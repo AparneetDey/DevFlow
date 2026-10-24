@@ -216,3 +216,197 @@ Upon inspection of the codebase prior to making changes, the following specific 
 3. Create foundational utilities: `ApiError.js`, `ApiResponse.js`, and `asyncHandler.js` in `backend/src/utils/`.
 4. Create centralized error-handling middleware in `backend/src/middlewares/error.middleware.js` and wire it to `src/app.js`.
 5. Scaffold the User model (`src/models/user.model.js`) with bcrypt password hashing hooks and JWT token generation methods.
+
+---
+
+## Task 2: Core Infrastructure and Error Handling
+
+### 1. Task Objective
+Implement the foundational shared utilities and error-handling middleware required across the DevFlow backend. Establish uniform API error representations (`ApiError`), standard success response structures (`ApiResponse`), an asynchronous controller wrapper (`asyncHandler`), a centralized Express error handler (`errorHandler`), and an unknown route handler (`notFoundHandler`). Integrate and order these components within `src/app.js` without implementing business domains or API endpoints.
+
+---
+
+### 2. Initial Project State
+- Foundation fixes from Task 1 were verified intact:
+  - `import "dotenv/config";` correctly loaded environment variables at module entry.
+  - Lowercase `src/db/` directory casing was preserved.
+  - Port fallback (`8000`) and CORS fallback (`http://localhost:5173`) were active.
+  - MongoDB connection using `{ dbName: DB_NAME }` was verified and functional.
+- Prior to Task 2, `backend/src/utils/` and `backend/src/middlewares/` were completely empty (0 files).
+- Requests to unhandled routes resulted in standard Express HTML error pages rather than JSON responses.
+- No structured error or response classes existed.
+
+---
+
+### 3. Files Inspected
+- `backend/src/app.js` (middleware pipeline)
+- `backend/src/index.js` (server entry point)
+- `backend/src/constants.js` (constants)
+- `backend/src/utils/` (empty directory)
+- `backend/src/middlewares/` (empty directory)
+- `backend/package.json` (dependencies and scripts)
+- `backend/WORK_REPORT.md` (Task 1 documentation)
+
+---
+
+### 4. Files Created
+- `backend/src/utils/ApiError.js` — Custom error class extending `Error` for operational and HTTP errors.
+- `backend/src/utils/ApiResponse.js` — Standard response wrapper class formatting JSON API outputs.
+- `backend/src/utils/asyncHandler.js` — Higher-order middleware wrapper forwarding rejected promises to `next(err)`.
+- `backend/src/middlewares/error.middleware.js` — Centralized 4-parameter Express error handler formatting JSON error outputs.
+- `backend/src/middlewares/notFound.middleware.js` — 404 handler capturing unmatched route requests and generating `ApiError(404)`.
+
+---
+
+### 5. Files Modified
+- `backend/src/app.js` — Imported and registered `notFoundHandler` and `errorHandler` at the end of the middleware stack.
+
+*(Note: No other existing files were modified.)*
+
+---
+
+### 6. Implementation Details
+
+#### A. `ApiError` Class (`src/utils/ApiError.js`)
+- Extends JavaScript's native `Error`.
+- Properties:
+  - `statusCode`: HTTP status code integer (e.g., 400, 401, 403, 404, 500).
+  - `message`: Human-readable error description (default: `"Something went wrong"`).
+  - `errors`: Array containing detailed validation errors or diagnostic context (default: `[]`).
+  - `data`: Initialized to `null`.
+  - `success`: Always `false`.
+  - `isOperational`: Set to `true` to distinguish operational errors from programmer bugs.
+  - `name`: Explicitly set to `"ApiError"`.
+  - `stack`: Preserves passed stack or captures stack trace via `Error.captureStackTrace(this, this.constructor)`.
+
+#### B. `ApiResponse` Class (`src/utils/ApiResponse.js`)
+- Standardized payload format for all future successful controller responses.
+- Properties:
+  - `statusCode`: HTTP status code integer (e.g., 200, 201).
+  - `data`: Response data payload.
+  - `message`: Descriptive success message (default: `"Success"`).
+  - `success`: Boolean derived dynamically (`statusCode < 400`).
+
+#### C. `asyncHandler` Wrapper (`src/utils/asyncHandler.js`)
+- Higher-order function taking an asynchronous Express controller `(req, res, next)`.
+- Wraps execution in `Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err))`.
+- Eliminates repetitive `try/catch` boilerplate across all future route controllers.
+
+#### D. Centralized Error Middleware (`src/middlewares/error.middleware.js`)
+- Express 4-parameter signature: `(err, req, res, next)`.
+- If the incoming error is not an `ApiError` (e.g. standard runtime `Error`, Mongoose error, JSON parsing error), it converts it into an `ApiError` with fallback status `500` and message `"Internal Server Error"`.
+- Response structure:
+  ```json
+  {
+    "statusCode": 404,
+    "success": false,
+    "message": "Route not found: GET /unknown",
+    "errors": []
+  }
+  ```
+- Environment awareness: Attaches `stack` to the JSON response only when `process.env.NODE_ENV !== "production"`. When in production, stack traces are withheld to prevent security leakage.
+- Returns `res.status(error.statusCode).json(response)` safely without crashing the server.
+
+#### E. 404 Not Found Middleware (`src/middlewares/notFound.middleware.js`)
+- Catches any request that passes through the entire middleware and router pipeline without matching a route.
+- Constructs an `ApiError(404, "Route not found: <METHOD> <URL>")` and passes it to `next(error)`.
+- By delegating to `next(error)`, the response is formatted uniformly by `errorHandler`.
+
+---
+
+### 7. Middleware Registration Order
+In `backend/src/app.js`, middlewares are registered in the following strict order:
+
+1. **CORS Middleware:** `cors({ origin: allowedOrigin, credentials: true })`
+2. **JSON Body Parser:** `express.json({ limit: "16kb" })`
+3. **URL-Encoded Body Parser:** `express.urlencoded({ extended: true, limit: "16kb" })`
+4. **Static File Server:** `express.static(path.join(__dirname, "../public"))`
+5. **Cookie Parser:** `cookieParser()`
+6. *(Mount point for future API route modules)*
+7. **404 Not Found Handler:** `app.use(notFoundHandler)` — Must be registered after all route declarations.
+8. **Centralized Error Handler:** `app.use(errorHandler)` — Must be registered as the terminal middleware in the application.
+
+---
+
+### 8. Commands Executed
+
+1. `node --check src/index.js; node --check src/app.js; node --check src/utils/ApiError.js; node --check src/utils/ApiResponse.js; node --check src/utils/asyncHandler.js; node --check src/middlewares/error.middleware.js; node --check src/middlewares/notFound.middleware.js` — Validated syntax of all source files.
+2. `node --input-type=module -e "/* test ApiError, ApiResponse, asyncHandler */"` — Executed unit verification script for utilities.
+3. `node --input-type=module -e "/* test Express route error pipeline */"` — Tested live route dispatching, promise rejection catching by `asyncHandler`, 404 generation, and error formatting.
+4. `node --input-type=module -e "/* test production mode stack suppression */"` — Verified `NODE_ENV=production` hides stack traces.
+5. `node src/index.js` (background task) — Verified whole-application boot, MongoDB Atlas connection, and live server startup on Port 8000.
+6. `node -e "fetch('http://localhost:8000/api/v1/unknown').then(res => res.json())..."` — Verified live HTTP request to running server returns uniform JSON 404 response.
+7. `git diff backend/src/app.js` — Verified exact diff of modified application code.
+8. `git status` — Verified repository status.
+
+---
+
+### 9. Validation Results
+
+#### A. Implemented Changes
+- [x] Created `src/utils/ApiError.js` with all required constructor properties and stack capture.
+- [x] Created `src/utils/ApiResponse.js` with status code, message, data, and dynamic success flag.
+- [x] Created `src/utils/asyncHandler.js` with Promise-based error forwarding to `next()`.
+- [x] Created `src/middlewares/error.middleware.js` with `ApiError` normalization, status codes, and environment-sensitive stack traces.
+- [x] Created `src/middlewares/notFound.middleware.js` with method/URL diagnostics.
+- [x] Wired `notFoundHandler` and `errorHandler` into `src/app.js` in correct execution order.
+- [x] Preserved existing CORS, body parsing, cookie parsing, and static file middleware.
+
+#### B. Verified Behavior
+- **Utility Instantiation:** `ApiError` correctly identifies as an instance of `Error` with `isOperational: true`, `name: 'ApiError'`, and valid stack.
+- **Response Format:** `ApiResponse` accurately sets `success: true` for status 200 and `success: false` for status 404.
+- **Async Rejection Forwarding:** `asyncHandler` successfully catches rejected promises and forwards errors to the `next` callback without crashing.
+- **404 Routing:** Unmatched routes return HTTP 404 with JSON: `{"statusCode": 404, "success": false, "message": "Route not found: GET /api/v1/unknown", "errors": []}`.
+- **Error Middleware Catching:** Operational and generic runtime errors are captured and returned as structured JSON responses.
+- **Production Safety:** In production mode (`NODE_ENV=production`), the `stack` field is completely omitted from the JSON payload.
+- **Server Coexistence:** Verified that live application starts normally, connects to MongoDB Atlas, and correctly serves the new error handling pipeline.
+
+---
+
+### 10. Tests Passed
+1. **Syntax Check Test:** All 7 backend files passed `node --check`.
+2. **ApiError Unit Test:** Validated constructor attributes, `instanceof Error`, and stack capture.
+3. **ApiResponse Unit Test:** Validated payload structure and `success` boolean calculation.
+4. **asyncHandler Unit Test:** Verified async error capture and `next(err)` invocation.
+5. **Express 404 Live Test:** Verified unmatched route returns 404 status with structured JSON.
+6. **Express Custom Error Live Test:** Verified `ApiError(418)` forwarded through `asyncHandler` returns status 418 with JSON errors array.
+7. **Express Unexpected Error Live Test:** Verified generic `Error('Unexpected crash')` converts to status 500 JSON without server crash.
+8. **Production Stack Trace Suppression Test:** Verified `stack` is undefined when `NODE_ENV=production`.
+9. **Full Application Live Boot Test:** Live `src/index.js` boot and live HTTP fetch confirmed working.
+
+---
+
+### 11. Tests Not Performed
+1. **Automated Integration Test Suite (`npm test`):** Not performed because automated test suites/frameworks (Jest/Mocha/Vitest) are not yet configured in the project.
+2. **API Endpoint Feature Tests:** Not performed because business controllers and routes (auth, boards, tasks) are not yet implemented.
+
+---
+
+### 12. Issues Encountered
+- **Middleware Registration Ordering During Ad-Hoc Route Testing:**
+  When testing ad-hoc routes against the pre-configured `app` instance, ad-hoc routes declared after `app.use(notFoundHandler)` were intercepted by 404 middleware. This validated that Express strictly respects registration order and confirmed that `notFoundHandler` must be registered after all route handlers.
+
+---
+
+### 13. Remaining Risks
+1. **Missing Authentication Packages:**
+   `bcrypt` and `jsonwebtoken` are not yet installed in `backend/package.json`.
+2. **Missing Schema Validation Library:**
+   No schema validation library (`zod` or `joi`) is installed for validating request bodies.
+3. **Missing Service Layer Directory:**
+   `backend/src/services/` does not yet exist.
+4. **Empty Feature Directories:**
+   `controllers/`, `models/`, and `routes/` are still empty shells awaiting domain implementation.
+
+---
+
+### 14. Recommended Next Task
+**Task 3: Authentication Domain & User Model Implementation**
+1. Install `bcrypt` (or `bcryptjs`) and `jsonwebtoken`.
+2. Install `zod` for request schema validation.
+3. Create `backend/src/services/` directory.
+4. Implement `backend/src/models/user.model.js` with bcrypt pre-save password hashing and JWT token generator methods.
+5. Implement `backend/src/middlewares/auth.middleware.js` to verify JWT access tokens and inject `req.user`.
+6. Implement `backend/src/services/auth.service.js`, `backend/src/controllers/auth.controller.js`, and `backend/src/routes/auth.routes.js`.
+7. Mount auth routes in `backend/src/app.js` at `/api/v1/auth`.
+
