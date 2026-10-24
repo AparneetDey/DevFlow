@@ -410,3 +410,205 @@ In `backend/src/app.js`, middlewares are registered in the following strict orde
 6. Implement `backend/src/services/auth.service.js`, `backend/src/controllers/auth.controller.js`, and `backend/src/routes/auth.routes.js`.
 7. Mount auth routes in `backend/src/app.js` at `/api/v1/auth`.
 
+---
+
+## Task 3: User Model and Authentication Foundation
+
+### 1. Objective
+Implement the Mongoose `User` model along with its core authentication foundation methods. Specifically, establish data fields for `username`, `email`, `password`, and `refreshToken`; configure pre-save password hashing with bcrypt; implement a safe candidate password comparison method; and create access and refresh token generation methods using JSON Web Tokens (JWT). Configure necessary environment variables without exposing sensitive values or writing application controllers/routes.
+
+---
+
+### 2. Initial Project State
+- Verified all previous work from Task 1 and Task 2:
+  - Database connection (`src/db/index.js`) and Express app initialization (`src/app.js`) were active.
+  - Core utilities (`ApiError`, `ApiResponse`, `asyncHandler`) and middlewares (`error.middleware.js`, `notFound.middleware.js`) were intact.
+- Prior to Task 3:
+  - `backend/src/models/` was completely empty (0 files).
+  - Neither `bcrypt` nor `jsonwebtoken` was installed in `package.json`.
+  - No user schema, password hashing hooks, or JWT token generators existed.
+
+---
+
+### 3. Files Inspected
+- `backend/package.json`
+- `backend/package-lock.json`
+- `backend/.env`
+- `backend/.env.example`
+- `backend/src/app.js`
+- `backend/src/index.js`
+- `backend/src/constants.js`
+- `backend/src/models/` (empty directory)
+- `backend/WORK_REPORT.md` (Tasks 1 & 2 documentation)
+
+---
+
+### 4. Files Created
+- `backend/src/models/user.model.js` — Mongoose schema and model for users with bcrypt pre-save hook, password comparison, and access/refresh token generation methods.
+- `backend/.env.example` — Environment configuration template populated with placeholders for server, database, and JWT access/refresh token settings.
+
+---
+
+### 5. Files Modified
+- `backend/package.json` — Added production dependencies `bcrypt` and `jsonwebtoken`.
+- `backend/package-lock.json` — Synced lockfile with installed dependencies.
+- `backend/.env` — Appended `ACCESS_TOKEN_SECRET`, `ACCESS_TOKEN_EXPIRY`, `REFRESH_TOKEN_SECRET`, and `REFRESH_TOKEN_EXPIRY` (secrets kept private).
+
+---
+
+### 6. Dependencies Added
+- **`bcrypt` (`^6.0.0`):** Secure password hashing using adaptive salt rounds. Installed as a production dependency.
+- **`jsonwebtoken` (`^9.0.3`):** Industry-standard implementation for generating and signing JSON Web Tokens. Installed as a production dependency.
+
+*(No other dependencies were installed or upgraded. Zod and other libraries were withheld per task instructions).*
+
+---
+
+### 7. User Schema Details
+Implemented in `backend/src/models/user.model.js`:
+
+| Field | Type | Modifiers / Validations | Description |
+| :--- | :--- | :--- | :--- |
+| `username` | `String` | `required`, `unique`, `trim`, `lowercase`, `minlength: 3`, `maxlength: 30`, `index: true` | Unique user handle, normalized to lowercase with length bounds. |
+| `email` | `String` | `required`, `unique`, `trim`, `lowercase`, `match: /^\S+@\S+\.\S+$/`, `index: true` | User email address validated with standard regex and normalized. |
+| `password` | `String` | `required`, `minlength: 6`, `select: false` | Bcrypt-hashed password. Explicitly excluded (`select: false`) from standard queries to prevent accidental exposure in API responses. |
+| `refreshToken` | `String` | Optional string | Stores the current hashed/active session refresh token on the user document. |
+| `timestamps` | `Boolean` | `createdAt`, `updatedAt` (automatic Mongoose schema option) | Automatically manages entity creation and update timestamps. |
+
+---
+
+### 8. Password Hashing Implementation
+- Configured via Mongoose pre-save hook: `userSchema.pre("save", async function () { ... })`.
+- Condition: Checks `this.isModified("password")`. If the password field has not changed (e.g., updating only username, email, or storing a refresh token), the hook returns immediately and skips re-hashing.
+- Hashing: Uses `await bcrypt.hash(this.password, 10)` with 10 salt rounds.
+- Asynchronous Promise handling: Complies natively with modern Mongoose (v9.x) async hook execution without relying on deprecated callback patterns.
+
+---
+
+### 9. Password Comparison Implementation
+- Reusable instance method: `userSchema.methods.isPasswordCorrect(candidatePassword)`.
+- Input Guard: Checks `if (!candidatePassword || !this.password) return false;`. Safely handles missing inputs or queries where `password` was omitted from selection.
+- Verification: Calls `await bcrypt.compare(candidatePassword, this.password)`.
+- Returns boolean `true` on match and `false` on mismatch without exposing the hash or throwing unhandled errors.
+
+---
+
+### 10. JWT Implementation
+
+#### A. Access Token (`generateAccessToken`)
+- Reusable instance method: `userSchema.methods.generateAccessToken()`.
+- Payload: Encodes `_id`, `email`, and `username` into the token payload. Never includes password hashes or sensitive internal fields.
+- Secret: Reads `process.env.ACCESS_TOKEN_SECRET`.
+- Safety Guard: Explicitly throws an `Error` (`"ACCESS_TOKEN_SECRET is not defined in environment variables"`) if the secret key is unset.
+- Expiration: Signs with configurable TTL via `process.env.ACCESS_TOKEN_EXPIRY` (defaulting to `"1d"`).
+
+#### B. Refresh Token (`generateRefreshToken`)
+- Reusable instance method: `userSchema.methods.generateRefreshToken()`.
+- Payload: Encodes only minimal identity: `{ _id: this._id }`.
+- Secret: Reads `process.env.REFRESH_TOKEN_SECRET`.
+- Safety Guard: Explicitly throws an `Error` (`"REFRESH_TOKEN_SECRET is not defined in environment variables"`) if the secret key is unset.
+- Expiration: Signs with longer session TTL via `process.env.REFRESH_TOKEN_EXPIRY` (defaulting to `"10d"`).
+
+---
+
+### 11. Environment Changes
+- **`backend/.env`:**
+  - Added `ACCESS_TOKEN_SECRET` with a cryptographically secure 256-bit random string.
+  - Added `ACCESS_TOKEN_EXPIRY=1d`.
+  - Added `REFRESH_TOKEN_SECRET` with an independent cryptographically secure 256-bit random string.
+  - Added `REFRESH_TOKEN_EXPIRY=10d`.
+  - Preserved existing `PORT`, `MONGO_DB_PASSWORD`, `MONGO_DB_URI`, and `DEV_URL`.
+- **`backend/.env.example`:**
+  - Populated template with placeholder entries:
+    ```
+    PORT=8000
+    MONGO_DB_URI=mongodb+srv://<username>:<password>@cluster0.example.mongodb.net
+    DEV_URL=http://localhost:5173
+    ACCESS_TOKEN_SECRET=your_access_token_secret
+    ACCESS_TOKEN_EXPIRY=1d
+    REFRESH_TOKEN_SECRET=your_refresh_token_secret
+    REFRESH_TOKEN_EXPIRY=10d
+    ```
+
+---
+
+### 12. Commands Executed
+1. `npm install bcrypt jsonwebtoken` (in `backend/`) — Installed required dependencies.
+2. `node --check src/models/user.model.js` — Verified syntax of the User model.
+3. `Get-Content .../scratch/test_user_model.js -Raw | node --input-type=module` (in `backend/`) — Executed comprehensive validation suite covering schema constraints, access token generation, refresh token generation, missing secret error guards, live MongoDB Atlas document persistence, `refreshToken` field storage and retrieval, `select: false` query protection, password comparison, and unrelated field update verification.
+4. `node --input-type=module -e "/* verify 0 remaining test users */"` — Verified database cleanliness.
+5. `git status` & `git diff` — Audited modified files and confirmed no changes outside task scope.
+
+---
+
+### 13. Validation Results
+
+#### A. Successfully Completed Functionality
+- [x] Installed `bcrypt` and `jsonwebtoken` in `package.json` and updated `package-lock.json`.
+- [x] Created `src/models/user.model.js` with required constraints on `username`, `email`, `password`, and `refreshToken`.
+- [x] Configured `password` field with `select: false` to ensure password hashes are excluded from default queries.
+- [x] Implemented pre-save password hashing with salt rounds = 10.
+- [x] Guarded against redundant re-hashing when modifying non-password fields via `isModified("password")`.
+- [x] Implemented `isPasswordCorrect` instance method for candidate password comparison.
+- [x] Implemented `generateAccessToken` instance method with payload `{ _id, email, username }`.
+- [x] Implemented `generateRefreshToken` instance method with minimal payload `{ _id }`.
+- [x] Added error guards throwing clear errors when `ACCESS_TOKEN_SECRET` or `REFRESH_TOKEN_SECRET` is missing.
+- [x] Added `ACCESS_TOKEN_SECRET`, `ACCESS_TOKEN_EXPIRY`, `REFRESH_TOKEN_SECRET`, and `REFRESH_TOKEN_EXPIRY` to `backend/.env`.
+- [x] Created `backend/.env.example` template with placeholders.
+
+#### B. Verified Behavior & Tests Passed
+1. **Schema Validation Test (Offline):** Verified that `validate()` properly rejects invalid emails (`"invalid-email"`), short usernames (`"ab"`), and short passwords (`"123"`).
+2. **Access Token Generation Test:** Verified `generateAccessToken()` produces a valid signed token. `jwt.verify()` confirmed payload includes correct `_id`, `email`, `username`, and `exp` timestamp.
+3. **Refresh Token Generation Test:** Verified `generateRefreshToken()` produces a valid signed token. `jwt.verify()` confirmed payload contains only `_id` and `exp` (minimal footprint).
+4. **Missing Secrets Error Guards Test:** Verified that removing `ACCESS_TOKEN_SECRET` or `REFRESH_TOKEN_SECRET` causes their respective generator methods to throw clear descriptive errors.
+5. **Live MongoDB Persistence & Hashing Test:** Connected to live MongoDB Atlas cluster, saved a temporary user, and verified that `user.password` was saved as a bcrypt hash starting with `$2b$`.
+6. **Refresh Token Field Persistence Test:** Stored generated refresh token on `user.refreshToken`, saved to Atlas, re-fetched document, and confirmed `user.refreshToken` persisted intact.
+7. **Query Password Exclusion (`select: false`) Test:** Queried user via `User.findById(id)` and verified `password` was `undefined`. Confirmed `JSON.stringify()` also excludes the password field.
+8. **Explicit Password Selection Test:** Queried user via `User.findById(id).select("+password")` and confirmed the bcrypt hash was retrieved.
+9. **Password Comparison Tests:**
+   - Valid candidate password returned `true`.
+   - Incorrect password returned `false`.
+   - Empty string (`""`) returned `false`.
+   - `null` input returned `false`.
+10. **Unrelated Field Modification Test:** Updated `username` and `refreshToken` on existing user and saved; verified that `user.password` hash remained identical and password comparison continued to return `true`.
+11. **Temporary User Cleanup Test:** Deleted temporary test document and verified that `User.findById()` returned `null`. Checked database collection to ensure 0 test records remain.
+
+---
+
+### 14. Tests Not Performed
+1. **Registration & Login Endpoint Tests:** Not performed because HTTP controllers and routes for authentication are not yet implemented.
+2. **Refresh Token Route Endpoint (`POST /refresh-token`):** Not performed because auth controllers and cookie handling routes are scheduled for Task 4.
+3. **Automated Test Suite Runner (`npm test`):** Automated test frameworks (Jest/Vitest) are not yet configured in the repository.
+
+---
+
+### 15. Issues Encountered
+- **Mongoose Username Maxlength Enforcement during Initial Test:**
+  During an initial test run with a dynamically generated timestamp string appended with `_updated`, the string length reached 32 characters, triggering a Mongoose `ValidationError` on `maxlength: 30`. This confirmed that the schema's `maxlength` validator is strictly enforced. The test script was adjusted to use a shorter prefix (`t_`), which cleanly validated the non-re-hashing behavior.
+
+---
+
+### 16. Remaining Risks
+1. **Missing Schema Validation Library (`zod`):**
+   Request body parsing and validation for incoming HTTP payloads (registration/login) must be implemented in subsequent controller tasks.
+2. **Missing Service Layer Directory:**
+   `backend/src/services/` does not yet exist and should be created to house `auth.service.js`.
+3. **Unimplemented Authentication Endpoints:**
+   No routes or controllers exist yet for user registration, login, logout, or session management.
+
+---
+
+### 17. Recommended Next Task
+**Task 4: Authentication Service, Controller, and JWT Middleware**
+1. Create `backend/src/services/` directory.
+2. Implement `backend/src/middlewares/auth.middleware.js` to extract Bearer tokens / cookies, verify JWT, and inject `req.user`.
+3. Implement `backend/src/services/auth.service.js` with registration, login, and profile retrieval logic.
+4. Implement `backend/src/controllers/auth.controller.js` leveraging `asyncHandler`, `ApiResponse`, and `ApiError`.
+5. Implement `backend/src/routes/auth.routes.js` with endpoints:
+   - `POST /api/v1/auth/register`
+   - `POST /api/v1/auth/login`
+   - `POST /api/v1/auth/logout`
+   - `GET /api/v1/auth/me`
+6. Mount auth routes in `backend/src/app.js` at `/api/v1/auth`.
+
+
