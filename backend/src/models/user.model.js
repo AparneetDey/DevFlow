@@ -1,6 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 const userSchema = new Schema(
     {
@@ -30,7 +31,8 @@ const userSchema = new Schema(
             select: false
         },
         refreshToken: {
-            type: String
+            type: String,
+            select: false
         }
     },
     {
@@ -101,13 +103,48 @@ userSchema.methods.generateRefreshToken = function () {
 
     return jwt.sign(
         {
-            _id: this._id
+            _id: this._id,
+            jti: crypto.randomUUID()
         },
         secret,
         {
             expiresIn: process.env.REFRESH_TOKEN_EXPIRY || "10d"
         }
     );
+};
+
+/**
+ * Deterministically hashes a raw refresh token using SHA-256.
+ *
+ * @param {string} token - Raw JWT refresh token string
+ * @returns {string} Hex-encoded SHA-256 hash
+ */
+userSchema.statics.hashRefreshToken = function (token) {
+    if (!token || typeof token !== "string") {
+        return "";
+    }
+    return crypto.createHash("sha256").update(token).digest("hex");
+};
+
+/**
+ * Safely compares candidate refresh token against stored hash in constant time.
+ *
+ * @param {string} candidateToken - Raw candidate JWT refresh token
+ * @returns {boolean} True if match, false otherwise
+ */
+userSchema.methods.isRefreshTokenCorrect = function (candidateToken) {
+    if (!candidateToken || !this.refreshToken) {
+        return false;
+    }
+    const candidateHash = User.hashRefreshToken(candidateToken);
+    try {
+        return crypto.timingSafeEqual(
+            Buffer.from(candidateHash, "hex"),
+            Buffer.from(this.refreshToken, "hex")
+        );
+    } catch {
+        return false;
+    }
 };
 
 export const User = mongoose.model("User", userSchema);
