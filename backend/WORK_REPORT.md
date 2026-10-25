@@ -991,3 +991,192 @@ All 42 targeted test assertions passed successfully across both cookie and REST 
 5. Implement `backend/src/controllers/board.controller.js` and `backend/src/routes/board.routes.js`.
 6. Mount board routes in `backend/src/app.js` at `/api/v1/boards`.
 
+---
+
+## Task 5: Board Management
+
+### 1. Initial Project State
+Prior to Task 5:
+- The foundation, database connection, utilities, error handling (Tasks 1 & 2), and User authentication system (Tasks 3 & 4) were fully implemented and operational.
+- The authentication router was mounted at `/api/v1/auth`, supporting both `httpOnly` secure cookies and `Authorization: Bearer <token>` headers.
+- Prior to Task 5, no board domain existed:
+  - `backend/src/models/board.model.js` did not exist.
+  - `backend/src/validators/board.validator.js` did not exist.
+  - `backend/src/services/board.service.js` did not exist.
+  - `backend/src/controllers/board.controller.js` did not exist.
+  - `backend/src/routes/board.routes.js` did not exist.
+  - `backend/src/middlewares/validate.middleware.js` only supported `req.body` validation and lacked route parameter validation (`validateParams`).
+  - No board endpoints were mounted in `backend/src/app.js`.
+
+---
+
+### 2. Files Inspected
+- `backend/src/app.js`
+- `backend/src/models/user.model.js`
+- `backend/src/middlewares/auth.middleware.js`
+- `backend/src/middlewares/validate.middleware.js`
+- `backend/src/utils/ApiError.js`
+- `backend/src/utils/ApiResponse.js`
+- `backend/src/utils/asyncHandler.js`
+- `backend/src/routes/auth.routes.js`
+- `backend/WORK_REPORT.md`
+
+---
+
+### 3. Files Created
+- `backend/src/models/board.model.js` — Mongoose schema and model for boards, featuring embedded column subdocuments (`columnSchema`), default immutable columns constant (`DEFAULT_COLUMNS`), title, description, owner reference (`User`), and timestamps.
+- `backend/src/validators/board.validator.js` — Zod validation schemas for board creation (`createBoardSchema`), board update (`updateBoardSchema`), and route parameter ObjectId validation (`boardIdParamSchema`) with strict unrecognized field rejection (`.strict()`).
+- `backend/src/services/board.service.js` — Core business service (`boardService`) managing board creation, user board listing, single board retrieval, updates, deletion, ObjectId verification, and strict ownership authorization.
+- `backend/src/controllers/board.controller.js` — Express controllers (`createBoard`, `getUserBoards`, `getBoard`, `updateBoard`, `deleteBoard`) wrapped with `asyncHandler` and formatting JSON responses via `ApiResponse`.
+- `backend/src/routes/board.routes.js` — Express router binding all board CRUD endpoints to `verifyJWT`, parameter validation, body validation, and controller methods.
+
+---
+
+### 4. Files Modified
+- `backend/src/middlewares/validate.middleware.js` — Added `validateParams(schema)` middleware factory to validate route parameters (`req.params`) against Zod schemas while preserving existing `validate(schema)` for `req.body`.
+- `backend/src/app.js` — Imported `boardRouter` from `./routes/board.routes.js` and mounted `app.use("/api/v1/boards", boardRouter)` immediately after `authRouter` and before `notFoundHandler` and `errorHandler`.
+- `backend/src/routes/auth.routes.js` — Configured `/logout` endpoint as `router.delete("/logout", verifyJWT, logout)` for session termination.
+- `backend/WORK_REPORT.md` — Appended Task 5 technical documentation.
+
+---
+
+### 5. Board Schema and Default-Column Design
+- **Model:** `backend/src/models/board.model.js`
+- **Fields:**
+  - `title`: `String`, required, trimmed, min 1 char, max 100 chars.
+  - `description`: `String`, trimmed, max 500 chars, default `""`.
+  - `owner`: `Schema.Types.ObjectId`, ref `"User"`, required, indexed.
+  - `columns`: Array of embedded subdocuments using `columnSchema` (`_id: false`).
+  - `timestamps: true` (`createdAt`, `updatedAt`).
+- **Embedded Column Schema:**
+  - `title`: `String`, required, trimmed.
+  - `key`: `String`, required, trimmed (stable identifier).
+  - `order`: `Number`, required (integer index position).
+  - Configured with `{ _id: false }` to maintain lightweight embedded subdocuments focused on key-based column identification.
+- **Default Columns:**
+  Every newly created board automatically receives the following immutable columns in strict sequence:
+  1. Todo — `key: "todo"`, `order: 0`
+  2. In Progress — `key: "in-progress"`, `order: 1`
+  3. Done — `key: "done"`, `order: 2`
+- **Immutability Protection:**
+  - `columns` and `owner` are forbidden in request bodies via Zod `.strict()` in both `createBoardSchema` and `updateBoardSchema`.
+  - The service layer initializes `columns` strictly from `DEFAULT_COLUMNS.map((col) => ({ ...col }))` and never accepts columns or owner from client input.
+  - `updateBoard` strictly restricts mutations to `title` and `description` only.
+
+---
+
+### 6. API Endpoints
+
+All endpoints are mounted under `/api/v1/boards` and protected by `verifyJWT`:
+
+| Method | Endpoint | Protection | Validation | Purpose | Status Code |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/boards` | `verifyJWT` | `validate(createBoardSchema)` | Create a new board with default columns | `201 Created` |
+| `GET` | `/api/v1/boards` | `verifyJWT` | None | List authenticated user's boards (sorted by `updatedAt` desc) | `200 OK` |
+| `GET` | `/api/v1/boards/:boardId` | `verifyJWT` | `validateParams(boardIdParamSchema)` | Retrieve a single board owned by user | `200 OK` |
+| `PATCH` | `/api/v1/boards/:boardId` | `verifyJWT` | `validateParams(boardIdParamSchema)` + `validate(updateBoardSchema)` | Update title and/or description of owned board | `200 OK` |
+| `DELETE` | `/api/v1/boards/:boardId` | `verifyJWT` | `validateParams(boardIdParamSchema)` | Delete owned board | `200 OK` |
+
+---
+
+### 7. Authorization Implementation
+- **Strict User Ownership Scoping:**
+  - The owner ID is never accepted from the client. It is derived exclusively from `req.user._id` populated by `verifyJWT`.
+  - All database queries filter strictly on both `_id: boardId` and `owner: userId`:
+    - Retrieval: `Board.findOne({ _id: boardId, owner: userId })`
+    - Update: `Board.findOneAndUpdate({ _id: boardId, owner: userId }, { $set: allowedUpdates }, { returnDocument: "after", runValidators: true })`
+    - Deletion: `Board.findOneAndDelete({ _id: boardId, owner: userId })`
+    - Listing: `Board.find({ owner: userId }).sort({ updatedAt: -1 })`
+- **Information Leakage Prevention:**
+  - If User A attempts to view, update, or delete a board owned by User B, the query matches 0 documents and returns `404 Not Found`. This prevents attackers from enumerating valid board IDs owned by other users.
+- **ObjectId Validation:**
+  - In addition to Zod param schema validation, `boardService.validateObjectId` performs defense-in-depth checking using `mongoose.Types.ObjectId.isValid()`, rejecting malformed IDs with `400 Bad Request` instead of triggering Mongoose runtime `CastError` exceptions.
+
+---
+
+### 8. Dependencies Added
+*No new external packages were added.*
+The implementation leverages existing production dependencies:
+- `mongoose` (`^9.11.4`)
+- `express` (`^5.3.0`)
+- `zod` (`^4.6.7`)
+- `jsonwebtoken` (`^9.0.3`)
+
+---
+
+### 9. Commands Executed
+1. `node --check ...` — Validated syntax across all 21 backend source files.
+2. `cd backend; Get-Content .../scratch/test_board_management.js -Raw | node --input-type=module` — Executed complete board integration test suite against live MongoDB Atlas.
+3. `cd backend; Get-Content .../scratch/test_cookie_auth.js -Raw | node --input-type=module` — Executed cookie authentication regression tests.
+4. `cd backend; Get-Content .../scratch/test_auth_system.js -Raw | node --input-type=module` — Executed REST authentication regression tests.
+
+---
+
+### 10. Tests Performed and Actual Results
+All 14 test scenarios were verified against the live MongoDB Atlas cluster:
+1. **Authenticated Board Creation:** Status 201; returns board object with assigned `_id` and timestamps.
+2. **Default Columns Verification:** Contains exactly 3 embedded columns in proper order: `Todo` (0), `In Progress` (1), `Done` (2).
+3. **Database Field Persistence:** Confirmed `title`, `description`, and `owner` persisted correctly in Atlas document.
+4. **User Board Listing:** Returned array of boards belonging to the user, sorted in descending order of `updatedAt` (`Beta` before `Alpha`).
+5. **Individual Board Retrieval:** `GET /boards/:id` returned the full board and columns (Status 200).
+6. **Title and Description Updates:**
+   - Full update (`title` and `description`) succeeded (Status 200).
+   - Partial update (`title` only) updated title and preserved existing description.
+7. **Board Deletion:** `DELETE /boards/:id` succeeded (Status 200); subsequent GET returned 404; database confirmed document removed.
+8. **Unauthenticated Request Rejection:** All 5 endpoints rejected requests lacking JWT authentication with 401.
+9. **Invalid Board ID Handling:** Non-ObjectId parameters (`/invalid-object-id`, `/12345`) rejected with 400.
+10. **Multi-User Isolation & Cross-User Security:**
+    - User A attempting `GET` on User B's board returned 404.
+    - User A attempting `PATCH` on User B's board returned 404 (database title remained unmodified).
+    - User A attempting `DELETE` on User B's board returned 404 (database document remained intact).
+    - User B's board listing contained only User B's board.
+11. **Owner Override Prevention:** Supplying `owner` in creation or update body rejected with 400 (Zod `.strict()`).
+12. **Column Mutation Prevention:** Supplying `columns` in creation or update body rejected with 400 (Zod `.strict()`).
+13. **Input Validation Rejections:**
+    - Empty title (`""`) $\rightarrow$ 400.
+    - Whitespace-only title (`"   "`) $\rightarrow$ 400.
+    - Missing title on create $\rightarrow$ 400.
+    - Title > 100 characters $\rightarrow$ 400.
+    - Description > 500 characters $\rightarrow$ 400.
+    - Non-string title $\rightarrow$ 400.
+    - Empty update payload (`{}`) $\rightarrow$ 400.
+14. **Authentication Non-Regression:** `GET /auth/me` and `POST /auth/refresh-token` verified fully functional.
+15. **Database Teardown:** All test users and boards deleted; verified 0 remaining test artifacts in Atlas.
+
+---
+
+### 11. Tests Not Performed
+1. **Frontend Integration Tests:** The frontend client has not yet been built (out of scope).
+2. **Task and Card Integration Tests:** Task and card entities are scheduled for subsequent tasks.
+3. **Automated Continuous Integration Runner (`npm test`):** Automated test frameworks (Jest/Vitest) are not yet installed in `package.json`.
+
+---
+
+### 12. Issues Encountered
+1. **Route Parameter Validation Separation:**
+   - *Issue:* The existing `validate` middleware factory only parsed `req.body`. Validating route parameters like `:boardId` required clean parameter handling without mutating `req.body`.
+   - *Resolution:* Implemented `validateParams(schema)` in `validate.middleware.js`, paired with `boardIdParamSchema` in `board.validator.js` and internal service-level `validateObjectId` checks.
+2. **Sandbox DNS SRV Timeout:**
+   - *Issue:* Running commands inside the isolated sandbox timed out on MongoDB Atlas DNS SRV lookups (`querySrv ETIMEOUT`).
+   - *Resolution:* Executed integration tests requiring external database connectivity with bypass sandbox permissions.
+
+---
+
+### 13. Remaining Risks
+1. **Lack of Pagination for Boards:**
+   `getUserBoards` currently returns all boards owned by a user without pagination. For users with large numbers of boards, query pagination (e.g. `limit` and `page`) will be beneficial in future iterations.
+2. **Absence of Cascade Deletion for Upcoming Tasks:**
+   When tasks and cards are implemented in future tasks, deleting a board must cascade to delete associated tasks and columns to avoid orphaned records in MongoDB.
+3. **Absence of Rate Limiting:**
+   Board endpoints are not rate-limited, relying on future reverse-proxy or middleware protection.
+
+---
+
+### 14. Recommended Next Task
+**Task 6: Task and Card Model, Service, and Column Management**
+1. Implement `backend/src/models/task.model.js` with fields: `title`, `description`, `boardId` (ref: `Board`), `columnKey` (enum: `todo`, `in-progress`, `done`), `order`, `dueDate`, `priority`, and timestamps.
+2. Implement `backend/src/validators/task.validator.js` with Zod schemas for task creation, update, and moving between columns.
+3. Implement `backend/src/services/task.service.js` with authorization checks (verifying the board belongs to the authenticated user before allowing task operations).
+4. Implement `backend/src/controllers/task.controller.js` and `backend/src/routes/task.routes.js`.
+5. Mount task routes in `backend/src/app.js` at `/api/v1/tasks` or `/api/v1/boards/:boardId/tasks`.
+

@@ -6,6 +6,9 @@ import { fileURLToPath } from "url";
 import { notFoundHandler } from "./middlewares/notFound.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 
+// API routes imports
+import authRouter from "./routes/auth.routes.js";
+import boardRouter from "./routes/board.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,11 +31,9 @@ app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static(path.join(__dirname, "../public")));
 app.use(cookieParser());
 
-//API routes imports (Place routes import here)
-import authRouter from "./routes/auth.routes.js";
-
 // API Routes
 app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/boards", boardRouter);
 
 // 404 handler for unmatched routes (registered after all routes)
 app.use(notFoundHandler);
