@@ -1,13 +1,30 @@
-import { NavLink, Link } from 'react-router-dom';
-import { Kanban, LayoutDashboard, User, LogIn, UserPlus } from 'lucide-react';
+import { useState } from 'react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { Kanban, LayoutDashboard, User, LogIn, UserPlus, LogOut } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 
 export function Navbar() {
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const navLinkClass = ({ isActive }) =>
     `flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
       isActive
         ? 'bg-indigo-600 text-white'
         : 'text-slate-300 hover:text-white hover:bg-slate-800'
     }`;
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      navigate('/login', { replace: true });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
@@ -19,35 +36,59 @@ export function Navbar() {
           </div>
           <div>
             <span className="text-lg font-bold text-white tracking-tight">DevFlow</span>
-            <span className="hidden sm:inline-block ml-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-indigo-950 text-indigo-300 rounded border border-indigo-800">
-              Foundation
-            </span>
           </div>
         </Link>
 
-        {/* Navigation Links for Verification */}
-        <nav className="flex items-center gap-1 sm:gap-2">
-          <NavLink to="/dashboard" className={navLinkClass}>
-            <LayoutDashboard className="w-4 h-4" />
-            <span>Dashboard</span>
-          </NavLink>
-          <NavLink to="/boards/demo-101" className={navLinkClass}>
-            <Kanban className="w-4 h-4" />
-            <span className="hidden sm:inline">Board</span>
-          </NavLink>
-          <NavLink to="/profile" className={navLinkClass}>
-            <User className="w-4 h-4" />
-            <span className="hidden sm:inline">Profile</span>
-          </NavLink>
-          <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
-          <NavLink to="/login" className={navLinkClass}>
-            <LogIn className="w-4 h-4" />
-            <span className="hidden sm:inline">Login</span>
-          </NavLink>
-          <NavLink to="/register" className={navLinkClass}>
-            <UserPlus className="w-4 h-4" />
-            <span className="hidden sm:inline">Register</span>
-          </NavLink>
+        {/* Navigation & Auth Controls */}
+        <nav className="flex items-center gap-2">
+          {isAuthenticated ? (
+            <>
+              <NavLink to="/dashboard" className={navLinkClass}>
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Dashboard</span>
+              </NavLink>
+              <NavLink to="/boards/demo-101" className={navLinkClass}>
+                <Kanban className="w-4 h-4" />
+                <span className="hidden sm:inline">Board</span>
+              </NavLink>
+              <NavLink to="/profile" className={navLinkClass}>
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Profile</span>
+              </NavLink>
+
+              <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
+
+              {/* User Identity Indicator */}
+              <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                {user?.username}
+              </span>
+
+              {/* Logout Button */}
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                aria-label="Log out"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-slate-300 hover:text-red-400 hover:bg-slate-800 transition-colors disabled:opacity-50"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">
+                  {isLoggingOut ? 'Logging out...' : 'Logout'}
+                </span>
+              </button>
+            </>
+          ) : (
+            <>
+              <NavLink to="/login" className={navLinkClass}>
+                <LogIn className="w-4 h-4" />
+                <span>Login</span>
+              </NavLink>
+              <NavLink to="/register" className={navLinkClass}>
+                <UserPlus className="w-4 h-4" />
+                <span>Register</span>
+              </NavLink>
+            </>
+          )}
         </nav>
       </div>
     </header>

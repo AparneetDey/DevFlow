@@ -370,3 +370,144 @@ Implemented a suite of accessible, atomic components under `src/components/commo
 - **Task 7:** Task Management & Workflow Operations.
 - **Task 8:** User Profile & UI Polish.
 - **Task 9:** Testing & Final Integration.
+
+
+---
+
+## Task 3: Authentication System & State Management
+
+### 1. Summary of Implemented Functionality
+Implemented the complete client-side authentication system for DevFlow without modifying the backend or violating HttpOnly cookie security protocols. Established a central `AuthContext` with custom `useAuth` hook, session restoration via `GET /auth/me`, silent 401 token refresh queueing via Axios interceptors, responsive and accessible Login and Register pages with client-side validation and backend error extraction, protected and public route guards (`ProtectedRoute`, `PublicRoute`), and authenticated navigation with logout handling (`DELETE /auth/logout`).
+
+---
+
+### 2. Authentication Architecture and State Management
+- **State Store (`src/context/AuthContext.jsx` & `src/context/authContextDef.js`):**
+  - Manages `user` (`{ _id, username, email, createdAt, updatedAt }` | `null`), `isLoading` (boolean), and computed `isAuthenticated` (`!!user`).
+  - Exposes actions: `login(credentials)`, `register(userData)`, `logout()`, and `checkAuth()`.
+  - Zero use of `localStorage` or `sessionStorage` for tokens, strictly respecting HttpOnly browser cookie management.
+- **Hook Layer (`src/hooks/useAuth.js`):**
+  - Clean consumer hook providing typed context access with guard checking.
+
+---
+
+### 3. API Endpoints Integrated
+Centralized through [`src/api/auth.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/auth.api.js) via the existing [`apiClient`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/client.js):
+1. `POST /api/v1/auth/register` — Creates user account; automatically receives HttpOnly cookie session and user profile.
+2. `POST /api/v1/auth/login` — Authenticates credentials; receives HttpOnly cookie session and user profile.
+3. `POST /api/v1/auth/refresh-token` — Rotates refresh token and issues renewed access token via HttpOnly cookies.
+4. `DELETE /api/v1/auth/logout` — Terminates authenticated session and clears cookies on the server.
+5. `GET /api/v1/auth/me` — Fetches current authenticated user profile for session verification.
+
+---
+
+### 4. Session Restoration Behavior
+- On initial mount of [`AuthProvider`](file:///e:/GitHub-Repo/DevFlow/frontend/src/context/AuthContext.jsx), an effect invokes `GET /auth/me`.
+- While checking session, `isLoading` remains `true`.
+- Protected and public route guards display `<Loading fullScreen text="Checking session..." />` to prevent UI flashes or unauthorized rendering.
+- If the session is valid, the returned user payload is stored in `user` state.
+- If the request fails (401 Unauthorized or network failure), `user` is set to `null` without throwing unhandled exceptions.
+- `isLoading` transitions to `false` in a `finally` block to unblock route rendering.
+
+---
+
+### 5. Login and Registration Behavior
+- **Login Page ([`src/pages/LoginPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/LoginPage.jsx)):**
+  - Email and password inputs with field-level validation (email presence & format, password presence).
+  - Integrates `extractErrorMessage(error)` to display backend error payloads (such as `401 Invalid email or password` or `400 Validation Error`).
+  - Disables inputs and button with spinner during submission to prevent duplicate requests.
+  - Redirects user upon success to their intended route (`location.state?.from?.pathname`) or `/dashboard`.
+- **Register Page ([`src/pages/RegisterPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/RegisterPage.jsx)):**
+  - Username (3–30 characters), email, and password (min 6 characters) inputs matching backend Zod schema constraints.
+  - Handles backend duplicate conflict errors (`409 Conflict: User with this username/email already exists`).
+  - Upon successful registration, the backend automatically issues session cookies and returns the user object; DevFlow updates auth state and redirects directly to `/dashboard`.
+
+---
+
+### 6. Refresh-Token Handling
+Configured in [`src/api/client.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/client.js):
+- **401 Interception:** Catches `401 Unauthorized` responses on protected resource requests.
+- **Exclusion Guard:** Excludes `/auth/login`, `/auth/register`, and `/auth/refresh-token` from retry loops to prevent infinite cycles.
+- **Concurrency Mutex Queue:** If a refresh request is already in-flight (`isRefreshing = true`), subsequent failed requests are queued in `failedQueue` and retried after the new cookie pair is established.
+- **Silent Renewal:** Calls `apiClient.post('/auth/refresh-token', {})`. The backend atomically updates the single-use token hash and issues fresh HttpOnly cookies.
+- **Session Revocation Handler:** If silent refresh fails (token revoked or expired), `setOnSessionExpired` triggers a callback that clears the `user` state to `null`, gracefully redirecting the user to `/login`.
+
+---
+
+### 7. Protected-Route Implementation
+- **[`ProtectedRoute.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/routes/ProtectedRoute.jsx):**
+  - Blocks unauthenticated visitors from accessing `/dashboard`, `/boards/:boardId`, and `/profile`.
+  - Captures `location` in navigation state (`state: { from: location }`) so user returns to the requested page post-login.
+- **[`PublicRoute.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/routes/PublicRoute.jsx):**
+  - Restricts `/login` and `/register` for already-authenticated users, redirecting them immediately to `/dashboard`.
+- **Navigation Shell ([`Navbar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/Navbar.jsx)):**
+  - Dynamically switches navigation links based on `isAuthenticated`. Shows Dashboard, Board, Profile, username badge, and Logout button when logged in; shows Login and Register when logged out.
+
+---
+
+### 8. Logout Behavior
+- Triggered from [`Navbar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/Navbar.jsx) via `logout()` action.
+- Issues HTTP `DELETE /api/v1/auth/logout` with credentials.
+- Clears `user` state to `null` in `finally` block to ensure consistent local state even if the network is interrupted.
+- Redirects user to `/login`.
+
+---
+
+### 9. Files Created and Modified
+
+#### Files Created:
+- `frontend/src/api/auth.api.js` — Modular authentication API service.
+- `frontend/src/context/authContextDef.js` — Decoupled React Context definition for Fast Refresh compliance.
+- `frontend/src/context/AuthContext.jsx` — Authentication state provider with session lifecycle management.
+- `frontend/src/hooks/useAuth.js` — Custom hook for consuming auth context.
+- `frontend/src/routes/ProtectedRoute.jsx` — Route guard for private endpoints.
+- `frontend/src/routes/PublicRoute.jsx` — Route guard for guest-only onboarding.
+
+#### Files Modified:
+- `frontend/src/api/client.js` — Added silent 401 token refresh queue, error handling, and session expiration listener.
+- `frontend/src/components/layout/Navbar.jsx` — Added dynamic auth links, user badge, and logout action.
+- `frontend/src/pages/LoginPage.jsx` — Replaced placeholder with full login form, validation, and error display.
+- `frontend/src/pages/RegisterPage.jsx` — Replaced placeholder with full registration form, validation, and error display.
+- `frontend/src/pages/ProfilePage.jsx` — Updated to display real authenticated user metadata from `useAuth`.
+- `frontend/src/routes/AppRoutes.jsx` — Wired `ProtectedRoute` and `PublicRoute` wrappers into the routing hierarchy.
+- `frontend/src/main.jsx` — Wrapped application with `<AuthProvider>`.
+- `frontend/WORK_REPORT.md` — Appended Task 3 technical report.
+
+---
+
+### 10. Dependencies Added
+- None. Reused existing dependencies (`react`, `react-dom`, `react-router-dom`, `axios`, `lucide-react`, `tailwindcss`).
+
+---
+
+### 11. Verification Commands and Actual Results
+1. **ESLint Verification:**
+   - Command: `npm run lint`
+   - Result: `0 errors, 0 warnings` across all frontend source files.
+2. **Production Build Verification:**
+   - Command: `npm run build`
+   - Result: Vite production build succeeded in 1.26s.
+     - `dist/index.html`: `0.45 kB`
+     - `dist/assets/index-DGUGI0qO.css`: `26.69 kB`
+     - `dist/assets/index-B_u6Ypav.js`: `340.70 kB`
+3. **Module & API Service Verification (Node.js):**
+   - Verified `authApi` exposes `register`, `login`, `refreshToken`, `logout`, `getCurrentUser`. All verified as callable functions.
+4. **Error Extractor Verification (Node.js):**
+   - Verified `extractErrorMessage` handles Zod validation arrays, 401 auth failures, 409 conflict errors, and network disconnects (100% assertions passed).
+5. **Axios Client Interceptor & Session Expiration Verification (Node.js):**
+   - Verified `setOnSessionExpired` registration and callback invocation.
+
+---
+
+### 12. Known Issues & Unverified Integration Behavior
+- **Live Backend Offline during Local Build:** The local backend server on port 8000 was inactive during this turn (`Unable to connect to the remote server`). As instructed by rule 12, live network round-trip integration against a running database will be verified once the backend server is launched. The client-side logic, API payloads, validation schemas, and cookie credentials strictly adhere to the verified backend code contract.
+
+---
+
+### 13. Remaining Work
+- **Task 4:** Dashboard UI (Layout shell, board summary cards, empty state, loading skeletons).
+- **Task 5:** Board Management (Board API integration and CRUD operations).
+- **Task 6:** Kanban Board UI (3-column layout, task cards, search/filter).
+- **Task 7:** Task Management (Task CRUD, `/move` endpoint integration, priority, due dates).
+- **Task 8:** Profile & UI Polish.
+- **Task 9:** Testing & Final Integration.
