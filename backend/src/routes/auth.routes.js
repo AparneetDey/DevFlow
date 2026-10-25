@@ -21,7 +21,7 @@ router.post("/register", validate(registerSchema), register);
 router.post("/login", validate(loginSchema), login);
 router.post(
     "/refresh-token",
-    (req, res, next) => {
+    (req, res, next) => { //allows browser requests with empty request bodies to pass Zod schema validation when the refresh token is delivered in cookie.
         if ((!req.body || !req.body.refreshToken) && req.cookies?.refreshToken) {
             req.body = { ...(req.body || {}), refreshToken: req.cookies.refreshToken };
         }
