@@ -1387,3 +1387,166 @@ All 25 targeted test scenarios passed against live MongoDB Atlas:
 4. Implement GitHub Actions or CI pipeline configurations.
 
 
+
+---
+
+# Task 7: Automated Backend Testing
+
+## 1. Initial Project State
+- Express 5.x application with ES modules (`type: "module"`).
+- User authentication complete with access and refresh tokens, bcrypt password hashing, and HttpOnly cookies.
+- Board management complete with default immutable columns (`todo`, `in-progress`, `done`) and user ownership isolation.
+- Task management complete with CRUD, column movement, order re-indexing, and cascade deletion.
+- Request validation implemented via Zod schemas and middleware.
+- Standalone scratch scripts existed in the scratch directory (`test_auth_system.js`, `test_cookie_auth.js`, `test_board_management.js`, `test_task_management.js`).
+- `npm test` was unconfigured (`echo "Error: no test specified" && exit 1`).
+- Task routes had redundant duplicate mounting in both `app.js` and `board.routes.js`.
+
+## 2. Files Inspected
+- `backend/package.json` — verified scripts and dependencies.
+- `backend/package-lock.json` — inspected dependency tree.
+- `backend/.env` and `backend/.env.example` — inspected environment variable structure.
+- `backend/src/app.js` — identified redundant task route mounting.
+- `backend/src/index.js` — verified entry point and server startup.
+- `backend/src/constants.js` — verified default DB_NAME (`devflow`).
+- `backend/src/db/index.js` — reviewed MongoDB connection logic.
+- `backend/src/routes/auth.routes.js` — confirmed route paths and HTTP methods (`DELETE /logout`).
+- `backend/src/routes/board.routes.js` — confirmed nested route structure (`/:boardId/tasks`).
+- `backend/src/routes/task.routes.js` — verified parameter merging (`mergeParams: true`) and controller bindings.
+- `backend/src/controllers/auth.controller.js`, `board.controller.js`, `task.controller.js` — verified response codes and payloads.
+- `backend/src/services/auth.service.js`, `board.service.js`, `task.service.js` — verified business logic, error throwing, and database queries.
+- Scratch scripts:
+  - `test_auth_system.js`
+  - `test_cookie_auth.js`
+  - `test_board_management.js`
+  - `test_task_management.js`
+
+## 3. Files Created
+- `backend/vitest.config.js` — Vitest configuration file specifying node environment, setup files, timeouts, and sequential execution (`fileParallelism: false`).
+- `backend/tests/setup.js` — Global test lifecycle hooks: loads environment variables, validates test DB name, connects to dedicated test database, validates connection host, and ensures teardown.
+- `backend/tests/helpers.js` — Shared testing utilities including `cleanDatabase()`, `createTestUser()`, `createTestBoard()`, `createTestTask()`, and `getCookieValue()`.
+- `backend/tests/auth.test.js` — Comprehensive automated test suite for registration, login, token rotation, cookies, `/me`, and logout.
+- `backend/tests/board.test.js` — Comprehensive automated test suite for board CRUD, column protection, cascade cleanup, and cross-user authorization.
+- `backend/tests/task.test.js` — Comprehensive automated test suite for task CRUD, movement, ordering, column filtering, parameter validations, and cross-board/cross-user isolation.
+
+## 4. Files Modified
+- `backend/package.json` — updated `scripts.test` to `"vitest run"` and added devDependencies.
+- `backend/package-lock.json` — lockfile updated with installed devDependencies.
+- `backend/.env.example` — added `TEST_DB_NAME=devflow_test` documentation.
+- `backend/.env` — configured `TEST_DB_NAME=devflow_test`.
+- `backend/src/app.js` — removed duplicate `taskRouter` import and redundant `app.use("/api/v1/boards/:boardId/tasks", taskRouter)` mount.
+
+## 5. Dependencies Added
+- `vitest` (`^5.0.5`) — Modern, fast ESM test runner.
+- `supertest` (`^7.3.1`) — High-level HTTP testing library for Express applications.
+- `@rolldown/binding-win32-x64-msvc` — Platform-specific native binary required on Windows x64 environments.
+
+## 6. Test Configuration
+- **Test Runner:** Vitest (`vitest run`).
+- **Configuration File:** `backend/vitest.config.js`.
+- **Environment:** Node.js.
+- **Execution Strategy:** `fileParallelism: false` to ensure test files run sequentially against the database, preventing race conditions or interleaved data mutations.
+- **Timeouts:** 30,000ms for test execution and lifecycle hooks to accommodate cloud Atlas database network latencies.
+- **Database Safety Guard:**
+  - Tests connect strictly to `TEST_DB_NAME` (defaults to `devflow_test`).
+  - Active connection name is verified against `TEST_DB_NAME`.
+  - Hard guard fails immediately if connection attempts to use `devflow` or `production`.
+  - Database cleanup (`cleanDatabase()`) is strictly conditioned on `mongoose.connection.name === TEST_DB_NAME`.
+
+## 7. Test Coverage
+A total of 52 automated tests organized across three dedicated suites:
+1. **Authentication Suite (`tests/auth.test.js` — 18 tests):**
+   - User registration with valid data, tokens, and HttpOnly cookies.
+   - Rejection of duplicate username (`409 Conflict`).
+   - Rejection of duplicate email (`409 Conflict`).
+   - Validation rejection on short/malformed data (`400 Bad Request`).
+   - Login with valid credentials returning tokens and HttpOnly cookies (`200 OK`).
+   - Rejection of incorrect password (`401 Unauthorized`).
+   - Rejection of non-existent email (`401 Unauthorized`).
+   - Validation rejection on missing login fields (`400 Bad Request`).
+   - Protected `/me` access using Bearer token header (`200 OK`).
+   - Protected `/me` access using `accessToken` cookie (`200 OK`).
+   - Rejection of unauthenticated `/me` request (`401 Unauthorized`).
+   - Rejection of malformed / invalid JWT access token (`401 Unauthorized`).
+   - Refresh token rotation issuing new token pair and updating DB hash (`200 OK`).
+   - Refresh token rotation using `refreshToken` cookie (`200 OK`).
+   - Replay protection rejecting previously rotated refresh token (`401 Unauthorized`).
+   - Rejection of missing refresh token (`400 Bad Request`).
+   - Rejection of malformed/invalid refresh token (`401 Unauthorized`).
+   - Logout clearing DB refresh token hash and invalidating cookies (`200 OK`).
+   - Rejection of unauthenticated logout attempt (`401 Unauthorized`).
+
+2. **Board Suite (`tests/board.test.js` — 14 tests):**
+   - Board creation linking to authenticated user and generating default columns in exact sequence (`todo: 0`, `in-progress: 1`, `done: 2`) (`201 Created`).
+   - Validation rejection of empty or missing board title (`400 Bad Request`).
+   - Rejection of unauthenticated board creation (`401 Unauthorized`).
+   - Listing boards strictly scoped to authenticated owner (`200 OK`).
+   - Rejection of unauthenticated board listing (`401 Unauthorized`).
+   - Retrieval of single board by owner (`200 OK`).
+   - Cross-user isolation: rejecting retrieval of another user's board (`404 Not Found`).
+   - Validation rejection of non-ObjectId board ID (`400 Bad Request`).
+   - Rejection of non-existent board ID (`404 Not Found`).
+   - Updating board title and description (`200 OK`).
+   - Protecting default columns against tampering or modification on board update.
+   - Cross-user isolation: rejecting update of another user's board (`404 Not Found`).
+   - Deleting board with cascade cleanup of associated tasks (`200 OK`).
+   - Cross-user isolation: rejecting deletion of another user's board (`404 Not Found`).
+
+3. **Task Suite (`tests/task.test.js` — 20 tests):**
+   - Creating tasks with default column (`todo`), default priority (`medium`), and auto-incrementing sequential orders (`0, 1, ...`) (`201 Created`).
+   - Validation rejection of empty task title (`400 Bad Request`).
+   - Validation rejection of title exceeding 150 characters (`400 Bad Request`).
+   - Validation rejection of description exceeding 2000 characters (`400 Bad Request`).
+   - Validation rejection of client attempting to inject `boardId` or `order` in payload (`400 Bad Request`).
+   - Cross-user isolation: rejecting task creation under another user's board (`404 Not Found`).
+   - Rejection of unauthenticated task creation (`401 Unauthorized`).
+   - Listing board tasks sorted ascending by column and order (`200 OK`).
+   - Filtering tasks by columnKey query parameter (`?columnKey=todo`, `?columnKey=in-progress`) (`200 OK`).
+   - Cross-user isolation: rejecting task listing for another user's board (`404 Not Found`).
+   - Retrieving a single task by ID (`200 OK`).
+   - Task-to-board mismatch prevention: rejecting retrieval when task does not belong to specified board (`404 Not Found`).
+   - Validation rejection of non-ObjectId task ID (`400 Bad Request`).
+   - Updating task details (title, description, priority) without altering columnKey or order (`200 OK`).
+   - Validation rejection of invalid priority values (`400 Bad Request`).
+   - Moving task between columns with automatic appending (`200 OK`).
+   - Reordering task within a column with contiguous re-indexing (`200 OK`).
+   - Validation rejection of moving task to an invalid column (`400 Bad Request`).
+   - Deleting a task with automatic re-indexing of remaining column tasks (`200 OK`).
+   - Cross-user isolation: rejecting task deletion by non-owner (`404 Not Found`).
+
+## 8. Exact Commands Executed
+- `npm install -D vitest supertest` — installed testing framework and Supertest.
+- `npm i -D @rolldown/binding-win32-x64-msvc` — installed Windows-compatible rolldown native binding.
+- `node -c ...` — syntax check across all source and test files.
+- `cd backend; npm test` — executed complete automated test suite via Vitest.
+
+## 9. Actual Test Results
+- **Test Runner:** Vitest v5.0.5.
+- **Database Used:** `devflow_test` (MongoDB Atlas dedicated test database).
+- **Test Files:** 3 passed (3 total).
+- **Total Tests:** 52 passed (52 total).
+- **Failed Tests:** 0.
+- **Skipped Tests:** 0.
+- **Execution Time:** ~23–32 seconds.
+
+## 10. Bugs Discovered and Fixed
+1. **Duplicate Route Mounting in Express:**
+   - *Discovery:* `app.js` mounted `app.use("/api/v1/boards/:boardId/tasks", taskRouter)` and `board.routes.js` mounted `router.use("/:boardId/tasks", taskRouter)`.
+   - *Fix:* Removed duplicate mount from `app.js`, establishing a single clean routing delegation hierarchy through `board.routes.js`.
+2. **Missing Windows Rolldown Native Binding:**
+   - *Discovery:* Vitest v5 on Windows x64 required `@rolldown/binding-win32-x64-msvc` to resolve native bundling.
+   - *Fix:* Added `@rolldown/binding-win32-x64-msvc` to `devDependencies`.
+
+## 11. Remaining Limitations
+1. **Cloud Database Network Latency:**
+   Tests execute against a cloud-hosted MongoDB Atlas instance (`devflow_test`). While functional and thorough, cloud network round-trips result in a ~25-second suite runtime. A local MongoDB instance or `mongodb-memory-server` can be introduced in future environments to accelerate local test cycles.
+2. **No Frontend UI Testing:**
+   Tests currently cover backend REST APIs exclusively. Frontend component and user interaction testing will be established once the React frontend is implemented.
+3. **CI/CD Pipeline Integration:**
+   Automated testing currently executes locally; GitHub Actions workflow integration will be configured in a subsequent task.
+
+## 12. Recommended Next Task
+**Task 8: Continuous Integration (CI) and Frontend Initialization**
+1. Configure GitHub Actions workflow to run `npm test` automatically on push and pull requests.
+2. Initialize the React frontend application (Vite + Tailwind CSS).
+3. Establish shared TypeScript/JavaScript API client contracts and environment setup.

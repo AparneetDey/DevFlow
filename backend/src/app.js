@@ -9,7 +9,6 @@ import { errorHandler } from "./middlewares/error.middleware.js";
 // API routes imports
 import authRouter from "./routes/auth.routes.js";
 import boardRouter from "./routes/board.routes.js";
-import taskRouter from "./routes/task.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +33,6 @@ app.use(cookieParser());
 
 // API Routes
 app.use("/api/v1/auth", authRouter);
-app.use("/api/v1/boards/:boardId/tasks", taskRouter);
 app.use("/api/v1/boards", boardRouter);
 
 // 404 handler for unmatched routes (registered after all routes)
