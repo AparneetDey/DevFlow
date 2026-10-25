@@ -1550,3 +1550,110 @@ A total of 52 automated tests organized across three dedicated suites:
 1. Configure GitHub Actions workflow to run `npm test` automatically on push and pull requests.
 2. Initialize the React frontend application (Vite + Tailwind CSS).
 3. Establish shared TypeScript/JavaScript API client contracts and environment setup.
+
+---
+
+# Task 8: Backend API Documentation
+
+## 1. Files Inspected
+- `backend/package.json` — verified scripts, ESM configuration, and production/dev dependencies.
+- `backend/src/app.js` — verified CORS origin configuration, body parser limits, cookie parser middleware, route mounting (`/api/v1/auth`, `/api/v1/boards`), 404 handler, and centralized error handler.
+- `backend/src/index.js` — verified server startup port configuration and database connection lifecycle.
+- `backend/src/constants.js` — verified default DB_NAME (`devflow`).
+- `backend/src/routes/auth.routes.js` — verified authentication route paths, HTTP methods (`POST /register`, `POST /login`, `POST /refresh-token`, `DELETE /logout`, `GET /me`), and route middlewares.
+- `backend/src/routes/board.routes.js` — verified board routes, route parameter validation, and nested task router delegation (`router.use("/:boardId/tasks", taskRouter)`).
+- `backend/src/routes/task.routes.js` — verified task route paths, `mergeParams: true`, parameter validation schemas, and controller bindings.
+- `backend/src/controllers/auth.controller.js` — verified cookie options (`httpOnly: true`, `secure`, `sameSite`, `maxAge`), status codes (`201 Created`, `200 OK`), and response bodies.
+- `backend/src/controllers/board.controller.js` — verified board handler signatures, status codes (`201 Created`, `200 OK`), and response payloads.
+- `backend/src/controllers/task.controller.js` — verified task handler signatures, status codes, query parameter parsing (`columnKey || column`), and response payloads.
+- `backend/src/services/auth.service.js` — verified registration checks, bcrypt comparison, token generation, SHA-256 refresh token hashing, atomic token rotation via `findOneAndUpdate`, `$unset` logout logic, and profile fetching.
+- `backend/src/services/board.service.js` — verified board creation with 3 immutable default columns, ownership scoping, update rules, and cascade task cleanup upon board deletion.
+- `backend/src/services/task.service.js` — verified board ownership verification, auto-incrementing sequential orders, column filtering, task detail update restrictions, append/insert move logic, and contiguous order normalization.
+- `backend/src/models/user.model.js` — verified User schema, bcrypt pre-save hook, JWT generators, SHA-256 hash method, and constant-time refresh token comparison.
+- `backend/src/models/board.model.js` — verified Board schema and `DEFAULT_COLUMNS` (`todo: 0`, `in-progress: 1`, `done: 2`).
+- `backend/src/models/task.model.js` — verified Task schema, `TASK_COLUMNS`, `TASK_PRIORITIES`, default values, and compound indexes.
+- `backend/src/validators/auth.validator.js` — verified `registerSchema`, `loginSchema`, and `refreshTokenSchema`.
+- `backend/src/validators/board.validator.js` — verified `createBoardSchema`, `updateBoardSchema`, and `boardIdParamSchema`.
+- `backend/src/validators/task.validator.js` — verified `createTaskSchema`, `updateTaskSchema`, `moveTaskSchema`, `boardIdParamSchema`, and `taskParamsSchema`.
+- `backend/src/middlewares/auth.middleware.js` — verified token extraction from cookies (`req.cookies.accessToken`) or Authorization header (`Bearer <token>`), JWT verification, and `req.user` assignment.
+- `backend/src/middlewares/validate.middleware.js` — verified `validate` and `validateParams` factories mapping Zod issues to `ApiError(400, "Validation Error", errors)`.
+- `backend/src/middlewares/error.middleware.js` — verified error formatting (`statusCode`, `success: false`, `message`, `errors`, and environment-specific `stack`).
+- `backend/src/middlewares/notFound.middleware.js` — verified 404 error generation for unmatched routes.
+- `backend/src/utils/ApiResponse.js` — verified standardized success response structure (`statusCode`, `data`, `message`, `success: true`).
+- `backend/src/utils/ApiError.js` — verified custom operational error class.
+- `backend/.env.example` — verified environment variable definitions.
+- `backend/WORK_REPORT.md` — reviewed historical task documentation.
+
+## 2. Files Created or Modified
+- **Created:** `backend/README.md` — comprehensive, 1200+ line technical API reference and frontend integration manual.
+- **Modified:** `backend/WORK_REPORT.md` — appended this Task 8 technical documentation section.
+
+## 3. API Groups Documented
+1. **Authentication API Group (`/api/v1/auth`):** 5 endpoints.
+2. **Board Management API Group (`/api/v1/boards`):** 5 endpoints.
+3. **Task & Card Management API Group (`/api/v1/boards/:boardId/tasks`):** 6 endpoints.
+
+## 4. Number of Endpoints Documented
+- **Total Implemented Endpoints Documented:** **16 endpoints**.
+- Authentication:
+  1. `POST /api/v1/auth/register`
+  2. `POST /api/v1/auth/login`
+  3. `POST /api/v1/auth/refresh-token`
+  4. `DELETE /api/v1/auth/logout`
+  5. `GET /api/v1/auth/me`
+- Board Management:
+  6. `POST /api/v1/boards`
+  7. `GET /api/v1/boards`
+  8. `GET /api/v1/boards/:boardId`
+  9. `PATCH /api/v1/boards/:boardId`
+  10. `DELETE /api/v1/boards/:boardId`
+- Task Management:
+  11. `POST /api/v1/boards/:boardId/tasks`
+  12. `GET /api/v1/boards/:boardId/tasks`
+  13. `GET /api/v1/boards/:boardId/tasks/:taskId`
+  14. `PATCH /api/v1/boards/:boardId/tasks/:taskId`
+  15. `PATCH /api/v1/boards/:boardId/tasks/:taskId/move`
+  16. `DELETE /api/v1/boards/:boardId/tasks/:taskId`
+
+## 5. Authentication Documentation Completed
+- Documented dual-token strategy: short-lived access tokens (1 day) and longer-lived refresh tokens (10 days).
+- Documented SHA-256 database hashing of refresh tokens and constant-time verification.
+- Documented supported client transport channels:
+  - HttpOnly cookies (`accessToken`, `refreshToken`) with production-aware `secure` and `sameSite` flags.
+  - Standard `Authorization: Bearer <accessToken>` header.
+- Documented refresh token rotation with replay protection and race-condition prevention.
+- Documented logout behavior: `$unset: { refreshToken: 1 }` in MongoDB and clearing of cookies.
+
+## 6. Request and Response Documentation Completed
+- Documented complete endpoint paths, HTTP verbs, and authentication requirements for all 16 endpoints.
+- Path parameters documented with data type, requirement flag, and ObjectId validation constraints.
+- Query parameters documented (e.g. `columnKey` filtering on task listing).
+- Request payloads documented with field names, types, constraints, default values, strict disallowances, and valid JSON examples.
+- Standard success response structure documented: `statusCode`, `data`, `message`, `success: true`.
+- Real-world, syntactically valid JSON success response examples provided for every endpoint.
+
+## 7. Error Response Documentation Completed
+- Standard error response structure documented: `statusCode`, `success: false`, `message`, `errors: [...]`, and development-only `stack`.
+- Error conditions and status codes documented for each endpoint:
+  - `400 Bad Request`: Zod validation errors, invalid ObjectIds, empty payloads, disallowed fields.
+  - `401 Unauthorized`: Missing tokens, expired tokens, invalid credentials, replay of rotated refresh tokens.
+  - `404 Not Found`: Non-existent boards, non-existent tasks, cross-user isolation blocks, task-to-board mismatches.
+  - `409 Conflict`: Duplicate username or email on registration.
+  - `500 Internal Server Error`: Unhandled operational exceptions.
+
+## 8. Verification Performed
+- Validated all 31 JSON code blocks in `backend/README.md` using Node.js `JSON.parse` to ensure 100% syntactical validity.
+- Compared every endpoint path and method against actual Express route files (`auth.routes.js`, `board.routes.js`, `task.routes.js`).
+- Verified request constraints against Zod schemas (`auth.validator.js`, `board.validator.js`, `task.validator.js`).
+- Confirmed environment variables against `src/index.js`, `src/db/index.js`, `src/app.js`, `src/models/user.model.js`, and `tests/setup.js`.
+- Verified that all 52 automated tests in the test suite continue to pass (`npm test`).
+
+## 9. Missing or Unclear Implementation Details
+- None. The backend implementation has clear separation of concerns, exhaustive input validation, consistent error and success structures, and complete automated test coverage across all endpoints.
+
+## 10. Recommended Next Task
+**Task 9: Frontend Initialization and Authentication Integration**
+1. Initialize Vite React client with Tailwind CSS in `frontend/`.
+2. Configure Axios client instance with `withCredentials: true` and automatic 401 refresh token interceptor as documented in `backend/README.md`.
+3. Implement user registration and login forms with client-side validation.
+4. Implement protected routing for dashboard and board views.
