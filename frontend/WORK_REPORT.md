@@ -616,3 +616,94 @@ No backend files were created, modified, or accessed.
 ### 8. Known Limitations & Placeholder Status
 - **UI-Only Entry Point:** The "Create Board" buttons and dashed cards are strictly non-functional placeholders. Clicking them displays a gentle notice indicating that Board creation modals and backend CRUD endpoints (`POST /api/v1/boards`) will be connected in Task 5.
 - **Static Board Data:** The boards displayed are mock datasets. Real board fetching (`GET /api/v1/boards`) and loading skeleton states are scheduled for upcoming tasks (Task 4.3 and Task 5).
+
+
+---
+
+## Task 4.2: Dashboard Loading & Empty States
+
+### 1. Summary of Changes
+Refined the DevFlow dashboard's presentation architecture by introducing a dedicated board-card loading skeleton, formalizing mutually exclusive rendering states (Loading, Empty, Populated), and cleaning out temporary development switcher controls:
+- **Dedicated Board Skeleton ([`BoardSkeleton.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardSkeleton.jsx)):** Built an atomic skeleton card matching the exact dimensions, grid footprint, and padding of `BoardCard` using Tailwind CSS native pulse animation.
+- **Strictly Separated Presentation States:** Structured `DashboardPage.jsx` into three mutually exclusive conditional branches (`isLoading`, `boards.length === 0`, and `boards.length > 0`), ensuring empty states never leak alongside populated cards or during loading.
+- **Development UI Cleanup:** Removed the temporary dev-only state toggle buttons from the user interface, presenting a clean, user-focused dashboard.
+- **Metric Card Skeletons:** Overview metric values now include pulse placeholders when in loading state.
+
+---
+
+### 2. Loading Skeleton Implementation
+- Located at [`frontend/src/components/boards/BoardSkeleton.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardSkeleton.jsx).
+- **Structure:**
+  - Accent bar placeholder (`h-1 bg-slate-200`) across top edge.
+  - Icon placeholder (`w-9 h-9 bg-slate-200 rounded-lg`).
+  - Action hint placeholder (`w-4 h-4 bg-slate-100 rounded`).
+  - Title placeholder (`h-4.5 bg-slate-200 rounded-md w-3/4 mb-2.5 mt-2`).
+  - Description placeholders (`h-3 bg-slate-100 rounded w-full`, `h-3 bg-slate-100 rounded w-4/5`).
+  - Footer metadata placeholders: column badge (`h-4 w-16 bg-slate-100 rounded`) and date indicator (`h-3.5 w-20 bg-slate-100 rounded`).
+- **Configurable Batching:** Accepts `count={6}` to seamlessly populate the 3-column dashboard grid.
+- **Zero Library Bloat:** Employs standard Tailwind CSS `animate-pulse` without installing external animation or skeleton libraries.
+
+---
+
+### 3. Empty-State Behavior
+- Rendered only when `!isLoading && boards.length === 0`.
+- Presents a centered dashed container with a `FolderPlus` icon, clear messaging ("No boards available"), and a "Create Your First Board" action button.
+- Strictly isolated: never displays alongside populated board cards or during active loading.
+- Create-board action functions as a UI-only placeholder, displaying an informational banner regarding upcoming Task 5 CRUD integration.
+
+---
+
+### 4. Populated-State Behavior
+- Rendered only when `!isLoading && boards.length > 0`.
+- Renders the dashed "Create New Board" entry card followed by all `BoardCard` instances from mock board data.
+- Maintains responsive grid scaling (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5`).
+- Preserves full interactive styling, hover states, and dynamic routing links to `/boards/:boardId`.
+
+---
+
+### 5. Components Created or Reused
+- **Created:**
+  - [`frontend/src/components/boards/BoardSkeleton.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardSkeleton.jsx): Reusable loading skeleton card.
+- **Reused:**
+  - [`frontend/src/components/boards/BoardCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardCard.jsx): Preserved for populated board card presentation.
+  - [`frontend/src/components/common/Button.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Button.jsx): Reused for header and empty-state action triggers.
+  - [`frontend/src/components/layout/Navbar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/Navbar.jsx) & [`AppLayout.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/AppLayout.jsx): Reused for application shell.
+  - [`frontend/src/hooks/useAuth.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/hooks/useAuth.js): Reused for authenticated username header greeting.
+
+---
+
+### 6. Files Created and Modified
+- **Created:**
+  - `frontend/src/components/boards/BoardSkeleton.jsx`
+- **Modified:**
+  - `frontend/src/pages/DashboardPage.jsx`
+  - `frontend/WORK_REPORT.md`
+
+No backend files were touched.
+
+---
+
+### 7. Responsive Behavior
+- **Mobile (< 640px):** Single-column grid (`grid-cols-1`) for skeletons, populated cards, and empty state.
+- **Tablet (640px – 1024px):** 2-column grid (`sm:grid-cols-2`) maintaining uniform skeleton card heights.
+- **Desktop (>= 1024px):** 3-column grid (`lg:grid-cols-3`) with consistent card dimensions and spacing.
+
+---
+
+### 8. Actual Lint Results
+- Command: `npm run lint`
+- Result: **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+---
+
+### 9. Actual Production Build Results
+- Command: `npm run build`
+- Result: Vite production build succeeded in 4.67s with 0 errors:
+  - `dist/index.html`: `0.45 kB`
+  - `dist/assets/index-hJxlLOE-.css`: `31.48 kB`
+  - `dist/assets/index-B8x81aaL.js`: `345.99 kB`
+
+---
+
+### 10. Known Limitations & Placeholder Status
+- **UI-Only Loading & Board Data:** States are driven by local React state (`isLoading: false`, `boards: INITIAL_MOCK_BOARDS`) in preparation for real API integration. Live board fetching (`GET /api/v1/boards`) and board creation (`POST /api/v1/boards`) will be connected in Task 5.

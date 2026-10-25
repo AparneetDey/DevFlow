@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, LayoutDashboard, Kanban, Layers, Sparkles, FolderPlus, Info } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { BoardCard } from '../components/boards/BoardCard';
+import { BoardSkeleton } from '../components/boards/BoardSkeleton';
 import { Button } from '../components/common/Button';
 
 // Locally defined mock board dataset mirroring backend Board model fields
@@ -42,10 +43,11 @@ const INITIAL_MOCK_BOARDS = [
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const [showNotice, setShowNotice] = useState(false);
-  const [activeTab, setActiveTab] = useState('populated'); // 'populated' | 'empty'
 
-  const boards = activeTab === 'populated' ? INITIAL_MOCK_BOARDS : [];
+  // Dashboard presentation states (isolated for Task 5 API integration)
+  const [boards] = useState(INITIAL_MOCK_BOARDS);
+  const [isLoading] = useState(false);
+  const [showNotice, setShowNotice] = useState(false);
 
   const handleCreatePlaceholder = () => {
     setShowNotice(true);
@@ -90,7 +92,7 @@ export function DashboardPage() {
         <div className="flex items-start gap-3 p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs animate-in fade-in duration-200">
           <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
           <div>
-            <p className="font-semibold text-indigo-950">UI-Only Entry Point (Task 4.1)</p>
+            <p className="font-semibold text-indigo-950">UI-Only Entry Point (Task 4.2)</p>
             <p className="text-indigo-800 mt-0.5">
               Board creation modal and live Backend Board API integration (`POST /api/v1/boards`) will be connected in Task 5.
             </p>
@@ -98,7 +100,7 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Overview Statistics Cards (Visual Presentation) */}
+      {/* Overview Statistics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
@@ -106,7 +108,11 @@ export function DashboardPage() {
           </div>
           <div>
             <p className="text-xs font-medium text-slate-500">Active Boards</p>
-            <p className="text-lg font-bold text-slate-900">{boards.length}</p>
+            {isLoading ? (
+              <div className="h-5 w-8 bg-slate-200 rounded animate-pulse mt-1" />
+            ) : (
+              <p className="text-lg font-bold text-slate-900">{boards.length}</p>
+            )}
           </div>
         </div>
 
@@ -133,50 +139,27 @@ export function DashboardPage() {
 
       {/* Boards Section */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Your Boards</h2>
-            <p className="text-xs text-slate-500">Select any workspace to view and organize Kanban tasks.</p>
-          </div>
-
-          {/* UI State Toggle for Verification */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setActiveTab('populated')}
-              className={`px-3 py-1 rounded-md font-medium transition-colors ${
-                activeTab === 'populated'
-                  ? 'bg-white text-indigo-600 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Mock Boards ({INITIAL_MOCK_BOARDS.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('empty')}
-              className={`px-3 py-1 rounded-md font-medium transition-colors ${
-                activeTab === 'empty'
-                  ? 'bg-white text-indigo-600 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Empty State Preview
-            </button>
-          </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Your Boards</h2>
+          <p className="text-xs text-slate-500">Select any workspace to view and organize Kanban tasks.</p>
         </div>
 
-        {/* Board Cards Grid or Empty State */}
-        {boards.length === 0 ? (
-          /* Empty State Representation */
+        {/* Mutually Exclusive Presentation States: Loading vs Empty vs Populated */}
+        {isLoading ? (
+          /* 1. Loading State: Skeleton cards */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" aria-busy="true">
+            <BoardSkeleton count={6} />
+          </div>
+        ) : boards.length === 0 ? (
+          /* 2. Empty State: No boards available */
           <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center max-w-lg mx-auto my-8 space-y-4">
             <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto border border-indigo-100 shadow-2xs">
               <FolderPlus className="w-7 h-7" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900">No boards created yet</h3>
+              <h3 className="text-base font-bold text-slate-900">No boards available</h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Get started by creating your first project workspace to track agile workflows and tasks.
+                You do not have any active project workspaces yet. Create a new board to get started organizing your tasks.
               </p>
             </div>
             <Button
@@ -190,12 +173,13 @@ export function DashboardPage() {
             </Button>
           </div>
         ) : (
+          /* 3. Populated State: Display board cards */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {/* Create Board Entry Point (Dashed Card) */}
             <button
               type="button"
               onClick={handleCreatePlaceholder}
-              className="min-h-[160px] rounded-xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 p-6 flex flex-col items-center justify-center text-center transition-all duration-200 group cursor-pointer"
+              className="min-h-[170px] rounded-xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 p-6 flex flex-col items-center justify-center text-center transition-all duration-200 group cursor-pointer"
             >
               <div className="w-10 h-10 rounded-full bg-white text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 flex items-center justify-center border border-slate-200 group-hover:border-indigo-200 transition-all mb-2.5 shadow-2xs">
                 <Plus className="w-5 h-5" />
@@ -204,7 +188,7 @@ export function DashboardPage() {
                 Create New Board
               </span>
               <span className="text-[11px] text-slate-400 mt-0.5">
-                UI Entry Point (Task 4.1)
+                UI Entry Point (Task 5)
               </span>
             </button>
 
