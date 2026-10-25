@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Board, DEFAULT_COLUMNS } from "../models/board.model.js";
+import { Task } from "../models/task.model.js";
 import { ApiError } from "../utils/ApiError.js";
 
 /**
@@ -126,6 +127,9 @@ class BoardService {
         if (!deletedBoard) {
             throw new ApiError(404, "Board not found");
         }
+
+        // Cascade cleanup: remove all tasks belonging to this board to prevent orphaned documents
+        await Task.deleteMany({ boardId });
 
         return { message: "Board deleted successfully" };
     }

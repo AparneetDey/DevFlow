@@ -13,11 +13,15 @@ import {
     updateBoardSchema,
     boardIdParamSchema
 } from "../validators/board.validator.js";
+import taskRouter from "./task.routes.js";
 
 const router = Router();
 
 // Protect all board routes with JWT authentication
 router.use(verifyJWT);
+
+// Nested task routes for a board: /api/v1/boards/:boardId/tasks
+router.use("/:boardId/tasks", taskRouter);
 
 // Board collection routes
 router

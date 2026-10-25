@@ -1180,3 +1180,210 @@ All 14 test scenarios were verified against the live MongoDB Atlas cluster:
 4. Implement `backend/src/controllers/task.controller.js` and `backend/src/routes/task.routes.js`.
 5. Mount task routes in `backend/src/app.js` at `/api/v1/tasks` or `/api/v1/boards/:boardId/tasks`.
 
+---
+
+## Task 6: Task and Card Management
+
+### 1. Initial Project State
+Prior to Task 6:
+- Foundational infrastructure (Tasks 1 & 2), user authentication with JWT and cookies (Tasks 3 & 4), and board management (Task 5) were fully implemented and verified.
+- The board router was mounted at `/api/v1/boards`, enforcing ownership checks.
+- However, prior to Task 6, no task or card management domain existed:
+  - `backend/src/models/task.model.js` did not exist.
+  - `backend/src/validators/task.validator.js` did not exist.
+  - `backend/src/services/task.service.js` did not exist.
+  - `backend/src/controllers/task.controller.js` did not exist.
+  - `backend/src/routes/task.routes.js` did not exist.
+  - Deleting a board in `board.service.js` did not clean up associated task records.
+  - No nested task endpoints were mounted in `backend/src/app.js`.
+
+---
+
+### 2. Files Inspected
+- `backend/src/app.js`
+- `backend/src/models/board.model.js`
+- `backend/src/models/user.model.js`
+- `backend/src/services/board.service.js`
+- `backend/src/validators/board.validator.js`
+- `backend/src/middlewares/validate.middleware.js`
+- `backend/src/middlewares/auth.middleware.js`
+- `backend/src/routes/auth.routes.js`
+- `backend/src/routes/board.routes.js`
+- `backend/WORK_REPORT.md`
+
+---
+
+### 3. Files Created
+- `backend/src/models/task.model.js` — Mongoose schema and model for tasks with `title`, `description`, `boardId`, `columnKey` (`todo`, `in-progress`, `done`), `order`, `priority` (`low`, `medium`, `high`), `dueDate`, and compound indexes for fast board/column ordering queries.
+- `backend/src/validators/task.validator.js` — Zod schemas (`createTaskSchema`, `updateTaskSchema`, `moveTaskSchema`, `boardIdParamSchema`, `taskParamsSchema`) with strict unrecognized field rejection (`.strict()`).
+- `backend/src/services/task.service.js` — Core business service (`taskService`) handling task creation, board-scoped retrieval, detail updates, movement/reordering, deletion, and cross-entity ownership authorization.
+- `backend/src/controllers/task.controller.js` — Express controllers (`createTask`, `getBoardTasks`, `getTask`, `updateTask`, `moveTask`, `deleteTask`) wrapped with `asyncHandler` and returning standardized `ApiResponse`.
+- `backend/src/routes/task.routes.js` — Express nested router with `mergeParams: true`, binding routes, parameter validation, body validation, authentication middleware, and controller methods.
+
+---
+
+### 4. Files Modified
+- `backend/src/services/board.service.js` — Added cascade cleanup in `deleteBoard`: imports `Task` and executes `await Task.deleteMany({ boardId })` upon board deletion to prevent orphaned documents.
+- `backend/src/routes/board.routes.js` — Nested task routes under `router.use("/:boardId/tasks", taskRouter)`.
+- `backend/src/app.js` — Mounted `app.use("/api/v1/boards/:boardId/tasks", taskRouter)` to ensure direct nested route handling prior to `/api/v1/boards`.
+- `backend/WORK_REPORT.md` — Appended Task 6 technical documentation.
+
+---
+
+### 5. Task Schema
+Implemented in `backend/src/models/task.model.js`:
+
+| Field | Type | Modifiers / Validations | Description |
+| :--- | :--- | :--- | :--- |
+| `title` | `String` | `required`, `trim`, `minlength: 1`, `maxlength: 150` | Task title |
+| `description` | `String` | `trim`, `maxlength: 2000`, `default: ""` | Optional task description |
+| `boardId` | `Schema.Types.ObjectId` | `required`, `ref: 'Board'`, `index: true` | Parent board reference |
+| `columnKey` | `String` | `required`, `enum: ['todo', 'in-progress', 'done']`, `default: 'todo'` | Target column status |
+| `order` | `Number` | `required`, `min: 0`, `default: 0` | Numeric position within column |
+| `priority` | `String` | `enum: ['low', 'medium', 'high']`, `default: 'medium'` | Priority level |
+| `dueDate` | `Date` | `default: null` | Optional deadline timestamp |
+| `timestamps` | `Boolean` | `createdAt`, `updatedAt` | Automatic entity timestamps |
+
+**Indexes:**
+- Compound index `{ boardId: 1, columnKey: 1, order: 1 }` for ordered column task queries.
+- Compound index `{ boardId: 1, order: 1 }` for whole-board ordering scans.
+
+---
+
+### 6. API Endpoints
+
+All endpoints are nested under `/api/v1/boards/:boardId/tasks` and protected by `verifyJWT`:
+
+| Method | Endpoint | Protection | Validation | Purpose | Status Code |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | `validateParams(boardIdParamSchema)` + `validate(createTaskSchema)` | Create a new task under a board | `201 Created` |
+| `GET` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | `validateParams(boardIdParamSchema)` | List all tasks on a board (optional `?columnKey=` filter) | `200 OK` |
+| `GET` | `/api/v1/boards/:boardId/tasks/:taskId` | `verifyJWT` | `validateParams(taskParamsSchema)` | Retrieve a single task by ID | `200 OK` |
+| `PATCH` | `/api/v1/boards/:boardId/tasks/:taskId` | `verifyJWT` | `validateParams(taskParamsSchema)` + `validate(updateTaskSchema)` | Update task details (`title`, `description`, `priority`, `dueDate`) | `200 OK` |
+| `PATCH` | `/api/v1/boards/:boardId/tasks/:taskId/move` | `verifyJWT` | `validateParams(taskParamsSchema)` + `validate(moveTaskSchema)` | Move task to a column and/or reposition order | `200 OK` |
+| `DELETE` | `/api/v1/boards/:boardId/tasks/:taskId` | `verifyJWT` | `validateParams(taskParamsSchema)` | Delete a task | `200 OK` |
+
+---
+
+### 7. Authorization Approach
+- **Strict Board Ownership Scoping:**
+  - In `taskService.verifyBoardOwnership(boardId, userId)`, the service queries `Board.findOne({ _id: boardId, owner: userId })`.
+  - If the board does not exist OR is owned by another user, the service immediately throws `ApiError(404, "Board not found")`.
+- **Strict Task-to-Board Association:**
+  - For operations on a task (`getTaskById`, `updateTask`, `moveTask`, `deleteTask`), the query enforces `{ _id: taskId, boardId }`.
+  - If the task does not exist on that board (even if it exists on another board belonging to the same user), the service returns `ApiError(404, "Task not found")`.
+- **No Client-Supplied Trust:**
+  - Clients cannot pass `boardId` in request bodies. It is extracted strictly from the URL route parameters verified against the token identity.
+  - Users cannot access, modify, move, or delete tasks belonging to other users.
+
+---
+
+### 8. Ordering Implementation
+- **Automatic Appending on Creation:**
+  - Newly created tasks query the maximum order in the target column (`findOne({ boardId, columnKey }).sort({ order: -1 })`) and assign `nextOrder = lastTask ? lastTask.order + 1 : 0`.
+- **Movement Without Specified Order:**
+  - When moving a task to a target column without providing an `order`, the task is appended to the bottom of the destination column (`order = maxOrder + 1`).
+  - If the task moved from a different column, the source column is normalized (`0, 1, 2, ...`).
+- **Movement With Target Order:**
+  - When a target `order` is provided, the destination column tasks are fetched in ascending order, the moved task is spliced into position, and orders are updated in bulk (`bulkWrite`) ensuring contiguous integers (`0, 1, 2, ...`).
+  - The source column (if different) is re-normalized.
+- **Deletion Re-Normalization:**
+  - Deleting a task triggers `normalizeColumnOrders` to close any order gap in the affected column.
+
+---
+
+### 9. Board Deletion Cleanup
+- In `backend/src/services/board.service.js`, `deleteBoard` was updated:
+  ```javascript
+  const deletedBoard = await Board.findOneAndDelete({ _id: boardId, owner: userId });
+  if (!deletedBoard) {
+      throw new ApiError(404, "Board not found");
+  }
+  // Cascade cleanup: remove all tasks belonging to this board
+  await Task.deleteMany({ boardId });
+  ```
+- Guaranteed prevention of orphaned task documents without requiring complex distributed transactions.
+
+---
+
+### 10. Dependencies Added
+*No new external packages were added.*
+The implementation relies entirely on existing dependencies:
+- `mongoose` (`^9.11.4`)
+- `express` (`^5.3.0`)
+- `zod` (`^4.6.7`)
+- `jsonwebtoken` (`^9.0.3`)
+
+---
+
+### 11. Commands Executed
+1. `node --check ...` — Validated syntax across all 26 backend source files.
+2. `cd backend; Get-Content .../scratch/test_task_management.js -Raw | node --input-type=module` — Executed full task integration test suite against live MongoDB Atlas (25 test cases).
+3. `cd backend; Get-Content .../scratch/test_board_management.js -Raw | node --input-type=module` — Executed board management regression suite.
+4. `cd backend; Get-Content .../scratch/test_auth_system.js -Raw | node --input-type=module` — Executed authentication regression suite.
+
+---
+
+### 12. Tests Performed and Actual Results
+All 25 targeted test scenarios passed against live MongoDB Atlas:
+1. **Authenticated Task Creation:** Status 201; returns task object.
+2. **Board ID Assignment:** Task is correctly linked to parent board (`boardId`).
+3. **Default Column Assignment:** Task defaults to `todo` column when omitted.
+4. **Default Priority Assignment:** Task priority defaults to `medium`.
+5. **Sequential Order Assignment:** First task gets order 0, second gets order 1, third gets order 2; first in-progress gets order 0.
+6. **Board Task Listing:** Lists all tasks for the board (Status 200).
+7. **Sorting Verification:** Tasks sorted by column and order ascending.
+8. **Column Filtering:** `?columnKey=todo` returns 3 tasks; `in-progress` returns 1; `done` returns 0.
+9. **Single Task Retrieval:** Returns requested task matching title and description.
+10. **Title and Description Update:** Updates saved and persisted in MongoDB.
+11. **Priority and Due Date Update:** Priority updated to `high`; `dueDate` stored as Date object.
+12. **Move to In Progress:** Status 200; columnKey updated; appended with order 1.
+13. **Move to Done:** Status 200; columnKey updated to `done` with order 0.
+14. **Move Appending vs Targeted Order:** Moving without order appends; moving with `order: 0` prepends and re-indexes contiguous orders (0, 1, 2).
+15. **Task Deletion:** Status 200; task removed from MongoDB; subsequent fetch returns 404.
+16. **Unauthenticated Request Rejection:** All 6 task endpoints reject missing auth with 401.
+17. **Invalid ID Rejection:** Malformed board or task ObjectIds rejected with 400.
+18. **Cross-User Board Access Prevention:** User A attempting to list or create tasks on User B's board receives 404.
+19. **Cross-User Task Access Prevention:** User A attempting to view, update, move, or delete User B's task receives 404 (User B's task remains untouched).
+20. **Cross-Board Mismatch Prevention:** Accessing a task using a different board ID owned by the same user returns 404.
+21. **Column Key Validation:** Invalid column keys rejected on create, move, and query filter (400).
+22. **Priority Validation:** Invalid priorities rejected on create and update (400).
+23. **Input Validation Constraints:** Empty titles, whitespace titles, titles > 150 chars, descriptions > 2000 chars, invalid dates, body `boardId`, body `order`, and empty update payloads rejected with 400.
+24. **Cascade Cleanup on Board Deletion:** Deleting a board automatically deletes all associated tasks in MongoDB (count drops from 3 to 0).
+25. **Regression Verification:** Authentication (`/me`) and board listing (`/boards`) verified fully functional.
+26. **Teardown:** Verified 0 test users, boards, or tasks remaining in Atlas.
+
+---
+
+### 13. Tests Not Performed
+1. **Frontend UI Drag-and-Drop Tests:** Frontend client is not yet built (out of scope).
+2. **Automated Continuous Integration Runner (`npm test`):** Automated test framework (Jest/Vitest) is not yet configured in `package.json`.
+
+---
+
+### 14. Issues Encountered
+1. **Express Nested Route Parameter Merging:**
+   - *Issue:* Express routers by default do not preserve parent route parameters (`:boardId`) when mounted as sub-routers.
+   - *Resolution:* Configured `Router({ mergeParams: true })` in `task.routes.js` and mounted directly in `app.js` and `board.routes.js`, ensuring `req.params.boardId` is accessible across all controller handlers.
+2. **Dual-Column Order Normalization on Move:**
+   - *Issue:* Moving a task from column A to column B leaves an order gap in column A and requires order insertion in column B.
+   - *Resolution:* Implemented `normalizeColumnOrders` helper executed on both source and destination columns during movement and deletion.
+
+---
+
+### 15. Remaining Risks
+1. **Concurrency During High-Frequency Simultaneous Moves:**
+   Order normalization in a column uses sequential find and bulk write. Under extremely high concurrent write loads on the exact same column, optimistic concurrency or atomic list operations may be considered in future releases.
+2. **Missing Advanced Task Features:**
+   Task assignment, labels, attachments, activity history, and comments are not yet supported (as per current MVP scope).
+
+---
+
+### 16. Recommended Next Task
+**Task 7: Automated Test Framework Setup & Comprehensive CI Suite**
+1. Install testing framework dependencies (`vitest` or `jest`, and `supertest`).
+2. Configure `package.json` test scripts (`npm test`).
+3. Convert scratch test suites into formal integration and unit test specifications under `backend/tests/`.
+4. Implement GitHub Actions or CI pipeline configurations.
+
+
