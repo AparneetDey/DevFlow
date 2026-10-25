@@ -32,7 +32,7 @@ router.post(
 );
 
 // Protected authentication routes
-router.post("/logout", verifyJWT, logout);
+router.delete("/logout", verifyJWT, logout);
 router.get("/me", verifyJWT, getCurrentUser);
 
 export default router;
