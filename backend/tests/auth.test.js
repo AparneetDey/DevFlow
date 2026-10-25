@@ -92,6 +92,83 @@ describe("Authentication API", () => {
             expect(Array.isArray(res.body.errors)).toBe(true);
             expect(res.body.errors.length).toBeGreaterThan(0);
         });
+
+        it("should reject usernames with invalid characters (spaces, hyphens, dots, special chars, emojis)", async () => {
+            const invalidUsernames = [
+                "dev flow",
+                " dev_flow",
+                "dev_flow ",
+                "dev-flow",
+                "dev.flow",
+                "user@123",
+                "user!",
+                "user😊"
+            ];
+
+            for (const username of invalidUsernames) {
+                const res = await request(app)
+                    .post("/api/v1/auth/register")
+                    .send({
+                        username,
+                        email: `valid_${Date.now()}@example.com`,
+                        password: "SecurePassword123!"
+                    });
+
+                expect(res.status).toBe(400);
+                expect(res.body.success).toBe(false);
+                expect(res.body.errors).toContain(
+                    "Username can only contain English letters, numbers, and underscores"
+                );
+            }
+        });
+
+        it("should reject usernames violating length boundaries (empty, below min, exceeding max)", async () => {
+            const boundaryCases = [
+                { username: "", expectedError: "Username must be at least 3 characters long" },
+                { username: "ab", expectedError: "Username must be at least 3 characters long" },
+                { username: "a".repeat(31), expectedError: "Username cannot exceed 30 characters" }
+            ];
+
+            for (const { username, expectedError } of boundaryCases) {
+                const res = await request(app)
+                    .post("/api/v1/auth/register")
+                    .send({
+                        username,
+                        email: `valid_${Date.now()}@example.com`,
+                        password: "SecurePassword123!"
+                    });
+
+                expect(res.status).toBe(400);
+                expect(res.body.success).toBe(false);
+                expect(res.body.errors).toContain(expectedError);
+            }
+        });
+
+        it("should accept valid usernames matching character and boundary rules", async () => {
+            const validUsernames = [
+                "Priyosi123",
+                "dev_flow",
+                "User_2026",
+                "abc",
+                "123",
+                "a".repeat(30)
+            ];
+
+            for (let i = 0; i < validUsernames.length; i++) {
+                const username = validUsernames[i];
+                const res = await request(app)
+                    .post("/api/v1/auth/register")
+                    .send({
+                        username,
+                        email: `user_${i}_${Date.now()}@example.com`,
+                        password: "SecurePassword123!"
+                    });
+
+                expect(res.status).toBe(201);
+                expect(res.body.success).toBe(true);
+                expect(res.body.data.user.username).toBe(username.toLowerCase());
+            }
+        });
     });
 
     describe("POST /api/v1/auth/login", () => {

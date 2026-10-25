@@ -1847,3 +1847,91 @@ The final `backend/README.md` document spans 1,330+ lines and contains 13 fully 
 
 
 ---
+
+
+---
+
+## Micro Task 3.2: Backend Username Validation
+
+### 1. Existing Validation Behavior Discovered
+Prior to Micro Task 3.2, user registration requests were inspected across the following components:
+- **`backend/src/validators/auth.validator.js` (`registerSchema`):**
+  - Username had `.trim()`, `.min(3, "Username must be at least 3 characters long")`, `.max(30, "Username cannot exceed 30 characters")`, and `.toLowerCase()`.
+  - Critically, it lacked character-set restriction validation. As a result, characters outside alphanumeric/underscore—including hyphens (`dev-flow`), dots (`dev.flow`), spaces (`dev flow`), special symbols (`user@123`, `user!`), and emojis (`user😊`)—were accepted by the Zod schema. Furthermore, strings with leading/trailing spaces (e.g. `" dev_flow"`) were silently trimmed rather than rejected.
+- **`backend/src/models/user.model.js` (`userSchema`):**
+  - Username field configured with `minlength: 3`, `maxlength: 30`, `trim: true`, `lowercase: true`, and `unique: true`.
+  - No Mongoose `match` regular expression existed on `username`.
+- **`backend/src/middlewares/validate.middleware.js`:**
+  - Standard Express validation middleware that parses `req.body` with Zod and forwards issues as `ApiError(400, "Validation Error", errors)`.
+
+### 2. Validation Rule Implemented
+In `backend/src/validators/auth.validator.js`, updated `registerSchema` to enforce the requested regular expression:
+```javascript
+export const registerSchema = z.object({
+    username: z
+        .string({ required_error: "Username is required" })
+        .min(3, "Username must be at least 3 characters long")
+        .max(30, "Username cannot exceed 30 characters")
+        .regex(
+            /^[A-Za-z0-9_]+$/,
+            "Username can only contain English letters, numbers, and underscores"
+        )
+        .toLowerCase(),
+    email: z
+        .string({ required_error: "Email is required" })
+        .trim()
+        .email("Please provide a valid email address")
+        .toLowerCase(),
+    password: z
+        .string({ required_error: "Password is required" })
+        .min(6, "Password must be at least 6 characters long")
+});
+```
+Key architectural details:
+- **Allowed Character Set:** Only English uppercase letters (`A-Z`), English lowercase letters (`a-z`), numbers (`0-9`), and underscores (`_`) via `^[A-Za-z0-9_]+$`.
+- **Strict Space Rejection:** Removed leading `.trim()` so that usernames with any spaces (leading, middle, or trailing) are rejected by the regular expression rather than silently mutated.
+- **Length Constraint Preservation:** Preserved existing `min(3)` and `max(30)` length constraints without modification.
+- **Normalization:** Applied `.toLowerCase()` post-regex to preserve case-insensitive uniqueness and consistency with MongoDB and existing auth flows.
+- **Error Formatting:** Uses existing `ApiError(400, "Validation Error", ["Username can only contain English letters, numbers, and underscores"])` directly compatible with frontend error parsing.
+
+### 3. Files Modified
+- [`backend/src/validators/auth.validator.js`](file:///e:/GitHub-Repo/DevFlow/backend/src/validators/auth.validator.js) — Added regular expression check `/^[A-Za-z0-9_]+$/` and removed silent space trimming.
+- [`backend/tests/auth.test.js`](file:///e:/GitHub-Repo/DevFlow/backend/tests/auth.test.js) — Added automated test coverage for invalid character rejections, length boundary checks, and valid username registrations.
+- [`backend/WORK_REPORT.md`](file:///e:/GitHub-Repo/DevFlow/backend/WORK_REPORT.md) — Appended this Micro Task 3.2 completion report.
+
+### 4. Validation Cases Tested
+1. **Valid Alphanumeric Username:** `"Priyosi123"` — Accepted (parsed to `"priyosi123"`).
+2. **Valid Username Containing Underscores:** `"dev_flow"` — Accepted (parsed to `"dev_flow"`).
+3. **Valid Mixed Case and Numbers:** `"User_2026"` — Accepted (parsed to `"user_2026"`).
+4. **Valid Minimum Length Boundary (3 chars):** `"abc"` and `"123"` — Accepted.
+5. **Valid Maximum Length Boundary (30 chars):** `"a".repeat(30)` — Accepted.
+6. **Username Containing Spaces:** `"dev flow"` — Rejected with 400 (`"Username can only contain English letters, numbers, and underscores"`).
+7. **Username Containing Leading Space:** `" dev_flow"` — Rejected with 400 (`"Username can only contain English letters, numbers, and underscores"`).
+8. **Username Containing Trailing Space:** `"dev_flow "` — Rejected with 400 (`"Username can only contain English letters, numbers, and underscores"`).
+9. **Username Containing Hyphens:** `"dev-flow"` — Rejected with 400 (`"Username can only contain English letters, numbers, and underscores"`).
+10. **Username Containing Dots:** `"dev.flow"` — Rejected with 400 (`"Username can only contain English letters, numbers, and underscores"`).
+11. **Username Containing Special Characters:** `"user@123"` and `"user!"` — Rejected with 400 (`"Username can only contain English letters, numbers, and underscores"`).
+12. **Username Containing Emojis:** `"user😊"` — Rejected with 400 (`"Username can only contain English letters, numbers, and underscores"`).
+13. **Empty Username:** `""` — Rejected with 400 (`"Username must be at least 3 characters long"`).
+14. **Username Below Minimum Length:** `"ab"` (2 chars) — Rejected with 400 (`"Username must be at least 3 characters long"`).
+15. **Username Exceeding Maximum Length:** `"a".repeat(31)` (31 chars) — Rejected with 400 (`"Username cannot exceed 30 characters"`).
+
+### 5. Actual Lint and Test Results
+- **Syntax Check:** `node -c src/validators/auth.validator.js tests/auth.test.js` passed without errors.
+- **Middleware Integration Test:** All 17 unit test cases passed with 0 failures.
+- **Full Automated Test Suite (`npm test`):**
+  - Test runner: Vitest v5.0.5
+  - Test files: 3 passed (3 total)
+  - Total tests: 55 passed (55 total, 0 failed, 0 skipped)
+    - `tests/auth.test.js`: 21 passed (includes 7 registration test scenarios verifying all username rules and database persistence)
+    - `tests/board.test.js`: 14 passed
+    - `tests/task.test.js`: 20 passed
+  - Execution duration: ~28 seconds
+
+### 6. API-Level Registration Testing Performed
+- **Yes.** API-level testing was executed via Supertest against the full Express `app` mounting `/api/v1/auth/register`:
+  - Verified HTTP `400 Bad Request` responses on invalid usernames with `{ success: false, message: "Validation Error", errors: [...] }`.
+  - Verified HTTP `201 Created` responses on valid usernames with set cookies (`accessToken`, `refreshToken`), response payload, and database persistence in MongoDB Atlas (`devflow_test`).
+
+### 7. Known Limitations
+- Network latency: Full automated test runs against remote MongoDB Atlas cluster take ~25–30 seconds.

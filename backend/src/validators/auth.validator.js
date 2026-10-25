@@ -3,9 +3,12 @@ import { z } from "zod";
 export const registerSchema = z.object({
     username: z
         .string({ required_error: "Username is required" })
-        .trim()
         .min(3, "Username must be at least 3 characters long")
         .max(30, "Username cannot exceed 30 characters")
+        .regex(
+            /^[A-Za-z0-9_]+$/,
+            "Username can only contain English letters, numbers, and underscores"
+        )
         .toLowerCase(),
     email: z
         .string({ required_error: "Email is required" })

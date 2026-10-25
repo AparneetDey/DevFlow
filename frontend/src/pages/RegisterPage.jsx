@@ -6,6 +6,8 @@ import { extractErrorMessage } from '../api/error';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 
+const USERNAME_REGEX = /^[A-Za-z0-9_]+$/;
+
 export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -32,14 +34,16 @@ export function RegisterPage() {
 
   const validate = () => {
     const errors = {};
-    const username = formData.username.trim();
+    const username = formData.username;
 
-    if (!username) {
+    if (!username || !username.trim()) {
       errors.username = 'Username is required';
     } else if (username.length < 3) {
       errors.username = 'Username must be at least 3 characters long';
     } else if (username.length > 30) {
       errors.username = 'Username cannot exceed 30 characters';
+    } else if (!USERNAME_REGEX.test(username)) {
+      errors.username = 'Username can only contain English letters, numbers, and underscores';
     }
 
     const email = formData.email.trim();
