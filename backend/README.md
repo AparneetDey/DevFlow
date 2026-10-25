@@ -2,142 +2,196 @@
 
 Welcome to the backend API documentation for **DevFlow**, a Trello-inspired Kanban task management application.
 
-DevFlow provides a structured RESTful API for user authentication, board organization, and Kanban card workflow management.
+DevFlow provides a structured, production-grade RESTful API for user authentication, board organization, and Kanban card workflow management. It is designed around a clean layered architecture with centralized error handling, robust request validation, dual-token JWT authentication with HttpOnly cookies, and strict cross-user data isolation.
 
 ---
 
 ## Table of Contents
 
-1. [API Overview](#api-overview)
-2. [Environment Configuration](#environment-configuration)
-3. [Architecture and Design Principles](#architecture-and-design-principles)
-4. [Authentication and Security Mechanism](#authentication-and-security-mechanism)
-5. [Standard API Response Format](#standard-api-response-format)
-6. [Complete API Summary Table](#complete-api-summary-table)
-7. [Authentication API Group](#authentication-api-group)
-   - [POST /api/v1/auth/register](#1-register-user)
-   - [POST /api/v1/auth/login](#2-login-user)
-   - [POST /api/v1/auth/refresh-token](#3-refresh-access-token)
-   - [DELETE /api/v1/auth/logout](#4-logout-user)
-   - [GET /api/v1/auth/me](#5-get-current-user)
-8. [Board Management API Group](#board-management-api-group)
-   - [POST /api/v1/boards](#1-create-board)
-   - [GET /api/v1/boards](#2-list-user-boards)
-   - [GET /api/v1/boards/:boardId](#3-get-board-by-id)
-   - [PATCH /api/v1/boards/:boardId](#4-update-board)
-   - [DELETE /api/v1/boards/:boardId](#5-delete-board)
-9. [Task and Card Management API Group](#task-and-card-management-api-group)
-   - [POST /api/v1/boards/:boardId/tasks](#1-create-task)
-   - [GET /api/v1/boards/:boardId/tasks](#2-list-tasks-for-a-board)
-   - [GET /api/v1/boards/:boardId/tasks/:taskId](#3-get-task-by-id)
-   - [PATCH /api/v1/boards/:boardId/tasks/:taskId](#4-update-task-details)
-   - [PATCH /api/v1/boards/:boardId/tasks/:taskId/move](#5-move-or-reorder-task)
-   - [DELETE /api/v1/boards/:boardId/tasks/:taskId](#6-delete-task)
-10. [Frontend Integration Guide](#frontend-integration-guide)
-11. [Workflow Walkthrough Examples](#workflow-walkthrough-examples)
-12. [Automated Testing](#automated-testing)
+1. [Project Overview and Tech Stack](#1-project-overview-and-tech-stack)
+2. [Getting Started and Installation](#2-getting-started-and-installation)
+3. [Environment Configuration](#3-environment-configuration)
+4. [Architecture and Design Principles](#4-architecture-and-design-principles)
+5. [Authentication and Security Mechanism](#5-authentication-and-security-mechanism)
+6. [Standard API Response Format](#6-standard-api-response-format)
+7. [Complete API Summary Table](#7-complete-api-summary-table)
+8. [Authentication API Group](#8-authentication-api-group)
+   - [8.1 Register User (`POST /api/v1/auth/register`)](#81-register-user)
+   - [8.2 Login User (`POST /api/v1/auth/login`)](#82-login-user)
+   - [8.3 Refresh Access Token (`POST /api/v1/auth/refresh-token`)](#83-refresh-access-token)
+   - [8.4 Logout User (`DELETE /api/v1/auth/logout`)](#84-logout-user)
+   - [8.5 Get Current User (`GET /api/v1/auth/me`)](#85-get-current-user)
+9. [Board Management API Group](#9-board-management-api-group)
+   - [9.1 Create Board (`POST /api/v1/boards`)](#91-create-board)
+   - [9.2 List User Boards (`GET /api/v1/boards`)](#92-list-user-boards)
+   - [9.3 Get Board by ID (`GET /api/v1/boards/:boardId`)](#93-get-board-by-id)
+   - [9.4 Update Board (`PATCH /api/v1/boards/:boardId`)](#94-update-board)
+   - [9.5 Delete Board (`DELETE /api/v1/boards/:boardId`)](#95-delete-board)
+10. [Task and Card Management API Group](#10-task-and-card-management-api-group)
+    - [10.1 Create Task (`POST /api/v1/boards/:boardId/tasks`)](#101-create-task)
+    - [10.2 List Tasks for a Board (`GET /api/v1/boards/:boardId/tasks`)](#102-list-tasks-for-a-board)
+    - [10.3 Get Task by ID (`GET /api/v1/boards/:boardId/tasks/:taskId`)](#103-get-task-by-id)
+    - [10.4 Update Task Details (`PATCH /api/v1/boards/:boardId/tasks/:taskId`)](#104-update-task-details)
+    - [10.5 Move or Reorder Task (`PATCH /api/v1/boards/:boardId/tasks/:taskId/move`)](#105-move-or-reorder-task)
+    - [10.6 Delete Task (`DELETE /api/v1/boards/:boardId/tasks/:taskId`)](#106-delete-task)
+11. [Frontend Integration Guide](#11-frontend-integration-guide)
+12. [End-to-End Workflow Walkthrough](#12-end-to-end-workflow-walkthrough)
+13. [Automated Testing Suite](#13-automated-testing-suite)
 
 ---
 
-## API Overview
+## 1. Project Overview and Tech Stack
 
 - **Application Name:** DevFlow
 - **Technology Stack:**
-  - Runtime: Node.js (ES Modules, `type: "module"`)
-  - Framework: Express.js (v5.x)
-  - Database: MongoDB via Mongoose ODM (v9.x)
-  - Validation: Zod (v4.x)
-  - Authentication: JWT (`jsonwebtoken`) & `bcrypt`
-  - Cookie Parsing: `cookie-parser`
-  - Testing: Vitest & Supertest
+  - **Runtime:** Node.js (ES Modules, `"type": "module"`)
+  - **Web Framework:** Express.js (v5.x)
+  - **Database & ODM:** MongoDB with Mongoose ODM (v9.x)
+  - **Input Validation:** Zod (v4.x)
+  - **Authentication:** JSON Web Tokens (`jsonwebtoken`) & `bcrypt` password hashing
+  - **Cookie Parsing:** `cookie-parser`
+  - **Testing Framework:** Vitest (v5.x) & Supertest (v7.x)
 - **API Version:** `v1`
 - **Base URL:** `http://localhost:<PORT>/api/v1`
-  - Default Local URL: `http://localhost:8000/api/v1` *(where `<PORT>` is defined in `backend/.env` or defaults to `8000`)*
-- **Supported Media Type:** `application/json`
+  - **Default Local Endpoint:** `http://localhost:8000/api/v1` *(where `<PORT>` is set in `.env` or defaults to `8000`)*
+- **Data Interchange Format:** `application/json`
 
 ---
 
-## Environment Configuration
+## 2. Getting Started and Installation
 
-The backend relies on environment variables loaded via `dotenv`. The table below outlines all environment variables utilized by the server and testing framework:
+### Prerequisites
+- Node.js (v18.0.0 or higher recommended)
+- npm (v9.0.0 or higher)
+- A running MongoDB instance (local MongoDB server or MongoDB Atlas cluster connection string)
+
+### Step-by-Step Setup
+
+1. **Navigate to the Backend Directory:**
+   ```bash
+   cd backend
+   ```
+
+2. **Install Dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables:**
+   Create a `.env` file in the `backend/` directory by copying the provided template:
+   ```bash
+   cp .env.example .env
+   ```
+   Open `backend/.env` and configure your MongoDB connection string and secret keys.
+
+4. **Start the Development Server:**
+   Runs the server with `nodemon` for automatic reloading upon code changes:
+   ```bash
+   npm run dev
+   ```
+   *Console output on successful connection:*
+   ```text
+   [DATABASE] MongoDB Connected Successfully :: Connected Host :: cluster0.example.mongodb.net
+   [SERVER] Server Successfully Running :: Port 8000
+   ```
+
+5. **Start for Production:**
+   ```bash
+   npm start
+   ```
+
+6. **Run Automated Tests:**
+   Executes all 52 automated tests against the dedicated test database:
+   ```bash
+   npm test
+   ```
+
+---
+
+## 3. Environment Configuration
+
+The backend loads configuration from `backend/.env` using `dotenv`. The table below details all supported environment variables:
 
 | Variable | Required | Purpose | Example / Default |
 |:---|:---:|:---|:---|
-| `PORT` | No | Port on which the Express server listens. | `8000` (defaults to `8000` if omitted) |
-| `MONGO_DB_URI` | **Yes** | MongoDB connection string (Atlas cluster or local). | `mongodb+srv://<user>:<password>@cluster0.example.mongodb.net` |
-| `DEV_URL` | No | Allowed frontend origin for CORS handling. | `http://localhost:5173` |
-| `ACCESS_TOKEN_SECRET` | **Yes** | Symmetric secret key used to sign and verify short-lived access tokens. | `<strong_random_secret_string>` |
-| `ACCESS_TOKEN_EXPIRY` | No | Lifespan duration for JWT access tokens. | `1d` (defaults to `1d`) |
-| `REFRESH_TOKEN_SECRET` | **Yes** | Symmetric secret key used to sign and verify longer-lived refresh tokens. | `<strong_random_secret_string>` |
-| `REFRESH_TOKEN_EXPIRY` | No | Lifespan duration for JWT refresh tokens. | `10d` (defaults to `10d`) |
-| `NODE_ENV` | No | Application runtime environment (`development`, `production`, `test`). Affects cookie `secure` / `sameSite` flags and error stack traces. | `development` |
-| `TEST_DB_NAME` | No | Name of the isolated database used for automated tests. Tests strictly abort if pointed at `devflow` or `production`. | `devflow_test` |
+| `PORT` | No | Port on which the Express HTTP server listens. | `8000` *(defaults to `8000` if omitted)* |
+| `MONGO_DB_URI` | **Yes** | MongoDB connection string (Atlas cluster or local URI). | `mongodb+srv://<user>:<password>@cluster0.example.mongodb.net` |
+| `DEV_URL` | No | Frontend client origin permitted by CORS policy. | `http://localhost:5173` *(Vite default)* |
+| `ACCESS_TOKEN_SECRET` | **Yes** | Cryptographic symmetric key used to sign and verify access tokens. | `<strong_random_secret_string>` |
+| `ACCESS_TOKEN_EXPIRY` | No | Validity duration of access tokens. | `1d` *(defaults to `1d`)* |
+| `REFRESH_TOKEN_SECRET` | **Yes** | Cryptographic symmetric key used to sign and verify refresh tokens. | `<strong_random_secret_string>` |
+| `REFRESH_TOKEN_EXPIRY` | No | Validity duration of refresh tokens. | `10d` *(defaults to `10d`)* |
+| `NODE_ENV` | No | Runtime mode (`development`, `production`, `test`). In production, cookies enforce `secure: true` and `sameSite: "none"`, while error stack traces are suppressed. | `development` |
+| `TEST_DB_NAME` | No | Isolated database name used exclusively for test suites. Safety guards prevent running tests against `devflow` or `production`. | `devflow_test` |
 
-> **Security Notice:** Never commit actual `.env` files with real credentials to version control. Reference `backend/.env.example` as a template.
+> **Security Warning:** Never commit `.env` files containing actual passwords or secret keys to version control. Always maintain `.env.example` as a safe placeholder template.
 
 ---
 
-## Architecture and Design Principles
+## 4. Architecture and Design Principles
 
-The backend follows a strict layered separation of concerns:
+DevFlow strictly adheres to a layered architecture ensuring decoupling, testability, and clear separation of concerns:
 
 $$\text{Routes} \longrightarrow \text{Middleware} \longrightarrow \text{Controllers} \longrightarrow \text{Services} \longrightarrow \text{Models} \longrightarrow \text{MongoDB}$$
 
-1. **Routes (`src/routes/`):** Define URL endpoints, HTTP verbs, parameter schemas, and pipeline middleware.
+1. **Routes (`src/routes/`):** Define URL endpoints, HTTP methods, and mount middlewares in order. Route parameters are validated before reaching controllers.
 2. **Middleware (`src/middlewares/`):**
-   - `verifyJWT`: Verifies access token from cookies or Authorization header.
-   - `validate`: Enforces strict request body schema checks via Zod.
-   - `validateParams`: Enforces route parameter checks (e.g., verifying MongoDB ObjectIds).
-   - `notFoundHandler`: Catches unmatched URLs and forwards a structured 404 error.
-   - `errorHandler`: Centralized error serializer with environment-aware stack traces.
-3. **Controllers (`src/controllers/`):** Manage request parsing, invoke service layer methods, set cookies, and format responses via `ApiResponse`.
-4. **Services (`src/services/`):** Contain all core domain logic, authorization validation, database operations, and error throwing via `ApiError`.
-5. **Models (`src/models/`):** Define Mongoose schemas, indexes, schema hooks, and cryptographic helpers.
+   - [`verifyJWT`](file:///e:/GitHub-Repo/DevFlow/backend/src/middlewares/auth.middleware.js): Validates JWT access tokens from cookies or Authorization Bearer header and attaches the user document to `req.user`.
+   - [`validate`](file:///e:/GitHub-Repo/DevFlow/backend/src/middlewares/validate.middleware.js): Validates and sanitizes request bodies against strict Zod schemas; rejects unexpected properties.
+   - [`validateParams`](file:///e:/GitHub-Repo/DevFlow/backend/src/middlewares/validate.middleware.js): Validates route parameters (e.g., verifying MongoDB ObjectIds).
+   - [`notFoundHandler`](file:///e:/GitHub-Repo/DevFlow/backend/src/middlewares/notFound.middleware.js): Intercepts requests to unmatched routes and forwards a standardized 404 `ApiError`.
+   - [`errorHandler`](file:///e:/GitHub-Repo/DevFlow/backend/src/middlewares/error.middleware.js): Centralized error middleware formatting operational and unexpected errors into a uniform JSON response.
+3. **Controllers (`src/controllers/`):** Parse HTTP inputs, invoke business services, set HttpOnly response cookies, and construct responses via `ApiResponse`. Wrapped in `asyncHandler` to eliminate repetitive `try-catch` blocks.
+4. **Services (`src/services/`):** Encapsulate all business rules, cross-user ownership verification, token hashing/rotation, column order normalizations, and database queries. Throws `ApiError` instances on rule violations.
+5. **Models (`src/models/`):** Mongoose schemas enforcing database-level validation, compound indexing, bcrypt password hashing hooks, and deterministic SHA-256 token hashing.
 
 ---
 
-## Authentication and Security Mechanism
+## 5. Authentication and Security Mechanism
 
-DevFlow implements a dual-token JWT authentication architecture with HttpOnly cookies and Bearer header support:
+DevFlow features a modern dual-token authentication system supporting both browser-based HttpOnly cookies and native API Bearer tokens.
 
 ### 1. Dual-Token Architecture
-- **Access Token:** Short-lived JWT (default 1 day). Contains `{ _id, email, username }`. Used to authorize all protected endpoints.
-- **Refresh Token:** Long-lived JWT (default 10 days). Contains `{ _id, jti }`. Used solely at `POST /api/v1/auth/refresh-token` to rotate tokens.
-- **Refresh Token Hashing:** The database never stores raw refresh tokens. Instead, a deterministic SHA-256 hex digest (`User.hashRefreshToken(rawToken)`) is stored in MongoDB, and verified in constant time (`crypto.timingSafeEqual`).
+- **Access Token:** Short-lived JWT (default 1 day). Contains user identification claims: `{ _id, email, username }`. Required to authorize all protected endpoints.
+- **Refresh Token:** Long-lived JWT (default 10 days). Contains `{ _id, jti }`. Used solely at `POST /api/v1/auth/refresh-token` to obtain a fresh token pair.
+- **SHA-256 Token Storage:** Raw refresh tokens are **never stored** in MongoDB. The backend stores a deterministic SHA-256 hash (`User.hashRefreshToken(rawToken)`). During rotation, incoming candidate tokens are hashed and validated in constant time using `crypto.timingSafeEqual` to eliminate timing attack vectors.
 
 ### 2. Supported Client Transport Modes
-DevFlow supports both modern browser-based cookie authentication and token-based client header authentication:
-- **HttpOnly Cookies:** Automatically set on `register`, `login`, and `refresh-token`. Cookies are configured with:
-  - `httpOnly: true` (prevents client-side XSS access)
+The API seamlessly supports both web browser clients and programmatic API clients:
+- **HttpOnly Cookies:** Automatically set in response headers on `register`, `login`, and `refresh-token`:
+  - `httpOnly: true` (inaccessible to JavaScript, defending against XSS)
   - `secure: true` in production (`false` in local development)
   - `sameSite: "none"` in production (`"lax"` in development)
   - `path: "/"`
-- **Authorization Header:** Supported across all protected endpoints:
+  - `maxAge`: 24 hours for `accessToken`, 10 days for `refreshToken`
+- **Authorization Header:** Clients may send the access token explicitly:
   ```http
   Authorization: Bearer <accessToken>
   ```
-  If both a cookie and an Authorization header are provided, the Authorization header takes precedence.
+  If both an HttpOnly cookie and an Authorization header are present, the Authorization header takes precedence.
 
 ### 3. Refresh Token Rotation & Replay Protection
 - Refreshing tokens rotates **both** the access token and the refresh token.
-- When `POST /api/v1/auth/refresh-token` is executed, the previous refresh token is immediately replaced by a new SHA-256 hash in the database.
-- If a client replays an old refresh token, the hash comparison fails, returning `401 Unauthorized`.
-- An atomic conditional update (`findOneAndUpdate({ _id, refreshToken: currentHash })`) prevents race conditions and concurrent rotation collisions.
+- When `POST /api/v1/auth/refresh-token` executes:
+  1. The incoming refresh token is verified for valid JWT signature and expiration.
+  2. The candidate token's hash is compared with the stored hash in the user record.
+  3. A new access token and new refresh token are generated.
+  4. An atomic update (`findOneAndUpdate({ _id, refreshToken: currentHash }, { refreshToken: newHash })`) updates the hash.
+- **Replay Protection:** If an old or intercepted refresh token is presented again, the stored hash will not match, causing an immediate `401 Unauthorized` rejection.
 
 ### 4. Logout Invalidation
-- When `DELETE /api/v1/auth/logout` is invoked, the user's stored refresh token hash in MongoDB is removed (`$unset: { refreshToken: 1 }`).
-- Both `accessToken` and `refreshToken` cookies are expired and cleared.
-- Once cleared, the refresh token cannot be used again to obtain new tokens. (Existing access tokens expire naturally at their designated lifetime).
+- Invoking `DELETE /api/v1/auth/logout` atomically unsets the stored refresh token hash (`$unset: { refreshToken: 1 }`).
+- Both `accessToken` and `refreshToken` cookies are cleared with expiration dates in the past.
+- Once cleared, the refresh token cannot be used again. Existing access tokens expire naturally upon reaching their token lifetime.
 
 ---
 
-## Standard API Response Format
+## 6. Standard API Response Format
 
-Every endpoint in DevFlow returns a consistent JSON payload structure.
+All responses follow a predictable JSON contract.
 
-### Success Response Structure
-
-Generated using the [`ApiResponse`](file:///e:/GitHub-Repo/DevFlow/backend/src/utils/ApiResponse.js) class:
+### Success Response Format
+Constructed by the [`ApiResponse`](file:///e:/GitHub-Repo/DevFlow/backend/src/utils/ApiResponse.js) class:
 
 ```json
 {
@@ -150,12 +204,11 @@ Generated using the [`ApiResponse`](file:///e:/GitHub-Repo/DevFlow/backend/src/u
 
 - `statusCode` *(number)*: HTTP status code matching the HTTP response header (e.g., `200`, `201`).
 - `data` *(object | array | null)*: The payload returned by the service.
-- `message` *(string)*: Human-readable status description.
-- `success` *(boolean)*: Always `true` for responses with status code $< 400$.
+- `message` *(string)*: Descriptive operational status message.
+- `success` *(boolean)*: Always `true` for all status codes $< 400$.
 
-### Error Response Structure
-
-Formatted by the centralized [`errorHandler`](file:///e:/GitHub-Repo/DevFlow/backend/src/middlewares/error.middleware.js) middleware:
+### Error Response Format
+Constructed by the centralized [`errorHandler`](file:///e:/GitHub-Repo/DevFlow/backend/src/middlewares/error.middleware.js) middleware:
 
 ```json
 {
@@ -168,60 +221,70 @@ Formatted by the centralized [`errorHandler`](file:///e:/GitHub-Repo/DevFlow/bac
 }
 ```
 
-- `statusCode` *(number)*: HTTP error code (e.g., `400`, `401`, `404`, `409`, `500`).
-- `success` *(boolean)*: Always `false` for error responses.
-- `message` *(string)*: Description of the operational error or reason for failure.
-- `errors` *(array of strings)*: Granular validation messages (empty array for non-validation errors).
-- `stack` *(string, optional)*: Included only when `NODE_ENV !== "production"` for debugging; omitted in production.
+- `statusCode` *(number)*: HTTP error status code (e.g., `400`, `401`, `404`, `409`, `500`).
+- `success` *(boolean)*: Always `false` for all error responses.
+- `message` *(string)*: High-level error summary.
+- `errors` *(array of strings)*: Granular validation or operational error details (empty array `[]` when not a validation error).
+- `stack` *(string, optional)*: Included only when `NODE_ENV !== "production"` for debugging; automatically stripped in production environments.
 
 ---
 
-## Complete API Summary Table
+## 7. Complete API Summary Table
 
-The table below lists all **16 endpoints** currently implemented in the DevFlow backend:
+The table below catalogs all **16 endpoints** implemented in DevFlow:
 
 | Method | Endpoint | Authentication | Description |
 |:---|:---|:---:|:---|
 | **Authentication** | | | |
 | `POST` | `/api/v1/auth/register` | None (Public) | Register a new user account with credentials |
-| `POST` | `/api/v1/auth/login` | None (Public) | Authenticate user credentials and issue tokens |
-| `POST` | `/api/v1/auth/refresh-token` | None / Cookie | Rotate refresh token and receive a new token pair |
-| `DELETE` | `/api/v1/auth/logout` | `verifyJWT` | Log out user, invalidate refresh token, and clear cookies |
+| `POST` | `/api/v1/auth/login` | None (Public) | Authenticate user credentials and issue token pair |
+| `POST` | `/api/v1/auth/refresh-token` | None / Cookie | Rotate refresh token and issue a fresh token pair |
+| `DELETE` | `/api/v1/auth/logout` | `verifyJWT` | Log out user, invalidate refresh token in DB, and clear cookies |
 | `GET` | `/api/v1/auth/me` | `verifyJWT` | Fetch currently authenticated user profile |
 | **Board Management** | | | |
 | `POST` | `/api/v1/boards` | `verifyJWT` | Create a new board with 3 default columns |
 | `GET` | `/api/v1/boards` | `verifyJWT` | List all boards owned by the authenticated user |
 | `GET` | `/api/v1/boards/:boardId` | `verifyJWT` | Retrieve details of a specific board by ID |
 | `PATCH` | `/api/v1/boards/:boardId` | `verifyJWT` | Update board title and/or description |
-| `DELETE` | `/api/v1/boards/:boardId` | `verifyJWT` | Delete a board and cascade delete its tasks |
+| `DELETE` | `/api/v1/boards/:boardId` | `verifyJWT` | Delete a board and cascade delete all its tasks |
 | **Task Management** | | | |
 | `POST` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | Create a new task under a board |
-| `GET` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | List tasks on a board (supports `?columnKey=` filter) |
+| `GET` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | List tasks on a board (supports optional `?columnKey=` filter) |
 | `GET` | `/api/v1/boards/:boardId/tasks/:taskId` | `verifyJWT` | Retrieve a single task by ID |
 | `PATCH` | `/api/v1/boards/:boardId/tasks/:taskId` | `verifyJWT` | Update task details (title, description, priority, dueDate) |
-| `PATCH` | `/api/v1/boards/:boardId/tasks/:taskId/move` | `verifyJWT` | Move task to another column or reposition order |
-| `DELETE` | `/api/v1/boards/:boardId/tasks/:taskId` | `verifyJWT` | Delete a task and re-index remaining column tasks |
+| `PATCH` | `/api/v1/boards/:boardId/tasks/:taskId/move` | `verifyJWT` | Move task to another column or reposition order index |
+| `DELETE` | `/api/v1/boards/:boardId/tasks/:taskId` | `verifyJWT` | Delete a task and normalize remaining column task orders |
 
 ---
 
-## Authentication API Group
+## 8. Authentication API Group
 
-### 1. Register User
+### 8.1 Register User
 
-- **Method:** `POST`
-- **URL:** `/api/v1/auth/register`
-- **Authentication Required:** No
-- **Purpose:** Registers a new user account, stores a bcrypt hash of the password, generates access and refresh tokens, stores a SHA-256 hash of the refresh token, and sets auth cookies.
+#### A. Endpoint Information
+- **API Name:** Register User
+- **HTTP Method:** `POST`
+- **Complete Endpoint URL:** `/api/v1/auth/register`
+- **Authentication Required:** No (Public)
+- **Purpose and Functionality:** Creates a new user account in MongoDB, hashes the user's password with bcrypt, creates an initial access token and refresh token, stores a SHA-256 hash of the refresh token, and sets HttpOnly cookies.
+- **Business Logic & Side Effects:** Checks for existing duplicate usernames or emails; creates user document in MongoDB; sets `accessToken` and `refreshToken` cookies in response header.
 
-#### Request Payload
-- Content-Type: `application/json`
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+- **Authentication Headers / Cookies:** None.
+- **Path Parameters:** None.
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `username` | String | Yes | None | Trimmed, lowercase, 3 to 30 characters | Unique user handle |
+  | `email` | String | Yes | None | Trimmed, lowercase, valid email format | Unique user email address |
+  | `password` | String | Yes | None | Minimum 6 characters | Plaintext password to be bcrypt-hashed |
 
-| Field | Type | Required | Constraints | Description |
-|:---|:---:|:---:|:---|:---|
-| `username` | String | Yes | Trimmed, lowercase, 3 to 30 characters | Unique handle for the user |
-| `email` | String | Yes | Trimmed, lowercase, valid email format | Unique email address |
-| `password` | String | Yes | Minimum 6 characters | User password (hashed with bcrypt) |
-
+#### C. Request Payload Example
 ```json
 {
   "username": "alexdeveloper",
@@ -230,11 +293,12 @@ The table below lists all **16 endpoints** currently implemented in the DevFlow 
 }
 ```
 
-#### Success Response
-- **Status:** `201 Created`
-- **Cookies Set:**
-  - `accessToken`: JWT string (HttpOnly, max-age 24 hours)
-  - `refreshToken`: JWT string (HttpOnly, max-age 10 days)
+#### D. Success Response
+- **HTTP Status Code:** `201 Created`
+- **Response Headers / Cookies Set:**
+  - `Set-Cookie: accessToken=<jwt>; HttpOnly; Path=/; Max-Age=86400; SameSite=Lax`
+  - `Set-Cookie: refreshToken=<jwt>; HttpOnly; Path=/; Max-Age=864000; SameSite=Lax`
+- **Response Content Description:** Returns the created user profile (omitting password and refreshToken) and both JWT tokens.
 
 ```json
 {
@@ -247,54 +311,69 @@ The table below lists all **16 endpoints** currently implemented in the DevFlow 
       "createdAt": "2026-10-25T10:00:00.000Z",
       "updatedAt": "2026-10-25T10:00:00.000Z"
     },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzFhYTEwMGU0YjAyMzQ1Njc4OTAxMjMiLCJlbWFpbCI6ImFsZXhAZXhhbXBsZS5jb20iLCJ1c2VybmFtZSI6ImFsZXhkZXZlbG9wZXIiLCJpYXQiOjE3Mjk4NTI4MDAsImV4cCI6MTcyOTkzOTIwMH0.exampleSignatureOnly",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzFhYTEwMGU0YjAyMzQ1Njc4OTAxMjMiLCJqdGkiOiJmMjRkMmE0NS1jYjVjLTQ5NmQtOGFjZi01MjY4ZmMxYzg3ODIiLCJpYXQiOjE3Mjk4NTI4MDAsImV4cCI6MTczMDcxNjgwMH0.exampleSignatureOnly"
   },
   "message": "User registered successfully",
   "success": true
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Validation failure on username, email, or password.
-  ```json
-  {
-    "statusCode": 400,
-    "success": false,
-    "message": "Validation Error",
-    "errors": [
-      "Username must be at least 3 characters long",
-      "Password must be at least 6 characters long"
-    ]
-  }
-  ```
-- **409 Conflict:** User with username or email already exists.
-  ```json
-  {
-    "statusCode": 409,
-    "success": false,
-    "message": "User with this email already exists",
-    "errors": []
-  }
-  ```
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when the request body violates Zod validation rules (short username, invalid email format, short password).
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Username must be at least 3 characters long",
+    "Please provide a valid email address",
+    "Password must be at least 6 characters long"
+  ]
+}
+```
+
+##### Error: 409 Conflict
+Triggered when the username or email is already taken by another account in the database.
+```json
+{
+  "statusCode": 409,
+  "success": false,
+  "message": "User with this email already exists",
+  "errors": []
+}
+```
 
 ---
 
-### 2. Login User
+### 8.2 Login User
 
-- **Method:** `POST`
-- **URL:** `/api/v1/auth/login`
-- **Authentication Required:** No
-- **Purpose:** Authenticates user credentials via email and password, generates a new access/refresh token pair, atomically updates the stored refresh token hash, and sets auth cookies.
+#### A. Endpoint Information
+- **API Name:** Login User
+- **HTTP Method:** `POST`
+- **Complete Endpoint URL:** `/api/v1/auth/login`
+- **Authentication Required:** No (Public)
+- **Purpose and Functionality:** Authenticates user credentials using email and password. Generates fresh access and refresh tokens, updates the stored SHA-256 refresh token hash in MongoDB, and issues updated HttpOnly cookies.
+- **Business Logic & Side Effects:** Compares password via `bcrypt.compare`; updates `user.refreshToken` in MongoDB; sets HttpOnly cookies.
 
-#### Request Payload
-- Content-Type: `application/json`
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+- **Authentication Headers / Cookies:** None.
+- **Path Parameters:** None.
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `email` | String | Yes | None | Trimmed, lowercase, valid email | Registered user email |
+  | `password` | String | Yes | None | Minimum 1 character | Candidate plaintext password |
 
-| Field | Type | Required | Constraints | Description |
-|:---|:---:|:---:|:---|:---|
-| `email` | String | Yes | Trimmed, lowercase, valid email | User email address |
-| `password` | String | Yes | Minimum 1 character | Plaintext candidate password |
-
+#### C. Request Payload Example
 ```json
 {
   "email": "alex@example.com",
@@ -302,9 +381,12 @@ The table below lists all **16 endpoints** currently implemented in the DevFlow 
 }
 ```
 
-#### Success Response
-- **Status:** `200 OK`
-- **Cookies Set:** `accessToken` and `refreshToken`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:**
+  - `Set-Cookie: accessToken=<jwt>; HttpOnly; Path=/; Max-Age=86400; SameSite=Lax`
+  - `Set-Cookie: refreshToken=<jwt>; HttpOnly; Path=/; Max-Age=864000; SameSite=Lax`
+- **Response Content Description:** Returns safe user profile data and newly signed access and refresh tokens.
 
 ```json
 {
@@ -317,94 +399,153 @@ The table below lists all **16 endpoints** currently implemented in the DevFlow 
       "createdAt": "2026-10-25T10:00:00.000Z",
       "updatedAt": "2026-10-25T10:00:00.000Z"
     },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzFhYTEwMGU0YjAyMzQ1Njc4OTAxMjMiLCJlbWFpbCI6ImFsZXhAZXhhbXBsZS5jb20iLCJ1c2VybmFtZSI6ImFsZXhkZXZlbG9wZXIiLCJpYXQiOjE3Mjk4NTI4MDAsImV4cCI6MTcyOTkzOTIwMH0.exampleSignatureOnly",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzFhYTEwMGU0YjAyMzQ1Njc4OTAxMjMiLCJqdGkiOiJmMjRkMmE0NS1jYjVjLTQ5NmQtOGFjZi01MjY4ZmMxYzg3ODIiLCJpYXQiOjE3Mjk4NTI4MDAsImV4cCI6MTczMDcxNjgwMH0.exampleSignatureOnly"
   },
   "message": "User logged in successfully",
   "success": true
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Missing email or password.
-- **401 Unauthorized:** Invalid email or incorrect password.
-  ```json
-  {
-    "statusCode": 401,
-    "success": false,
-    "message": "Invalid email or password",
-    "errors": []
-  }
-  ```
+#### E. Error Responses
 
----
-
-### 3. Refresh Access Token
-
-- **Method:** `POST`
-- **URL:** `/api/v1/auth/refresh-token`
-- **Authentication Required:** No (authenticates via refresh token candidate)
-- **Purpose:** Rotates the refresh token. Verifies the candidate refresh token against the stored hash in MongoDB, issues a brand new access token and refresh token, and atomically updates the stored hash.
-
-#### Request Payload
-- Either provide `refreshToken` in the request body OR send the `refreshToken` cookie.
-
-| Field | Type | Required | Constraints | Description |
-|:---|:---:|:---:|:---|:---|
-| `refreshToken` | String | Optional* | Valid JWT string | Required in JSON body if cookie is not present |
-
+##### Error: 400 Bad Request
+Triggered when email or password is missing or empty.
 ```json
 {
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Email is required",
+    "Password is required"
+  ]
 }
 ```
 
-#### Success Response
-- **Status:** `200 OK`
-- **Cookies Set:** Updates both `accessToken` and `refreshToken` with new rotated tokens.
+##### Error: 401 Unauthorized
+Triggered when the email is not registered or the candidate password fails bcrypt comparison.
+```json
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Invalid email or password",
+  "errors": []
+}
+```
+
+---
+
+### 8.3 Refresh Access Token
+
+#### A. Endpoint Information
+- **API Name:** Refresh Access Token
+- **HTTP Method:** `POST`
+- **Complete Endpoint URL:** `/api/v1/auth/refresh-token`
+- **Authentication Required:** No (Authenticates via refresh token candidate)
+- **Purpose and Functionality:** Rotates both the access token and refresh token. Validates candidate refresh token against stored SHA-256 hash in MongoDB and performs atomic update.
+- **Business Logic & Side Effects:** Replaces old refresh token hash in MongoDB with a new hash, invalidating the old refresh token; sets updated HttpOnly cookies.
+
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | No* | `application/json` | Required if delivering token via JSON body |
+- **Authentication Headers / Cookies:** Accepts `Cookie: refreshToken=<token>` OR JSON request body `{ "refreshToken": "<token>" }`.
+- **Path Parameters:** None.
+- **Query Parameters:** None.
+- **Request Body Requirements:** Optional if cookie is provided; required if cookie is omitted.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `refreshToken` | String | Optional* | None | Valid signed JWT string | Candidate refresh token |
+
+#### C. Request Payload Example
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzFhYTEwMGU0YjAyMzQ1Njc4OTAxMjMiLCJqdGkiOiJmMjRkMmE0NS1jYjVjLTQ5NmQtOGFjZi01MjY4ZmMxYzg3ODIiLCJpYXQiOjE3Mjk4NTI4MDAsImV4cCI6MTczMDcxNjgwMH0.exampleSignatureOnly"
+}
+```
+
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:**
+  - `Set-Cookie: accessToken=<newJwt>; HttpOnly; Path=/; Max-Age=86400; SameSite=Lax`
+  - `Set-Cookie: refreshToken=<newJwt>; HttpOnly; Path=/; Max-Age=864000; SameSite=Lax`
+- **Response Content Description:** Returns the newly rotated access token and refresh token strings.
 
 ```json
 {
   "statusCode": 200,
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzFhYTEwMGU0YjAyMzQ1Njc4OTAxMjMiLCJlbWFpbCI6ImFsZXhAZXhhbXBsZS5jb20iLCJ1c2VybmFtZSI6ImFsZXhkZXZlbG9wZXIiLCJpYXQiOjE3Mjk4NTM2MDAsImV4cCI6MTcyOTk0MDAwMH0.exampleSignatureOnly",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NzFhYTEwMGU0YjAyMzQ1Njc4OTAxMjMiLCJqdGkiOiJkM2VhMmM0NS1kZjVjLTQ5NmQtOGFjZi05ODc2ZmMxYzg5OTEiLCJpYXQiOjE3Mjk4NTM2MDAsImV4cCI6MTczMDcxNzYwMH0.exampleSignatureOnly"
   },
   "message": "Access token refreshed successfully",
   "success": true
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Refresh token missing from both request body and cookie.
-- **401 Unauthorized:** Refresh token is expired, invalid, replayed, or revoked.
-  ```json
-  {
-    "statusCode": 401,
-    "success": false,
-    "message": "Refresh token is invalid or has already been used",
-    "errors": []
-  }
-  ```
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when no refresh token is provided in either the request body or cookies.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Refresh token is required"
+  ]
+}
+```
+
+##### Error: 401 Unauthorized
+Triggered when the refresh token is expired, has an invalid signature, has already been rotated (replay attack), or user does not exist.
+```json
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Refresh token is invalid or has already been used",
+  "errors": []
+}
+```
 
 ---
 
-### 4. Logout User
+### 8.4 Logout User
 
-- **Method:** `DELETE`
-- **URL:** `/api/v1/auth/logout`
+#### A. Endpoint Information
+- **API Name:** Logout User
+- **HTTP Method:** `DELETE`
+- **Complete Endpoint URL:** `/api/v1/auth/logout`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Clears the stored refresh token hash from the database (`$unset: { refreshToken: 1 }`), preventing future token rotations, and clears `accessToken` and `refreshToken` cookies.
+- **Purpose and Functionality:** Clears user session. Unsets the stored refresh token hash in MongoDB (`$unset: { refreshToken: 1 }`), preventing future token rotations, and clears `accessToken` and `refreshToken` cookies.
+- **Business Logic & Side Effects:** Removes stored refresh token hash in database; clears HttpOnly cookies on client.
 
-#### Request Headers / Cookies
-- Header: `Authorization: Bearer <accessToken>` **OR** Cookie: `accessToken=<token>`
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:** None.
+- **Query Parameters:** None.
+- **Request Body Requirements:** None. This endpoint does not accept a request body.
 
-#### Request Body
-- `None`
+#### C. Request Example
+```http
+DELETE /api/v1/auth/logout HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
 
-#### Success Response
-- **Status:** `200 OK`
-- **Cookies Cleared:** `accessToken`, `refreshToken`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:**
+  - `Set-Cookie: accessToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
+  - `Set-Cookie: refreshToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
+- **Response Content Description:** Returns logout confirmation message.
 
 ```json
 {
@@ -417,23 +558,52 @@ The table below lists all **16 endpoints** currently implemented in the DevFlow 
 }
 ```
 
-#### Error Responses
-- **401 Unauthorized:** Unauthenticated, missing, or expired access token.
+#### E. Error Responses
+
+##### Error: 401 Unauthorized
+Triggered when no access token is provided or the token has expired.
+```json
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Authorization header missing",
+  "errors": []
+}
+```
 
 ---
 
-### 5. Get Current User
+### 8.5 Get Current User
 
-- **Method:** `GET`
-- **URL:** `/api/v1/auth/me`
+#### A. Endpoint Information
+- **API Name:** Get Current User
+- **HTTP Method:** `GET`
+- **Complete Endpoint URL:** `/api/v1/auth/me`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Fetches the profile of the currently authenticated user (password and refreshToken are excluded).
+- **Purpose and Functionality:** Fetches the profile of the currently authenticated user based on the decoded access token.
+- **Business Logic & Side Effects:** Excludes `password` and `refreshToken` fields from the returned user document.
 
-#### Request Body
-- `None`
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:** None.
+- **Query Parameters:** None.
+- **Request Body Requirements:** None. This endpoint does not accept a request body.
 
-#### Success Response
-- **Status:** `200 OK`
+#### C. Request Example
+```http
+GET /api/v1/auth/me HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns safe user profile data.
 
 ```json
 {
@@ -450,42 +620,62 @@ The table below lists all **16 endpoints** currently implemented in the DevFlow 
 }
 ```
 
-#### Error Responses
-- **401 Unauthorized:** Invalid or missing access token.
-- **404 Not Found:** User no longer exists in database.
+#### E. Error Responses
+
+##### Error: 401 Unauthorized
+Triggered when the access token is invalid, expired, or missing.
+```json
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Access token has expired",
+  "errors": []
+}
+```
+
+##### Error: 404 Not Found
+Triggered if the user account referenced in the token has been deleted from MongoDB.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "User not found",
+  "errors": []
+}
+```
 
 ---
 
-## Board Management API Group
+## 9. Board Management API Group
 
-All board endpoints are protected by `verifyJWT`. A user can only access, modify, or delete boards that they own.
+All board endpoints require authentication via `verifyJWT`. Data isolation guarantees that users can only access boards they own.
 
-### Default Board Columns
-Every newly created board automatically receives **three immutable default columns** in this exact order:
-1. **Todo** — key: `"todo"`, order: `0`
-2. **In Progress** — key: `"in-progress"`, order: `1`
-3. **Done** — key: `"done"`, order: `2`
+### 9.1 Create Board
 
-Clients cannot inject or modify column structures on boards.
-
----
-
-### 1. Create Board
-
-- **Method:** `POST`
-- **URL:** `/api/v1/boards`
+#### A. Endpoint Information
+- **API Name:** Create Board
+- **HTTP Method:** `POST`
+- **Complete Endpoint URL:** `/api/v1/boards`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Creates a new board owned by the authenticated user with default columns.
+- **Purpose and Functionality:** Creates a new board associated with the authenticated user. Automatically attaches three default columns (`Todo`, `In Progress`, `Done`).
+- **Business Logic & Side Effects:** Client cannot define custom columns or set owner ID. The board is saved in MongoDB with default column schema.
 
-#### Request Payload
-- Content-Type: `application/json`
-- Strict Validation: Only `title` and `description` are allowed. Unrecognized fields (such as `owner` or `columns`) are strictly rejected.
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:** None.
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `title` | String | Yes | None | Trimmed, 1 to 100 characters | Name of the board |
+  | `description` | String | No | `""` | Trimmed, max 500 characters | Optional board description |
 
-| Field | Type | Required | Constraints | Description |
-|:---|:---:|:---:|:---|:---|
-| `title` | String | Yes | Trimmed, 1 to 100 characters | Name of the board |
-| `description` | String | No | Trimmed, maximum 500 characters, default `""` | Optional description |
-
+#### C. Request Payload Example
 ```json
 {
   "title": "Mobile App Launch",
@@ -493,8 +683,10 @@ Clients cannot inject or modify column structures on boards.
 }
 ```
 
-#### Success Response
-- **Status:** `201 Created`
+#### D. Success Response
+- **HTTP Status Code:** `201 Created`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the created board object with embedded default columns and owner ID.
 
 ```json
 {
@@ -517,24 +709,65 @@ Clients cannot inject or modify column structures on boards.
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Empty title or title > 100 characters; description > 500 characters; or unrecognized fields provided.
-- **401 Unauthorized:** Missing or invalid access token.
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when title is missing, empty, or client sends unrecognized fields (`columns`, `owner`).
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Title is required"
+  ]
+}
+```
+
+##### Error: 401 Unauthorized
+Triggered when no authentication token is provided.
+```json
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Authorization header missing",
+  "errors": []
+}
+```
 
 ---
 
-### 2. List User Boards
+### 9.2 List User Boards
 
-- **Method:** `GET`
-- **URL:** `/api/v1/boards`
+#### A. Endpoint Information
+- **API Name:** List User Boards
+- **HTTP Method:** `GET`
+- **Complete Endpoint URL:** `/api/v1/boards`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Lists all boards owned by the authenticated user, sorted by most recently updated (`updatedAt: -1`).
+- **Purpose and Functionality:** Retrieves all boards owned by the authenticated user, sorted by most recently updated (`updatedAt: -1`).
+- **Business Logic & Side Effects:** Scoped strictly to `owner: req.user._id`. Boards of other users are excluded.
 
-#### Request Body
-- `None`
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:** None.
+- **Query Parameters:** None.
+- **Request Body Requirements:** None. This endpoint does not accept a request body.
 
-#### Success Response
-- **Status:** `200 OK`
+#### C. Request Example
+```http
+GET /api/v1/boards HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns an array of board documents.
 
 ```json
 {
@@ -559,29 +792,55 @@ Clients cannot inject or modify column structures on boards.
 }
 ```
 
-#### Error Responses
-- **401 Unauthorized:** Missing or invalid authentication.
+#### E. Error Responses
+
+##### Error: 401 Unauthorized
+Triggered when authentication is missing or expired.
+```json
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Authorization header missing",
+  "errors": []
+}
+```
 
 ---
 
-### 3. Get Board by ID
+### 9.3 Get Board by ID
 
-- **Method:** `GET`
-- **URL:** `/api/v1/boards/:boardId`
+#### A. Endpoint Information
+- **API Name:** Get Board by ID
+- **HTTP Method:** `GET`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Retrieves a single board by its ID for the authenticated owner.
+- **Purpose and Functionality:** Retrieves detailed information for a single board owned by the user.
+- **Business Logic & Side Effects:** Queries `{ _id: boardId, owner: userId }`. Returns 404 if board belongs to another user.
 
-#### Path Parameters
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid 24-character hexadecimal MongoDB ObjectId | Target Board ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** None. This endpoint does not accept a request body.
 
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid 24-character hexadecimal MongoDB ObjectId |
+#### C. Request Example
+```http
+GET /api/v1/boards/671bb200e4b0234567890456 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
 
-#### Request Body
-- `None`
-
-#### Success Response
-- **Status:** `200 OK`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the single requested board object.
 
 ```json
 {
@@ -604,35 +863,74 @@ Clients cannot inject or modify column structures on boards.
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Malformed `boardId` parameter.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board does not exist or belongs to another user (cross-user isolation).
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when `:boardId` is not a valid 24-character hexadecimal MongoDB ObjectId.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Invalid board ID format"
+  ]
+}
+```
+
+##### Error: 401 Unauthorized
+Triggered when request is not authenticated.
+```json
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Authorization header missing",
+  "errors": []
+}
+```
+
+##### Error: 404 Not Found
+Triggered when the board does not exist or is owned by another user.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Board not found",
+  "errors": []
+}
+```
 
 ---
 
-### 4. Update Board
+### 9.4 Update Board
 
-- **Method:** `PATCH`
-- **URL:** `/api/v1/boards/:boardId`
+#### A. Endpoint Information
+- **API Name:** Update Board
+- **HTTP Method:** `PATCH`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Updates the `title` and/or `description` of a board. At least one field must be provided. Columns and owner cannot be modified.
+- **Purpose and Functionality:** Updates the title and/or description of an existing board. At least one field must be provided. Columns and owner cannot be altered.
+- **Business Logic & Side Effects:** Updates the board document in MongoDB and refreshes `updatedAt`.
 
-#### Path Parameters
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid 24-character hexadecimal MongoDB ObjectId | Target Board ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required. Must contain at least `title` or `description`.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `title` | String | No | None | Trimmed, 1 to 100 characters | Updated board title |
+  | `description` | String | No | None | Trimmed, max 500 characters | Updated board description |
 
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid MongoDB ObjectId |
-
-#### Request Payload
-- Content-Type: `application/json`
-- Strict Validation: At least one field (`title` or `description`) required. Unrecognized fields are rejected.
-
-| Field | Type | Required | Constraints | Description |
-|:---|:---:|:---:|:---|:---|
-| `title` | String | No | Trimmed, 1 to 100 characters | Updated board title |
-| `description` | String | No | Trimmed, maximum 500 characters | Updated board description |
-
+#### C. Request Payload Example
 ```json
 {
   "title": "Mobile App Release - Version 1.0",
@@ -640,8 +938,10 @@ Clients cannot inject or modify column structures on boards.
 }
 ```
 
-#### Success Response
-- **Status:** `200 OK`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the updated board document.
 
 ```json
 {
@@ -664,31 +964,68 @@ Clients cannot inject or modify column structures on boards.
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Empty request payload, invalid `boardId`, or unrecognized fields provided.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board does not exist or is not owned by the user.
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when the request body is empty `{}` or unrecognized fields (`columns`, `owner`) are sent.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "At least one field (title or description) must be provided for update"
+  ]
+}
+```
+
+##### Error: 404 Not Found
+Triggered if the board does not exist or belongs to another user.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Board not found",
+  "errors": []
+}
+```
 
 ---
 
-### 5. Delete Board
+### 9.5 Delete Board
 
-- **Method:** `DELETE`
-- **URL:** `/api/v1/boards/:boardId`
+#### A. Endpoint Information
+- **API Name:** Delete Board
+- **HTTP Method:** `DELETE`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Deletes the board and **automatically cascade-deletes all tasks associated with this board** (`Task.deleteMany({ boardId })`).
+- **Purpose and Functionality:** Deletes a board and automatically cascade-deletes all tasks attached to the board.
+- **Business Logic & Side Effects:** Removes the Board document and executes `Task.deleteMany({ boardId })` to clean up associated tasks.
 
-#### Path Parameters
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid 24-character hexadecimal MongoDB ObjectId | Target Board ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** None. This endpoint does not accept a request body.
 
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid MongoDB ObjectId |
+#### C. Request Example
+```http
+DELETE /api/v1/boards/671bb200e4b0234567890456 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
 
-#### Request Body
-- `None`
-
-#### Success Response
-- **Status:** `200 OK`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns confirmation message.
 
 ```json
 {
@@ -701,53 +1038,73 @@ Clients cannot inject or modify column structures on boards.
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Invalid `boardId` format.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board does not exist or belongs to another user.
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when `:boardId` is not a valid MongoDB ObjectId.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Invalid board ID format"
+  ]
+}
+```
+
+##### Error: 404 Not Found
+Triggered when the board does not exist or is not owned by the authenticated user.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Board not found",
+  "errors": []
+}
+```
 
 ---
 
-## Task and Card Management API Group
+## 10. Task and Card Management API Group
 
 All task routes are nested hierarchically under their parent board:
 `/api/v1/boards/:boardId/tasks`
 
-All endpoints verify that the user owns the board before performing any read or write operation.
+Every request verifies that `:boardId` exists and belongs to the authenticated user before executing any task operation.
 
-### Task Schema & Ordering Rules
-- **Allowed Columns:** `"todo"`, `"in-progress"`, `"done"`
-- **Allowed Priorities:** `"low"`, `"medium"`, `"high"` (defaults to `"medium"`)
-- **Automatic Appending on Creation:** New tasks are appended to the target column with `order = lastTask.order + 1` (or `0` if column is empty).
-- **Contiguous Order Normalization:** When a task is moved to a specific order position or deleted, affected columns are re-indexed to contiguous integers (`0, 1, 2, ...`).
+### 10.1 Create Task
 
----
-
-### 1. Create Task
-
-- **Method:** `POST`
-- **URL:** `/api/v1/boards/:boardId/tasks`
+#### A. Endpoint Information
+- **API Name:** Create Task
+- **HTTP Method:** `POST`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/tasks`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Creates a new task under the specified board. Automatically calculates the sequential order in the destination column.
+- **Purpose and Functionality:** Creates a new task card under the specified board. Automatically calculates and assigns the next sequential `order` index in the destination column.
+- **Business Logic & Side Effects:** Verifies parent board ownership; computes `order = lastTask.order + 1` (or 0 if empty); saves Task document in MongoDB.
 
-#### Path Parameters
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid MongoDB ObjectId | Parent Board ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `title` | String | Yes | None | Trimmed, 1 to 150 characters | Task card title |
+  | `description` | String | No | `""` | Trimmed, max 2000 characters | Task card details |
+  | `columnKey` | String (Enum) | No | `"todo"` | `"todo"`, `"in-progress"`, `"done"` | Initial column placement |
+  | `priority` | String (Enum) | No | `"medium"` | `"low"`, `"medium"`, `"high"` | Priority level |
+  | `dueDate` | String / Null | No | `null` | Valid ISO date string or `null` | Optional deadline |
 
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid parent Board ObjectId |
-
-#### Request Payload
-- Content-Type: `application/json`
-- Strict Validation: Clients cannot provide `boardId` or `order` in the body.
-
-| Field | Type | Required | Constraints | Description |
-|:---|:---:|:---:|:---|:---|
-| `title` | String | Yes | Trimmed, 1 to 150 characters | Task title |
-| `description` | String | No | Trimmed, max 2000 characters, default `""` | Task description |
-| `columnKey` | String (Enum) | No | `"todo"`, `"in-progress"`, `"done"`, default `"todo"` | Target column |
-| `priority` | String (Enum) | No | `"low"`, `"medium"`, `"high"`, default `"medium"` | Priority level |
-| `dueDate` | String / Null | No | Valid ISO date string or `null`, default `null` | Optional deadline |
-
+#### C. Request Payload Example
 ```json
 {
   "title": "Design login wireframes",
@@ -758,8 +1115,10 @@ All endpoints verify that the user owns the board before performing any read or 
 }
 ```
 
-#### Success Response
-- **Status:** `201 Created`
+#### D. Success Response
+- **HTTP Status Code:** `201 Created`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the created task document with assigned `order` and `boardId`.
 
 ```json
 {
@@ -781,39 +1140,72 @@ All endpoints verify that the user owns the board before performing any read or 
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Empty title, title > 150 characters, description > 2000 characters, invalid priority, invalid columnKey, invalid date, or attempting to pass `boardId` / `order` in body.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board does not exist or is not owned by the user.
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when title is missing or empty, priority is invalid, or client attempts to inject `boardId` or `order` into the body.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Title cannot be empty",
+    "Unrecognized field provided. Only title, description, columnKey, priority, and dueDate are allowed"
+  ]
+}
+```
+
+##### Error: 404 Not Found
+Triggered when `:boardId` does not exist or belongs to another user.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Board not found",
+  "errors": []
+}
+```
 
 ---
 
-### 2. List Tasks for a Board
+### 10.2 List Tasks for a Board
 
-- **Method:** `GET`
-- **URL:** `/api/v1/boards/:boardId/tasks`
+#### A. Endpoint Information
+- **API Name:** List Tasks for a Board
+- **HTTP Method:** `GET`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/tasks`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Retrieves all tasks for the board sorted ascending by column and order (`{ columnKey: 1, order: 1 }`). Supports optional column filtering.
+- **Purpose and Functionality:** Lists all tasks belonging to the board, sorted ascending by column and order index (`{ columnKey: 1, order: 1 }`). Supports optional column filtering via query parameter.
+- **Business Logic & Side Effects:** Verifies parent board ownership; applies database filter `{ boardId, columnKey }`.
 
-#### Path Parameters
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid MongoDB ObjectId | Parent Board ID |
+- **Query Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `columnKey` | String | No | None | `"todo"`, `"in-progress"`, `"done"` | Filters tasks to given column |
+- **Request Body Requirements:** None. This endpoint does not accept a request body.
 
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid parent Board ObjectId |
+#### C. Request Example
+```http
+GET /api/v1/boards/671bb200e4b0234567890456/tasks?columnKey=in-progress HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
 
-#### Query Parameters
-
-| Parameter | Type | Required | Accepted Values | Description |
-|:---|:---:|:---:|:---|:---|
-| `columnKey` | String | No | `todo`, `in-progress`, `done` | Filters tasks to only include those in the specified column |
-
-*Example Filter URL:* `/api/v1/boards/671bb200e4b0234567890456/tasks?columnKey=in-progress`
-
-#### Request Body
-- `None`
-
-#### Success Response
-- **Status:** `200 OK`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns an array of task objects sorted by order index.
 
 ```json
 {
@@ -824,7 +1216,7 @@ All endpoints verify that the user owns the board before performing any read or 
       "title": "Design login wireframes",
       "description": "Create Figma mockups for email and password login screens",
       "boardId": "671bb200e4b0234567890456",
-      "columnKey": "todo",
+      "columnKey": "in-progress",
       "order": 0,
       "priority": "high",
       "dueDate": "2026-11-01T12:00:00.000Z",
@@ -837,32 +1229,67 @@ All endpoints verify that the user owns the board before performing any read or 
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Invalid `boardId` format or invalid `columnKey` filter value.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board does not exist or is not owned by the user.
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when `columnKey` query parameter is not one of the allowed column values.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Column key must be one of: todo, in-progress, done",
+  "errors": []
+}
+```
+
+##### Error: 404 Not Found
+Triggered when the parent board does not exist or is not owned by the user.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Board not found",
+  "errors": []
+}
+```
 
 ---
 
-### 3. Get Task by ID
+### 10.3 Get Task by ID
 
-- **Method:** `GET`
-- **URL:** `/api/v1/boards/:boardId/tasks/:taskId`
+#### A. Endpoint Information
+- **API Name:** Get Task by ID
+- **HTTP Method:** `GET`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/tasks/:taskId`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Retrieves a single task by ID. Enforces board ownership and verifies that the task belongs to the given board (prevents task-to-board mismatch).
+- **Purpose and Functionality:** Retrieves a single task card. Validates that the task belongs specifically to the requested board.
+- **Business Logic & Side Effects:** Queries `{ _id: taskId, boardId }`. Prevents cross-board or cross-user data leakage.
 
-#### Path Parameters
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid MongoDB ObjectId | Parent Board ID |
+  | `taskId` | String | Yes | None | Valid MongoDB ObjectId | Target Task ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** None. This endpoint does not accept a request body.
 
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid parent Board ObjectId |
-| `taskId` | String (ObjectId) | Yes | Valid Task ObjectId |
+#### C. Request Example
+```http
+GET /api/v1/boards/671bb200e4b0234567890456/tasks/671cc300e4b0234567890789 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
 
-#### Request Body
-- `None`
-
-#### Success Response
-- **Status:** `200 OK`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the task document.
 
 ```json
 {
@@ -884,38 +1311,66 @@ All endpoints verify that the user owns the board before performing any read or 
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Invalid `boardId` or `taskId` parameter format.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board not found, task not found, or task does not belong to the board.
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when `:taskId` is not a valid 24-character hexadecimal MongoDB ObjectId.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Invalid task ID format"
+  ]
+}
+```
+
+##### Error: 404 Not Found
+Triggered when the task does not exist or does not belong to the requested board (task-to-board mismatch).
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Task not found",
+  "errors": []
+}
+```
 
 ---
 
-### 4. Update Task Details
+### 10.4 Update Task Details
 
-- **Method:** `PATCH`
-- **URL:** `/api/v1/boards/:boardId/tasks/:taskId`
+#### A. Endpoint Information
+- **API Name:** Update Task Details
+- **HTTP Method:** `PATCH`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/tasks/:taskId`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Modifies task content (title, description, priority, dueDate). Does not modify column or order (movement is handled via `/move`).
+- **Purpose and Functionality:** Modifies task content (title, description, priority, dueDate). Does not alter column placement or order position (movement is handled exclusively via `/move`).
+- **Business Logic & Side Effects:** Updates Task document in MongoDB and updates `updatedAt`.
 
-#### Path Parameters
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid MongoDB ObjectId | Parent Board ID |
+  | `taskId` | String | Yes | None | Valid MongoDB ObjectId | Target Task ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required. At least one field must be provided.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `title` | String | No | None | Trimmed, 1 to 150 characters | Updated task title |
+  | `description` | String | No | None | Trimmed, max 2000 characters | Updated task description |
+  | `priority` | String (Enum) | No | None | `"low"`, `"medium"`, `"high"` | Updated priority level |
+  | `dueDate` | String / Null | No | None | Valid ISO date string or `null` | Updated deadline |
 
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid parent Board ObjectId |
-| `taskId` | String (ObjectId) | Yes | Valid Task ObjectId |
-
-#### Request Payload
-- Content-Type: `application/json`
-- Strict Validation: At least one field required. Disallows `boardId`, `columnKey`, and `order`.
-
-| Field | Type | Required | Constraints | Description |
-|:---|:---:|:---:|:---|:---|
-| `title` | String | No | Trimmed, 1 to 150 characters | Updated task title |
-| `description` | String | No | Trimmed, max 2000 characters | Updated task description |
-| `priority` | String (Enum) | No | `"low"`, `"medium"`, `"high"` | Updated priority level |
-| `dueDate` | String / Null | No | Valid ISO date string or `null` | Updated due date |
-
+#### C. Request Payload Example
 ```json
 {
   "title": "Design and review login wireframes",
@@ -924,8 +1379,10 @@ All endpoints verify that the user owns the board before performing any read or 
 }
 ```
 
-#### Success Response
-- **Status:** `200 OK`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the updated task document.
 
 ```json
 {
@@ -947,65 +1404,92 @@ All endpoints verify that the user owns the board before performing any read or 
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Empty update payload, invalid priority, invalid date, or disallowed fields.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board not found, task not found, or task does not belong to the board.
+#### E. Error Responses
 
----
-
-### 5. Move or Reorder Task
-
-- **Method:** `PATCH`
-- **URL:** `/api/v1/boards/:boardId/tasks/:taskId/move`
-- **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Moves a task to another column and/or updates its order index position.
-
-#### Path Parameters
-
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid parent Board ObjectId |
-| `taskId` | String (ObjectId) | Yes | Valid Task ObjectId |
-
-#### Request Payload
-- Content-Type: `application/json`
-
-| Field | Type | Required | Constraints | Description |
-|:---|:---:|:---:|:---|:---|
-| `columnKey` | String (Enum) | Yes | `"todo"`, `"in-progress"`, `"done"` | Destination column |
-| `order` | Integer | No | Non-negative integer ($\ge 0$) | Position index in destination column. If omitted, task is appended to end of column. |
-
-*Example A — Moving to a new column and appending to the bottom:*
+##### Error: 400 Bad Request
+Triggered when request payload is empty `{}` or client attempts to pass disallowed fields (`columnKey`, `order`, `boardId`).
 ```json
 {
-  "columnKey": "in-progress"
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "At least one valid field (title, description, priority, or dueDate) must be provided for update",
+    "Unrecognized field provided. Only title, description, priority, and dueDate can be updated"
+  ]
 }
 ```
 
-*Example B — Moving or reordering to the top position:*
+##### Error: 404 Not Found
+Triggered if the task does not exist or does not belong to the board.
 ```json
 {
-  "columnKey": "done",
+  "statusCode": 404,
+  "success": false,
+  "message": "Task not found",
+  "errors": []
+}
+```
+
+---
+
+### 10.5 Move or Reorder Task
+
+#### A. Endpoint Information
+- **API Name:** Move or Reorder Task
+- **HTTP Method:** `PATCH`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/tasks/:taskId/move`
+- **Authentication Required:** Yes (`verifyJWT`)
+- **Purpose and Functionality:** Moves a task to a different column and/or updates its numeric order position. Normalizes contiguous order indexing in both source and destination columns.
+- **Business Logic & Side Effects:**
+  - If `order` is omitted: Appends the task to the destination column (`order = lastTask.order + 1`).
+  - If `order` is provided: Inserts the task at that index and re-indexes all tasks in the destination column (`0, 1, 2, ...`).
+  - If moved between columns: Re-indexes all remaining tasks in the source column (`normalizeColumnOrders`).
+
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---|:---|:---|
+  | `boardId` | String | Yes | None | Valid MongoDB ObjectId | Parent Board ID |
+  | `taskId` | String | Yes | None | Valid MongoDB ObjectId | Target Task ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `columnKey` | String (Enum) | Yes | None | `"todo"`, `"in-progress"`, `"done"` | Destination column |
+  | `order` | Integer | No | None | Non-negative integer ($\ge 0$) | Position index in destination column. If omitted, appends to the end of the column. |
+
+#### C. Request Payload Example
+```json
+{
+  "columnKey": "in-progress",
   "order": 0
 }
 ```
 
-#### Success Response
-- **Status:** `200 OK`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the moved task document with updated `columnKey` and `order`.
 
 ```json
 {
   "statusCode": 200,
   "data": {
     "_id": "671cc300e4b0234567890789",
-    "title": "Design and review login wireframes",
+    "title": "Design login wireframes",
     "description": "Create Figma mockups for email and password login screens",
     "boardId": "671bb200e4b0234567890456",
     "columnKey": "in-progress",
-    "order": 1,
-    "priority": "medium",
-    "dueDate": "2026-11-05T18:00:00.000Z",
+    "order": 0,
+    "priority": "high",
+    "dueDate": "2026-11-01T12:00:00.000Z",
     "createdAt": "2026-10-25T10:45:00.000Z",
     "updatedAt": "2026-10-25T11:15:00.000Z"
   },
@@ -1014,32 +1498,70 @@ All endpoints verify that the user owns the board before performing any read or 
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Missing or invalid `columnKey`, negative `order`, or non-integer `order`.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board not found, task not found, or task does not belong to the board.
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when `columnKey` is missing or invalid, or `order` is a negative number or non-integer.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Column key must be one of: todo, in-progress, done",
+    "Order must be a non-negative integer"
+  ]
+}
+```
+
+##### Error: 404 Not Found
+Triggered if the task does not exist or does not belong to the board.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Task not found",
+  "errors": []
+}
+```
 
 ---
 
-### 6. Delete Task
+### 10.6 Delete Task
 
-- **Method:** `DELETE`
-- **URL:** `/api/v1/boards/:boardId/tasks/:taskId`
+#### A. Endpoint Information
+- **API Name:** Delete Task
+- **HTTP Method:** `DELETE`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/tasks/:taskId`
 - **Authentication Required:** Yes (`verifyJWT`)
-- **Purpose:** Deletes the specified task and automatically re-normalizes the order indices of remaining tasks in that column.
+- **Purpose and Functionality:** Deletes a task card from MongoDB and automatically re-indexes remaining tasks in that column to maintain contiguous ordering (`0, 1, 2, ...`).
+- **Business Logic & Side Effects:** Removes Task document and runs `normalizeColumnOrders` on the column.
 
-#### Path Parameters
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Parameter | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---|:---|:---|
+  | `boardId` | String | Yes | None | Valid MongoDB ObjectId | Parent Board ID |
+  | `taskId` | String | Yes | None | Valid MongoDB ObjectId | Target Task ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** None. This endpoint does not accept a request body.
 
-| Parameter | Type | Required | Description |
-|:---|:---:|:---:|:---|
-| `boardId` | String (ObjectId) | Yes | Valid parent Board ObjectId |
-| `taskId` | String (ObjectId) | Yes | Valid Task ObjectId |
+#### C. Request Example
+```http
+DELETE /api/v1/boards/671bb200e4b0234567890456/tasks/671cc300e4b0234567890789 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
 
-#### Request Body
-- `None`
-
-#### Success Response
-- **Status:** `200 OK`
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns deletion confirmation message.
 
 ```json
 {
@@ -1052,23 +1574,46 @@ All endpoints verify that the user owns the board before performing any read or 
 }
 ```
 
-#### Error Responses
-- **400 Bad Request:** Invalid `boardId` or `taskId` parameter format.
-- **401 Unauthorized:** Missing or invalid authentication.
-- **404 Not Found:** Board not found, task not found, or task does not belong to the board.
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when `:boardId` or `:taskId` is not a valid 24-character hexadecimal MongoDB ObjectId.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Invalid task ID format"
+  ]
+}
+```
+
+##### Error: 404 Not Found
+Triggered if the task does not exist or does not belong to the board.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Task not found",
+  "errors": []
+}
+```
 
 ---
 
-## Frontend Integration Guide
+## 11. Frontend Integration Guide
 
-This guide explains how a React/Vite frontend communicates with the DevFlow backend using **Axios**.
+This guide provides practical examples for integrating a React frontend (e.g., built with Vite and Tailwind CSS) with the DevFlow backend using **Axios**.
 
 ### 1. Key Integration Rules
-1. **Always Set `withCredentials: true`:** Enables the browser to automatically include and store HttpOnly `accessToken` and `refreshToken` cookies on cross-origin requests.
-2. **CORS Configuration:** Ensure `DEV_URL` in `backend/.env` matches your local frontend origin (default: `http://localhost:5173`).
-3. **Automatic Token Refresh:** Use an Axios response interceptor to intercept `401 Unauthorized` responses and silently refresh the session via `POST /api/v1/auth/refresh-token`.
+1. **Always Enable `withCredentials: true`:** Enables the browser to store and forward HttpOnly `accessToken` and `refreshToken` cookies across origins.
+2. **Handle CORS Origin:** Configure `VITE_API_BASE_URL` in the frontend (e.g. `http://localhost:8000/api/v1`) and ensure `DEV_URL` in `backend/.env` matches your Vite dev server (`http://localhost:5173`).
+3. **Automatic Token Rotation via Interceptors:** Intercept `401 Unauthorized` responses to silently refresh the session using `POST /api/v1/auth/refresh-token` before retrying the original request.
 
-### 2. Recommended Axios Client Setup (`apiClient.js`)
+---
+
+### 2. Axios Client Setup (`src/services/apiClient.js`)
 
 ```javascript
 import axios from "axios";
@@ -1077,153 +1622,294 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // Required for HttpOnly cookie exchange
+  withCredentials: true, // Crucial for receiving and sending HttpOnly auth cookies
   headers: {
     "Content-Type": "application/json"
   }
 });
 
-// Response interceptor for automatic refresh token rotation
+// Response interceptor: automatically handles token expiration and retries
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => response.data, // Unwraps the ApiResponse object: { statusCode, data, message, success }
   async (error) => {
     const originalRequest = error.config;
 
-    // If 401 Unauthorized occurs and we haven't retried yet
+    // Detect 401 Unauthorized, excluding login/register/refresh endpoints to prevent infinite loops
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url.includes("/auth/login") &&
+      !originalRequest.url.includes("/auth/register") &&
       !originalRequest.url.includes("/auth/refresh-token")
     ) {
       originalRequest._retry = true;
 
       try {
-        // Attempt token rotation via cookies
+        // Attempt silent session renewal using the HttpOnly refresh token cookie
         await apiClient.post("/auth/refresh-token");
-        // Retry the original request
+
+        // Retry the original request with new cookies
         return apiClient(originalRequest);
       } catch (refreshError) {
-        // Refresh token expired or revoked -> redirect to login
+        // Session has fully expired or refresh token is revoked -> redirect to login
         window.location.href = "/login";
         return Promise.reject(refreshError);
       }
     }
 
-    return Promise.reject(error.response?.data || error.message);
+    // Extract standardized ApiError payload: { statusCode, success, message, errors }
+    const errorData = error.response?.data || {
+      statusCode: error.response?.status || 500,
+      message: error.message || "Network error occurred",
+      errors: []
+    };
+
+    return Promise.reject(errorData);
   }
 );
 ```
 
 ---
 
-## Workflow Walkthrough Examples
+### 3. Modular Frontend API Services
 
-### Workflow 1: Authentication Workflow
+#### Authentication Service (`src/services/authService.js`)
+```javascript
+import { apiClient } from "./apiClient.js";
 
+export const authService = {
+  // Register a new user
+  register: (userData) => apiClient.post("/auth/register", userData),
+
+  // Log in with email and password
+  login: (credentials) => apiClient.post("/auth/login", credentials),
+
+  // Refresh access token manually
+  refreshToken: (tokenData = {}) => apiClient.post("/auth/refresh-token", tokenData),
+
+  // Log out and clear cookies
+  logout: () => apiClient.delete("/auth/logout"),
+
+  // Fetch current authenticated user
+  getCurrentUser: () => apiClient.get("/auth/me")
+};
+```
+
+#### Board Service (`src/services/boardService.js`)
+```javascript
+import { apiClient } from "./apiClient.js";
+
+export const boardService = {
+  // List all boards for the logged-in user
+  getBoards: () => apiClient.get("/boards"),
+
+  // Retrieve single board by ID
+  getBoardById: (boardId) => apiClient.get(`/boards/${boardId}`),
+
+  // Create a new board
+  createBoard: (boardData) => apiClient.post("/boards", boardData),
+
+  // Update board title or description
+  updateBoard: (boardId, updateData) => apiClient.patch(`/boards/${boardId}`, updateData),
+
+  // Delete board and all its tasks
+  deleteBoard: (boardId) => apiClient.delete(`/boards/${boardId}`)
+};
+```
+
+#### Task Service (`src/services/taskService.js`)
+```javascript
+import { apiClient } from "./apiClient.js";
+
+export const taskService = {
+  // List tasks for a board (optional columnKey filter: 'todo' | 'in-progress' | 'done')
+  getBoardTasks: (boardId, columnKey) => {
+    const params = columnKey ? { columnKey } : {};
+    return apiClient.get(`/boards/${boardId}/tasks`, { params });
+  },
+
+  // Retrieve single task by ID
+  getTaskById: (boardId, taskId) => apiClient.get(`/boards/${boardId}/tasks/${taskId}`),
+
+  // Create task under a board
+  createTask: (boardId, taskData) => apiClient.post(`/boards/${boardId}/tasks`, taskData),
+
+  // Update task details (title, description, priority, dueDate)
+  updateTask: (boardId, taskId, taskData) => apiClient.patch(`/boards/${boardId}/tasks/${taskId}`, taskData),
+
+  // Move or reorder a task
+  moveTask: (boardId, taskId, moveData) => apiClient.patch(`/boards/${boardId}/tasks/${taskId}/move`, moveData),
+
+  // Delete a task
+  deleteTask: (boardId, taskId) => apiClient.delete(`/boards/${boardId}/tasks/${taskId}`)
+};
+```
+
+---
+
+### 4. Helper Function: Form Error Handling
+
+```javascript
+/**
+ * Safely extracts error strings from backend ApiError responses for user notifications.
+ *
+ * @param {Object} error - Caught error object from apiClient
+ * @returns {string} Human-friendly error message
+ */
+export function extractErrorMessage(error) {
+  if (Array.isArray(error.errors) && error.errors.length > 0) {
+    return error.errors.join(". ");
+  }
+  return error.message || "An unexpected error occurred. Please try again.";
+}
+```
+
+---
+
+## 12. End-to-End Workflow Walkthrough
+
+Below is a complete 12-step sequence demonstrating the complete lifecycle from registration to board deletion using `curl`. A persistent cookie jar (`cookies.txt`) is used throughout the sequence to maintain session state.
+
+### Step 1: Register User Account
 ```bash
-# 1. Register a new user account
 curl -X POST http://localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -c cookies.txt \
-  -d '{"username": "janedoe", "email": "jane@example.com", "password": "Password123!"}'
+  -d '{
+    "username": "sarahconnor",
+    "email": "sarah@example.com",
+    "password": "Password123!"
+  }'
+```
 
-# 2. Login to retrieve tokens and session cookies
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -c cookies.txt \
-  -d '{"email": "jane@example.com", "password": "Password123!"}'
-
-# 3. Access current user profile using cookies
+### Step 2: Fetch Current Authenticated User (`/me`)
+```bash
 curl -X GET http://localhost:8000/api/v1/auth/me \
   -b cookies.txt
+```
 
-# 4. Rotate session tokens
+### Step 3: Create a Board
+```bash
+curl -X POST http://localhost:8000/api/v1/boards \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "title": "Q4 Product Launch",
+    "description": "Sprint tracking for production milestone release"
+  }'
+```
+*Assumed returned Board ID: `671bb200e4b0234567890456`*
+
+### Step 4: List Boards
+```bash
+curl -X GET http://localhost:8000/api/v1/boards \
+  -b cookies.txt
+```
+
+### Step 5: Create a Task in "Todo"
+```bash
+curl -X POST http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "title": "Setup OAuth2 login",
+    "description": "Implement Google social login buttons on client",
+    "priority": "high",
+    "columnKey": "todo"
+  }'
+```
+*Assumed returned Task ID: `671cc300e4b0234567890789`*
+
+### Step 6: Fetch All Tasks on the Board
+```bash
+curl -X GET http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks \
+  -b cookies.txt
+```
+
+### Step 7: Update Task Details
+```bash
+curl -X PATCH http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks/671cc300e4b0234567890789 \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "title": "Setup OAuth2 login & audit logging",
+    "priority": "medium",
+    "dueDate": "2026-11-15T00:00:00.000Z"
+  }'
+```
+
+### Step 8: Move Task to "In Progress"
+```bash
+curl -X PATCH http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks/671cc300e4b0234567890789/move \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "columnKey": "in-progress"
+  }'
+```
+
+### Step 9: Delete Task
+```bash
+curl -X DELETE http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks/671cc300e4b0234567890789 \
+  -b cookies.txt
+```
+
+### Step 10: Delete Board
+```bash
+curl -X DELETE http://localhost:8000/api/v1/boards/671bb200e4b0234567890456 \
+  -b cookies.txt
+```
+
+### Step 11: Refresh Authentication Tokens
+```bash
 curl -X POST http://localhost:8000/api/v1/auth/refresh-token \
   -b cookies.txt -c cookies.txt
+```
 
-# 5. Logout and invalidate session
+### Step 12: Logout
+```bash
 curl -X DELETE http://localhost:8000/api/v1/auth/logout \
   -b cookies.txt -c cookies.txt
 ```
 
 ---
 
-### Workflow 2: Board Management Workflow
+## 13. Automated Testing Suite
 
-```bash
-# 1. Create a new project board
-curl -X POST http://localhost:8000/api/v1/boards \
-  -H "Content-Type: application/json" \
-  -b cookies.txt \
-  -d '{"title": "DevFlow MVP", "description": "Kanban board for MVP delivery"}'
+The DevFlow backend is validated by an automated integration test suite written with **Vitest** and **Supertest**.
 
-# 2. List all user boards
-curl -X GET http://localhost:8000/api/v1/boards \
-  -b cookies.txt
-
-# 3. Retrieve specific board by ID
-curl -X GET http://localhost:8000/api/v1/boards/671bb200e4b0234567890456 \
-  -b cookies.txt
-
-# 4. Update board details
-curl -X PATCH http://localhost:8000/api/v1/boards/671bb200e4b0234567890456 \
-  -H "Content-Type: application/json" \
-  -b cookies.txt \
-  -d '{"title": "DevFlow MVP V1.0"}'
-
-# 5. Delete board (cascades task deletion)
-curl -X DELETE http://localhost:8000/api/v1/boards/671bb200e4b0234567890456 \
-  -b cookies.txt
-```
-
----
-
-### Workflow 3: Task & Kanban Movement Workflow
-
-```bash
-# 1. Create a task in 'todo'
-curl -X POST http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks \
-  -H "Content-Type: application/json" \
-  -b cookies.txt \
-  -d '{"title": "Implement auth middleware", "priority": "high", "columnKey": "todo"}'
-
-# 2. List all tasks for board
-curl -X GET http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks \
-  -b cookies.txt
-
-# 3. Filter tasks in progress
-curl -X GET "http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks?columnKey=in-progress" \
-  -b cookies.txt
-
-# 4. Update task details
-curl -X PATCH http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks/671cc300e4b0234567890789 \
-  -H "Content-Type: application/json" \
-  -b cookies.txt \
-  -d '{"description": "Verify Bearer header and cookie token fallback"}'
-
-# 5. Move task to 'in-progress'
-curl -X PATCH http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks/671cc300e4b0234567890789/move \
-  -H "Content-Type: application/json" \
-  -b cookies.txt \
-  -d '{"columnKey": "in-progress"}'
-
-# 6. Delete task
-curl -X DELETE http://localhost:8000/api/v1/boards/671bb200e4b0234567890456/tasks/671cc300e4b0234567890789 \
-  -b cookies.txt
-```
-
----
-
-## Automated Testing
-
-DevFlow includes a fully automated Vitest and Supertest testing suite covering all 16 endpoints.
-
-To run the complete automated test suite:
-
+### Running the Test Suite
 ```bash
 cd backend
 npm test
 ```
 
-Tests execute against an isolated test database defined in `TEST_DB_NAME` (`devflow_test`), ensuring that development and production data are never mutated or deleted during test runs.
+### Test Configuration (`vitest.config.js`)
+- **Environment:** Node.js ESM
+- **Timeouts:** 30,000ms hook and test timeouts to support remote cloud database latencies.
+- **Sequential Execution:** `fileParallelism: false` runs test files serially, preventing concurrent database mutations and race conditions.
+
+### Test Database Safety Guard (`tests/setup.js`)
+Tests connect to an isolated database configured via `TEST_DB_NAME` (`devflow_test`). The setup script strictly validates that:
+```javascript
+if (
+  !TEST_DB_NAME ||
+  TEST_DB_NAME === "devflow" ||
+  TEST_DB_NAME === "production"
+) {
+  throw new Error("TEST ABORTED: Insecure test database name.");
+}
+```
+If the connection is pointed at the development or production database, the test suite aborts immediately. Collections are cleaned safely between test runs and dropped upon suite completion.
+
+### Test Coverage Breakdown (52 Total Tests)
+- **Authentication Suite (`tests/auth.test.js` — 18 tests):** Registration, duplicate detection (username/email), validation rejections, password hashing, login, incorrect credentials, Bearer token auth, HttpOnly cookie auth, `/me` profile retrieval, refresh token rotation, replay attack prevention, and logout.
+- **Board Management Suite (`tests/board.test.js` — 14 tests):** Board creation, default column verification (`todo`, `in-progress`, `done`), column immutability, board listing, single board retrieval, updates, invalid ObjectId rejection, cross-user isolation, and cascade cleanup of tasks upon board deletion.
+- **Task Management Suite (`tests/task.test.js` — 20 tests):** Task creation with auto-incrementing order indices, title and description length constraints, column filtering, single task retrieval, task updates, column movement, specific order insertion, contiguous order normalization, task deletion, and task-to-board mismatch prevention.
+
+### Test Results
+```text
+Test Files  3 passed (3)
+     Tests  52 passed (52)
+  Duration  ~25 - 60 seconds
+```
