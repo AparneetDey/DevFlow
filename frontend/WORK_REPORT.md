@@ -511,3 +511,108 @@ Configured in [`src/api/client.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/
 - **Task 7:** Task Management (Task CRUD, `/move` endpoint integration, priority, due dates).
 - **Task 8:** Profile & UI Polish.
 - **Task 9:** Testing & Final Integration.
+
+
+---
+
+## Task 4.1: Dashboard Layout
+
+### 1. Summary of the Dashboard Layout Implemented
+Replaced the temporary Task 2 component showcase on the Dashboard page with a complete, modern SaaS DevFlow dashboard layout:
+- **Personalized Header:** Welcomes the authenticated user by username (`user.username`) with a supportive subtitle introducing workspace management and default Kanban stages (Todo, In Progress, Done).
+- **Header Action Entry Point:** A prominent "Create Board" action button acting as a UI-only entry point.
+- **Visual Overview Metrics:** Added 3 clean summary cards displaying active board counts, workflow stages (3 fixed columns), and agile methodology indicators.
+- **Responsive Workspace Grid:** Renders an interactive grid featuring a dashed "Create New Board" card alongside summary board cards.
+- **State Switcher Preview:** Integrated an interactive tab toggle between populated mock boards and the empty-state layout representation.
+- **Empty State Presentation:** Clean, accessible fallback view with a `FolderPlus` icon and a "Create Your First Board" action button.
+
+---
+
+### 2. Components Created or Reused
+- **Created:**
+  - [`frontend/src/components/boards/BoardCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardCard.jsx): A reusable presentation card component featuring an accent color bar, board category icon, external navigation indicator, title, 2-line description clamp, column count pill ("3 Columns"), and formatted last-modified date (`updatedAt`).
+- **Reused:**
+  - [`Button.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Button.jsx): Used for the "Create Board" actions in both the header and empty-state views.
+  - [`Navbar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/Navbar.jsx) & [`AppLayout.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/AppLayout.jsx): Preserved the existing dark charcoal SaaS header and main container shell.
+  - [`useAuth.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/hooks/useAuth.js): Leveraged to retrieve `user.username` for dynamic greeting presentation without modifying authentication state.
+
+---
+
+### 3. Mock Data Used
+Mirrored the exact schema of the backend Mongoose `Board` model (`title`, `description`, `color`, `updatedAt`, `columnCount`):
+```javascript
+const INITIAL_MOCK_BOARDS = [
+  {
+    _id: 'mock-board-1',
+    title: 'Product Roadmap 2026',
+    description: 'Quarterly feature milestones, core infrastructure updates, and customer-facing releases.',
+    color: 'indigo',
+    updatedAt: '2026-10-25T14:30:00.000Z',
+    columnCount: 3,
+  },
+  {
+    _id: 'mock-board-2',
+    title: 'Sprint Backlog',
+    description: 'Current agile sprint user stories, bug fixes, and development workflows.',
+    color: 'emerald',
+    updatedAt: '2026-10-25T11:15:00.000Z',
+    columnCount: 3,
+  },
+  {
+    _id: 'mock-board-3',
+    title: 'DevOps & CI/CD Pipelines',
+    description: 'Docker containerization, automated testing workflows, and cloud deployments.',
+    color: 'violet',
+    updatedAt: '2026-10-24T18:45:00.000Z',
+    columnCount: 3,
+  },
+  {
+    _id: 'mock-board-4',
+    title: 'Design System & UI Library',
+    description: 'Component token standards, responsive layouts, accessibility audits, and icons.',
+    color: 'amber',
+    updatedAt: '2026-10-23T09:20:00.000Z',
+    columnCount: 3,
+  },
+];
+```
+Mock data remains completely isolated inside `DashboardPage.jsx` without touching the backend or creating artificial API layers.
+
+---
+
+### 4. Files Created and Modified
+- **Created:**
+  - `frontend/src/components/boards/BoardCard.jsx`
+- **Modified:**
+  - `frontend/src/pages/DashboardPage.jsx`
+  - `frontend/WORK_REPORT.md`
+
+No backend files were created, modified, or accessed.
+
+---
+
+### 5. Responsive Behavior
+- **Mobile (< 640px):** Single-column vertical layout (`grid-cols-1`); stacked header actions and metric pills with comfortable touch targets.
+- **Tablet (640px – 1024px):** Two-column card grid (`sm:grid-cols-2`) and horizontal metric banner.
+- **Desktop (>= 1024px):** Three-column workspace grid (`lg:grid-cols-3`) with consistent card heights, subtle hover shadows, and smooth transitions.
+
+---
+
+### 6. Lint Results
+- Command: `npm run lint`
+- Result: **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+---
+
+### 7. Production Build Results
+- Command: `npm run build`
+- Result: Vite production build succeeded in 5.97s with zero bundling warnings:
+  - `dist/index.html`: `0.45 kB`
+  - `dist/assets/index-D-yIonls.css`: `31.18 kB`
+  - `dist/assets/index-BV18bQsT.js`: `345.38 kB`
+
+---
+
+### 8. Known Limitations & Placeholder Status
+- **UI-Only Entry Point:** The "Create Board" buttons and dashed cards are strictly non-functional placeholders. Clicking them displays a gentle notice indicating that Board creation modals and backend CRUD endpoints (`POST /api/v1/boards`) will be connected in Task 5.
+- **Static Board Data:** The boards displayed are mock datasets. Real board fetching (`GET /api/v1/boards`) and loading skeleton states are scheduled for upcoming tasks (Task 4.3 and Task 5).

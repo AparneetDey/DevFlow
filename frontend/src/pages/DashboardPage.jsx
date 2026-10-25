@@ -1,147 +1,220 @@
 import { useState } from 'react';
+import { Plus, LayoutDashboard, Kanban, Layers, Sparkles, FolderPlus, Info } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { BoardCard } from '../components/boards/BoardCard';
 import { Button } from '../components/common/Button';
-import { Input } from '../components/common/Input';
-import { Modal } from '../components/common/Modal';
-import { Loading } from '../components/common/Loading';
-import { LayoutDashboard, CheckCircle2, Sparkles, AlertCircle } from 'lucide-react';
+
+// Locally defined mock board dataset mirroring backend Board model fields
+const INITIAL_MOCK_BOARDS = [
+  {
+    _id: 'mock-board-1',
+    title: 'Product Roadmap 2026',
+    description: 'Quarterly feature milestones, core infrastructure updates, and customer-facing releases.',
+    color: 'indigo',
+    updatedAt: '2026-10-25T14:30:00.000Z',
+    columnCount: 3,
+  },
+  {
+    _id: 'mock-board-2',
+    title: 'Sprint Backlog',
+    description: 'Current agile sprint user stories, bug fixes, and development workflows.',
+    color: 'emerald',
+    updatedAt: '2026-10-25T11:15:00.000Z',
+    columnCount: 3,
+  },
+  {
+    _id: 'mock-board-3',
+    title: 'DevOps & CI/CD Pipelines',
+    description: 'Docker containerization, automated testing workflows, and cloud deployments.',
+    color: 'violet',
+    updatedAt: '2026-10-24T18:45:00.000Z',
+    columnCount: 3,
+  },
+  {
+    _id: 'mock-board-4',
+    title: 'Design System & UI Library',
+    description: 'Component token standards, responsive layouts, accessibility audits, and icons.',
+    color: 'amber',
+    updatedAt: '2026-10-23T09:20:00.000Z',
+    columnCount: 3,
+  },
+];
 
 export function DashboardPage() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [demoInput, setDemoInput] = useState('');
-  const [inputError, setInputError] = useState('');
-  const [simulateLoading, setSimulateLoading] = useState(false);
+  const { user } = useAuth();
+  const [showNotice, setShowNotice] = useState(false);
+  const [activeTab, setActiveTab] = useState('populated'); // 'populated' | 'empty'
 
-  const handleTestError = () => {
-    if (!demoInput.trim()) {
-      setInputError('This field cannot be empty.');
-    } else {
-      setInputError('');
-    }
+  const boards = activeTab === 'populated' ? INITIAL_MOCK_BOARDS : [];
+
+  const handleCreatePlaceholder = () => {
+    setShowNotice(true);
+    setTimeout(() => setShowNotice(false), 3500);
   };
 
-  const handleTestLoading = () => {
-    setSimulateLoading(true);
-    setTimeout(() => setSimulateLoading(false), 1200);
-  };
+  const displayName = user?.username ? `, ${user.username}` : '';
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
-      <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-indigo-600 mb-1">
+      {/* Dashboard Header */}
+      <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-indigo-600">
             <LayoutDashboard className="w-5 h-5" />
-            <span className="text-xs font-semibold uppercase tracking-wider">Foundation Verification</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Workspaces Overview</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard (Placeholder)</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            This placeholder page verifies route navigation and foundational UI components for Task 2.
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            Welcome back{displayName}!
+          </h1>
+          <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">
+            Manage your project workspaces, track Kanban cards across default status columns (Todo, In Progress, Done), and monitor development progress.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={handleTestLoading} isLoading={simulateLoading}>
-            Test Loading
+
+        {/* Create Board Entry Point (Header Action) */}
+        <div className="flex items-center gap-3 shrink-0">
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleCreatePlaceholder}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create Board</span>
           </Button>
-          <Button variant="primary" onClick={() => setIsModalOpen(true)}>
-            Open Test Modal
-          </Button>
         </div>
       </div>
 
-      {/* Component Foundation Showcase Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Buttons Showcase */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            Reusable Button Variants
-          </h2>
-          <p className="text-xs text-slate-500">
-            Standardized button component supporting <code>primary</code>, <code>secondary</code>, <code>outline</code>, and <code>danger</code> variants.
-          </p>
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <Button variant="primary">Primary</Button>
-            <Button variant="secondary">Secondary</Button>
-            <Button variant="outline">Outline</Button>
-            <Button variant="danger">Danger</Button>
-            <Button variant="primary" disabled>Disabled</Button>
-            <Button variant="primary" isLoading>Loading</Button>
+      {/* Temporary Notice when clicking Create Board placeholder */}
+      {showNotice && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs animate-in fade-in duration-200">
+          <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold text-indigo-950">UI-Only Entry Point (Task 4.1)</p>
+            <p className="text-indigo-800 mt-0.5">
+              Board creation modal and live Backend Board API integration (`POST /api/v1/boards`) will be connected in Task 5.
+            </p>
           </div>
-        </div>
-
-        {/* Input Showcase */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-indigo-600" />
-            Reusable Form Input
-          </h2>
-          <div className="space-y-3">
-            <Input
-              label="Board or Task Title"
-              placeholder="e.g., Sprint Planning"
-              value={demoInput}
-              onChange={(e) => {
-                setDemoInput(e.target.value);
-                if (inputError) setInputError('');
-              }}
-              error={inputError}
-              required
-            />
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={handleTestError}>
-                Validate Input
-              </Button>
-              {demoInput && (
-                <Button size="sm" variant="secondary" onClick={() => { setDemoInput(''); setInputError(''); }}>
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Status & Next Steps */}
-      <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-5 flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-indigo-600 mt-0.5 shrink-0" />
-        <div className="text-sm text-indigo-950">
-          <p className="font-semibold mb-0.5">Task 2 Foundation Active</p>
-          <p className="text-indigo-800 text-xs">
-            Routing, Axios client, Tailwind styling, and reusable UI components are now verified. Real authentication and dashboard logic will follow in Tasks 3 and 4.
-          </p>
-        </div>
-      </div>
-
-      {/* Test Modal Component */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Reusable Modal Component"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            This modal confirms accessible backdrop dismissal, Escape key closing, and clean border framing.
-          </p>
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs text-slate-700">
-            <strong>Ready for:</strong> Create Board Modal (Task 5) &amp; Task Editor Modal (Task 7).
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" size="sm" onClick={() => setIsModalOpen(false)}>
-              Close
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => setIsModalOpen(false)}>
-              Acknowledge
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Inline Loading Demonstration */}
-      {simulateLoading && (
-        <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-xs flex justify-center">
-          <Loading text="Demonstrating loading component..." />
         </div>
       )}
+
+      {/* Overview Statistics Cards (Visual Presentation) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+            <Kanban className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Active Boards</p>
+            <p className="text-lg font-bold text-slate-900">{boards.length}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Workflow Columns</p>
+            <p className="text-lg font-bold text-slate-900">3 Fixed Stages</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center border border-violet-100">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Agile Workflow</p>
+            <p className="text-lg font-bold text-slate-900">Kanban Board</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Boards Section */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Your Boards</h2>
+            <p className="text-xs text-slate-500">Select any workspace to view and organize Kanban tasks.</p>
+          </div>
+
+          {/* UI State Toggle for Verification */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setActiveTab('populated')}
+              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                activeTab === 'populated'
+                  ? 'bg-white text-indigo-600 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Mock Boards ({INITIAL_MOCK_BOARDS.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('empty')}
+              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                activeTab === 'empty'
+                  ? 'bg-white text-indigo-600 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Empty State Preview
+            </button>
+          </div>
+        </div>
+
+        {/* Board Cards Grid or Empty State */}
+        {boards.length === 0 ? (
+          /* Empty State Representation */
+          <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center max-w-lg mx-auto my-8 space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto border border-indigo-100 shadow-2xs">
+              <FolderPlus className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-900">No boards created yet</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Get started by creating your first project workspace to track agile workflows and tasks.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCreatePlaceholder}
+              className="inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Your First Board</span>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* Create Board Entry Point (Dashed Card) */}
+            <button
+              type="button"
+              onClick={handleCreatePlaceholder}
+              className="min-h-[160px] rounded-xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 p-6 flex flex-col items-center justify-center text-center transition-all duration-200 group cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-full bg-white text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 flex items-center justify-center border border-slate-200 group-hover:border-indigo-200 transition-all mb-2.5 shadow-2xs">
+                <Plus className="w-5 h-5" />
+              </div>
+              <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-600 transition-colors">
+                Create New Board
+              </span>
+              <span className="text-[11px] text-slate-400 mt-0.5">
+                UI Entry Point (Task 4.1)
+              </span>
+            </button>
+
+            {/* Board Cards */}
+            {boards.map((board) => (
+              <BoardCard key={board._id} board={board} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
