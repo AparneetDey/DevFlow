@@ -43,7 +43,8 @@ export function BoardCard({ board }) {
   return (
     <Link
       to={`/boards/${board._id}`}
-      className={`group relative bg-white rounded-xl border border-slate-200 p-5 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden ${theme.hoverBorder}`}
+      aria-label={`Open ${board.title} board`}
+      className={`group relative bg-white rounded-xl border border-slate-200 p-5 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden min-h-[170px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${theme.hoverBorder}`}
     >
       {/* Top accent bar */}
       <div className={`absolute top-0 left-0 right-0 h-1 ${theme.bar}`} />

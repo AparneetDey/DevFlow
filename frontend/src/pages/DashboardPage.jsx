@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, LayoutDashboard, Kanban, Layers, Sparkles, FolderPlus, Info } from 'lucide-react';
+import { Plus, LayoutDashboard, Kanban, Layers, Sparkles, FolderPlus, Info, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { BoardCard } from '../components/boards/BoardCard';
 import { BoardSkeleton } from '../components/boards/BoardSkeleton';
@@ -51,7 +51,7 @@ export function DashboardPage() {
 
   const handleCreatePlaceholder = () => {
     setShowNotice(true);
-    setTimeout(() => setShowNotice(false), 3500);
+    setTimeout(() => setShowNotice(false), 4000);
   };
 
   const displayName = user?.username ? `, ${user.username}` : '';
@@ -80,6 +80,7 @@ export function DashboardPage() {
             size="md"
             onClick={handleCreatePlaceholder}
             className="flex items-center gap-2"
+            aria-label="Create board workspace"
           >
             <Plus className="w-4 h-4" />
             <span>Create Board</span>
@@ -89,21 +90,35 @@ export function DashboardPage() {
 
       {/* Temporary Notice when clicking Create Board placeholder */}
       {showNotice && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs animate-in fade-in duration-200">
-          <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold text-indigo-950">UI-Only Entry Point (Task 4.2)</p>
-            <p className="text-indigo-800 mt-0.5">
-              Board creation modal and live Backend Board API integration (`POST /api/v1/boards`) will be connected in Task 5.
-            </p>
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start justify-between gap-3 p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs transition-all duration-200"
+        >
+          <div className="flex items-start gap-3">
+            <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-indigo-950">UI-Only Entry Point (Task 4)</p>
+              <p className="text-indigo-800 mt-0.5">
+                Board creation modal and live Backend Board API integration (<code>POST /api/v1/boards</code>) will be connected in Task 5.
+              </p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowNotice(false)}
+            className="text-indigo-400 hover:text-indigo-600 p-1 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            aria-label="Dismiss notification"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
       {/* Overview Statistics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+          <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shrink-0">
             <Kanban className="w-5 h-5" />
           </div>
           <div>
@@ -117,7 +132,7 @@ export function DashboardPage() {
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shrink-0">
             <Layers className="w-5 h-5" />
           </div>
           <div>
@@ -127,7 +142,7 @@ export function DashboardPage() {
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center border border-violet-100">
+          <div className="w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center border border-violet-100 shrink-0">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
@@ -141,7 +156,7 @@ export function DashboardPage() {
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-bold text-slate-900 tracking-tight">Your Boards</h2>
-          <p className="text-xs text-slate-500">Select any workspace to view and organize Kanban tasks.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Select any workspace to view and organize Kanban tasks.</p>
         </div>
 
         {/* Mutually Exclusive Presentation States: Loading vs Empty vs Populated */}
@@ -152,7 +167,11 @@ export function DashboardPage() {
           </div>
         ) : boards.length === 0 ? (
           /* 2. Empty State: No boards available */
-          <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center max-w-lg mx-auto my-8 space-y-4">
+          <div
+            role="region"
+            aria-label="Empty boards state"
+            className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center max-w-lg mx-auto my-8 space-y-4"
+          >
             <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto border border-indigo-100 shadow-2xs">
               <FolderPlus className="w-7 h-7" />
             </div>
@@ -167,6 +186,7 @@ export function DashboardPage() {
               size="sm"
               onClick={handleCreatePlaceholder}
               className="inline-flex items-center gap-1.5"
+              aria-label="Create your first board workspace"
             >
               <Plus className="w-4 h-4" />
               <span>Create Your First Board</span>
@@ -179,7 +199,8 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={handleCreatePlaceholder}
-              className="min-h-[170px] rounded-xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 p-6 flex flex-col items-center justify-center text-center transition-all duration-200 group cursor-pointer"
+              aria-label="Create new board workspace"
+              className="min-h-[170px] rounded-xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 p-6 flex flex-col items-center justify-center text-center transition-all duration-200 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             >
               <div className="w-10 h-10 rounded-full bg-white text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 flex items-center justify-center border border-slate-200 group-hover:border-indigo-200 transition-all mb-2.5 shadow-2xs">
                 <Plus className="w-5 h-5" />
