@@ -13,6 +13,7 @@ import {
 import { Button } from '../components/common/Button.jsx';
 import KanbanColumn from '../components/boards/KanbanColumn.jsx';
 import boardApi from '../api/board.api.js';
+import { sortBoardColumns } from '../utils/columnSorting.js';
 import { extractErrorMessage } from '../api/error.js';
 
 export function BoardPage() {
@@ -103,43 +104,47 @@ export function BoardPage() {
         });
   })();
 
-  const columns = Array.isArray(board?.columns)
-    ? [...board.columns]
-        .filter((col) => col && typeof col === 'object' && typeof col.title === 'string')
-        .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
-    : [];
+  const columns = sortBoardColumns(board?.columns);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 sm:space-y-8">
       {/* 1. Loading State: Header & Column Skeletons */}
       {isLoading ? (
-        <div className="space-y-6" aria-busy="true">
+        <div className="space-y-6 sm:space-y-8" aria-busy="true">
           {/* Back link skeleton */}
           <div className="h-4 w-32 bg-slate-200 rounded animate-pulse" />
 
           {/* Header Card Skeleton */}
-          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-2xs space-y-4 animate-pulse">
-            <div className="h-7 w-72 bg-slate-200 rounded-md" />
-            <div className="h-4 w-96 max-w-full bg-slate-100 rounded" />
-            <div className="flex gap-3 pt-2">
-              <div className="h-6 w-24 bg-slate-100 rounded-md" />
-              <div className="h-6 w-32 bg-slate-100 rounded-md" />
+          <div className="bg-white rounded-2xl p-6 sm:p-7 border border-slate-200 shadow-2xs space-y-4 animate-pulse">
+            <div className="h-4 w-28 bg-slate-200 rounded" />
+            <div className="h-8 w-72 max-w-full bg-slate-200 rounded-md" />
+            <div className="h-4 w-full max-w-md bg-slate-100 rounded" />
+            <div className="flex gap-2.5 pt-1.5">
+              <div className="h-6 w-24 bg-slate-100 rounded-lg" />
+              <div className="h-6 w-32 bg-slate-100 rounded-lg" />
             </div>
           </div>
 
           {/* Kanban Columns Skeleton */}
-          <div className="flex items-start gap-5 overflow-x-auto pb-6 pt-1">
-            {[1, 2, 3].map((colIndex) => (
-              <div
-                key={colIndex}
-                className="w-72 sm:w-80 shrink-0 bg-slate-100/70 border border-slate-200/80 rounded-2xl p-3.5 min-h-[420px] animate-pulse flex flex-col space-y-3"
-              >
-                <div className="flex justify-between items-center px-1.5 py-2 mb-2 border-b border-slate-200/60">
-                  <div className="h-4 w-24 bg-slate-200 rounded" />
+          <div className="space-y-3.5">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-28 bg-slate-200 rounded animate-pulse" />
+            </div>
+            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1">
+              {[1, 2, 3].map((colIndex) => (
+                <div
+                  key={colIndex}
+                  className="w-72 sm:w-80 shrink-0 bg-slate-100/70 border border-slate-200/80 rounded-2xl p-3 sm:p-3.5 min-h-[440px] animate-pulse flex flex-col"
+                >
+                  <div className="flex items-center gap-2 px-1.5 py-1 mb-2.5 pb-2.5 border-b border-slate-200/60">
+                    <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                    <div className="h-4 w-24 bg-slate-200 rounded" />
+                  </div>
+                  <div className="flex-1 rounded-xl border border-dashed border-slate-200/80 bg-white/40 p-6 flex flex-col items-center justify-center" />
                 </div>
-                <div className="flex-1 rounded-xl border-2 border-dashed border-slate-200/80 bg-white/40 p-6 flex flex-col items-center justify-center" />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       ) : isNotFound ? (
@@ -198,7 +203,7 @@ export function BoardPage() {
         </div>
       ) : board ? (
         /* 4. Populated Board Detail */
-        <div className="space-y-6">
+        <div className="space-y-6 sm:space-y-8">
           {/* Back Navigation Link */}
           <div>
             <Link
@@ -211,17 +216,17 @@ export function BoardPage() {
           </div>
 
           {/* Board Header Card */}
-          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+          <div className="bg-white rounded-2xl p-6 sm:p-7 border border-slate-200 shadow-2xs space-y-4">
             <div className="space-y-2 max-w-3xl">
-              <div className="flex items-center gap-2 text-indigo-600">
-                <Kanban className="w-5 h-5" />
+              <div className="flex items-center gap-1.5 text-indigo-600">
+                <Kanban className="w-4 h-4" />
                 <span className="text-xs font-semibold uppercase tracking-wider">Board Workspace</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight break-words">
                 {board.title}
               </h1>
               {board.description ? (
-                <p className="text-sm text-slate-600 leading-relaxed">
+                <p className="text-sm text-slate-600 leading-relaxed break-words whitespace-pre-line max-w-3xl">
                   {board.description}
                 </p>
               ) : (
@@ -231,14 +236,15 @@ export function BoardPage() {
               )}
 
               {/* Board Metadata Pills */}
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <span className="text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md font-medium border border-slate-200/60">
-                  {columns.length} {columns.length === 1 ? 'Column' : 'Columns'}
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium border border-slate-200/80">
+                  <Layers className="w-3.5 h-3.5 text-slate-500" />
+                  <span>{columns.length} {columns.length === 1 ? 'Column' : 'Columns'}</span>
                 </span>
 
                 {formattedDate && (
-                  <span className="text-xs text-slate-500 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60 font-medium">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
                     <span>Updated {formattedDate}</span>
                   </span>
                 )}
@@ -246,10 +252,10 @@ export function BoardPage() {
             </div>
           </div>
 
-          {/* Kanban Columns Container */}
-          <div className="space-y-3">
+          {/* Kanban Columns Section */}
+          <div className="space-y-3.5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+              <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
                 <Layers className="w-4 h-4 text-indigo-600" />
                 <span>Workflow Stages</span>
               </h2>
@@ -266,7 +272,7 @@ export function BoardPage() {
                 </p>
               </div>
             ) : (
-              <div className="flex items-start gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none">
+              <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0">
                 {columns.map((column, index) => (
                   <KanbanColumn
                     key={column.key || column.title || `column-${index}`}

@@ -1775,3 +1775,167 @@ Replace the static column preview in the board detail view with a reusable, resp
 ### 9. Confirmation of Backend Read-Only Discipline
 - **Strict Read-Only Enforcement:** Zero backend files were modified, created, or deleted.
 - **Git Status:** Verified via `git status backend` that the `backend/` directory remains 100% clean and untouched.
+
+
+---
+
+## Task 6.3: Board UI Refinement and Strict Column Sorting
+
+### 1. Task Objective
+Refine the board detail UI and implement deterministic, strict, and fully tested column sorting logic. Eliminate loose sorting fallbacks that conceal invalid data, enforce backend schema fidelity (`order: Number`), ensure stability for duplicate orders, position columns with missing or invalid orders at the end in their original sequence, prevent mutation of input structures, and polish `KanbanColumn.jsx` and `BoardPage.jsx` typography, header visual hierarchy, metadata badges, responsive horizontal scrolling, and loading skeleton alignment.
+
+---
+
+### 2. Files Created or Modified
+
+#### Files Created
+- [`frontend/src/utils/columnSorting.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/columnSorting.js) — Pure helper module containing `isValidOrder` and `sortBoardColumns`.
+- [`frontend/src/utils/columnSorting.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/columnSorting.test.js) — Native test suite validating all 8 sorting specifications via Node.js test runner (`node:test` and `node:assert/strict`).
+
+#### Files Modified
+- [`frontend/src/components/boards/KanbanColumn.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/KanbanColumn.jsx) — Refined header typography, indicator dot, borders, spacing, and subtle empty-state card while preserving the existing public interface.
+- [`frontend/src/pages/BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx) — Integrated `sortBoardColumns`, refined header visual hierarchy, metadata pills (`Layers` and `Clock` icons), word breaking on board title/description (`break-words`), and aligned skeleton loading dimensions.
+- [`frontend/package.json`](file:///e:/GitHub-Repo/DevFlow/frontend/package.json) — Added native `"test"` script (`node --test src/utils/columnSorting.test.js`).
+
+---
+
+### 3. Exact Column Sorting Rules Implemented
+Implemented in [`frontend/src/utils/columnSorting.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/columnSorting.js):
+
+1. **Safe Input Guard:**
+   - If `columns` is not an array (e.g. `null`, `undefined`, string, object, number), returns an empty array `[]`.
+2. **Malformed Entry Filtering:**
+   - Each retained column must be a non-null object (not an array) with `typeof col.title === 'string'`.
+   - Nulls, undefined entries, primitive strings/numbers, arrays, and objects missing a string `title` are filtered out before sorting.
+3. **Strict Order Validation (`isValidOrder`):**
+   - An `order` value is valid if and only if `typeof order === 'number' && Number.isFinite(order)`.
+   - Zero (`0`) and negative numbers (e.g. `-10`, `-5`) are recognized as valid finite numbers.
+   - Non-numbers, booleans, objects, arrays, empty strings, whitespace-only strings, `NaN`, `Infinity`, and `-Infinity` are treated as invalid.
+   - Numeric strings (e.g. `'0'`, `'1'`) are treated as invalid order values because the backend schema (`backend/src/models/board.model.js`) strictly defines `order: { type: Number, required: true }` without numeric string support.
+4. **Ascending Order & Stability:**
+   - Columns with valid numeric orders are sorted in ascending numerical order (`a.col.order - b.col.order`).
+   - Duplicate valid order values are strictly stable, preserving their original relative input order via tie-breaking with `a.index - b.index`.
+5. **Placement of Invalid / Missing Orders:**
+   - Columns with missing (`undefined`) or invalid order values are placed after all valid order columns.
+   - The relative input order among missing or invalid order columns is strictly preserved.
+6. **Immutability Guarantee:**
+   - Neither the input `columns` array nor the original column objects are modified or mutated.
+
+---
+
+### 4. UI Refinements Made
+
+#### KanbanColumn Component (`KanbanColumn.jsx`)
+- **Header Layout & Typography:** Added a subtle status dot (`w-2 h-2 rounded-full bg-slate-400/80`), semibold title typography (`text-sm font-semibold text-slate-800`), truncation safety (`truncate` with native `title` tooltip), and a clean bottom border (`border-b border-slate-200/70 pb-2.5`).
+- **Card Body & Content Space:** Expanded column vertical space to `min-h-[440px]` with body container `min-h-[350px]`, preserving ample room for future task cards.
+- **Empty State Presentation:** Replaced heavy dashed borders with a subtle, non-distracting dashed container (`border border-dashed border-slate-300/80 bg-white/50 rounded-xl p-6`) and muted copy (`text-xs font-medium text-slate-400`) that does not compete with the column header.
+- **Container Sizing & Contrast:** Sized at `w-72 sm:w-80 shrink-0` with `bg-slate-100/75 border border-slate-200/90 rounded-2xl shadow-2xs` for consistent contrast against page background.
+
+#### Board Detail View (`BoardPage.jsx`)
+- **Visual Hierarchy & Header Card:** Refined the board workspace badge with `Kanban` icon, increased title contrast, and formatted description with `break-words` and `whitespace-pre-line` to prevent long words/descriptions from overflowing the container.
+- **Metadata Badges:** Restyled column counter and updated timestamp with distinct icon badges (`Layers` for column count, `Clock` for timestamp) on subtle slate pills.
+- **Header-to-Column Spacing:** Adjusted container rhythm (`space-y-6 sm:space-y-8`) with dedicated section header (`Workflow Stages`).
+- **Responsive Horizontal Scrolling:** Restructured the Kanban workspace with `flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 min-w-0` so only the columns area scrolls horizontally on narrow viewports without triggering page-level overflow.
+- **Skeleton Synchronization:** Updated the loading skeleton placeholders to match the exact `min-h-[440px]` height, header dot, title bar, and dashed body of `KanbanColumn.jsx`, eliminating cumulative layout shift (CLS).
+
+---
+
+### 5. Test Cases Added and Actual Results
+
+#### Native Test Suite (`frontend/src/utils/columnSorting.test.js`)
+Executed via Node.js built-in test runner:
+- **Command:** `npm.cmd test`
+- **Output:**
+  ```text
+  > frontend@0.0.0 test
+  > node --test src/utils/columnSorting.test.js
+
+  TAP version 13
+  # Subtest: isValidOrder helper
+      # Subtest: accepts finite numbers, zero, and negative numbers
+      ok 1 - accepts finite numbers, zero, and negative numbers
+      # Subtest: rejects NaN, Infinity, and -Infinity
+      ok 2 - rejects NaN, Infinity, and -Infinity
+      # Subtest: rejects non-numeric types
+      ok 3 - rejects non-numeric types
+  ok 1 - isValidOrder helper
+  # Subtest: sortBoardColumns
+      # Subtest: 1. sorts valid orders in ascending numerical order
+      ok 1 - 1. sorts valid orders in ascending numerical order
+      # Subtest: 2. correctly sorts negative and zero order values
+      ok 2 - 2. correctly sorts negative and zero order values
+      # Subtest: 3. preserves stable original order for duplicate valid order values
+      ok 3 - 3. preserves stable original order for duplicate valid order values
+      # Subtest: 4. places columns with missing order after valid columns in original order
+      ok 4 - 4. places columns with missing order after valid columns in original order
+      # Subtest: 5. places invalid order values (null, NaN, Infinity, booleans, objects, arrays, empty strings, whitespace) after valid columns while preserving input order
+      ok 5 - 5. places invalid order values (null, NaN, Infinity, booleans, objects, arrays, empty strings, whitespace) after valid columns while preserving input order
+      # Subtest: 6. treats numeric strings as invalid order since backend schema explicitly requires Number
+      ok 6 - 6. treats numeric strings as invalid order since backend schema explicitly requires Number
+      # Subtest: 7. filters malformed entries and safely handles non-array inputs
+      ok 7 - 7. filters malformed entries and safely handles non-array inputs
+      # Subtest: 8. does not mutate original array or column objects
+      ok 8 - 8. does not mutate original array or column objects
+  ok 2 - sortBoardColumns
+
+  1..2
+  # tests 11
+  # suites 2
+  # pass 11
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  ```
+- **Result:** **11 of 11 tests passed (0 failures, 0 skipped)**.
+
+---
+
+### 6. Lint Results
+- **Command:** `npm.cmd run lint`
+- **Result:**
+  ```text
+  > frontend@0.0.0 lint
+  > eslint .
+  ```
+  **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+---
+
+### 7. Production Build Results
+- **Command:** `npm.cmd run build`
+- **Result:**
+  ```text
+  vite v8.3.5 building client environment for production...
+  transforming...
+  ✓ 2024 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                   0.45 kB │ gzip:   0.29 kB
+  dist/assets/index-CT43TCRR.css   35.99 kB │ gzip:   7.08 kB
+  dist/assets/index-CPROGLk0.js   366.15 kB │ gzip: 113.71 kB
+
+  ✓ built in 6.80s
+  ```
+  Production bundle compiled with **0 errors and 0 warnings**.
+
+---
+
+### 8. Verification and Server Status
+- **Backend Status:** Offline (`http://localhost:8000`).
+- **Verification Performed:**
+  - Automated unit testing via Node 22 native test runner verified all 8 sorting requirements and edge cases.
+  - ESLint static analysis verified React 19 standards, dependency hygiene, and syntax correctness.
+  - Production Vite build confirmed bundle generation and asset compilation.
+  - Note: In-browser visual verification was not simulated or claimed without an active browser session; layout properties adhere strictly to Tailwind CSS best practices and accessible design tokens.
+
+---
+
+### 9. Confirmation of Backend Read-Only Discipline
+- **Strict Isolation Maintained:** Zero files in `backend/` were modified, created, or deleted.
+- **Git Status:** Verified via `git status backend` that the backend repository directory remains 100% clean and untouched.
+
+---
+
+### 10. Remaining Limitations & Next Steps
+- **Task Management (Task 7):** Task cards, task fetching (`GET /api/v1/boards/:boardId/tasks`), task creation modals, editing, deletion, and drag-and-drop column transitions will be implemented in Task 7.
