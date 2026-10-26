@@ -1,15 +1,17 @@
 import React from 'react';
+import { Plus } from 'lucide-react';
 import TaskCard from '../tasks/TaskCard.jsx';
 
 /**
  * Reusable presentation component for a Kanban workflow column.
- * Displays column header with task counter and a task container with an empty message fallback.
+ * Displays column header with task counter, quick task creation action, and task container with empty fallback.
  *
  * @param {Object} props
  * @param {Object} props.column - Column metadata { title, key, order }
  * @param {Array<Object>} [props.tasks] - List of task objects to render within the column
  * @param {React.ReactNode} [props.children] - Custom children to render within the column
  * @param {boolean} [props.isLoading=false] - Whether tasks are currently loading
+ * @param {Function} [props.onAddTask] - Callback when user clicks add task for this column
  * @param {string} [props.className] - Optional custom CSS classes
  */
 export function KanbanColumn({
@@ -17,6 +19,7 @@ export function KanbanColumn({
   tasks,
   children,
   isLoading = false,
+  onAddTask,
   className = '',
 }) {
   const columnTitle = column?.title || 'Untitled Column';
@@ -50,13 +53,26 @@ export function KanbanColumn({
           </h3>
         </div>
 
-        {/* Task Count Badge */}
-        <span
-          className="text-xs px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-600 font-semibold text-[11px] shrink-0"
-          aria-label={`${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${columnTitle}`}
-        >
-          {taskCount}
-        </span>
+        {/* Task Count Badge & Add Task Button */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span
+            className="text-xs px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-600 font-semibold text-[11px]"
+            aria-label={`${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${columnTitle}`}
+          >
+            {taskCount}
+          </span>
+          {onAddTask && (
+            <button
+              type="button"
+              onClick={() => onAddTask(column?.key || 'todo')}
+              aria-label={`Add task to ${columnTitle} column`}
+              title={`Add task to ${columnTitle}`}
+              className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-200/70 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Column Body / Task Content Area */}
@@ -79,11 +95,21 @@ export function KanbanColumn({
           <div
             role="region"
             aria-label={`Empty ${columnTitle} column`}
-            className="flex-1 rounded-xl border border-dashed border-slate-300/80 bg-white/50 p-6 flex flex-col items-center justify-center text-center select-none"
+            className="flex-1 rounded-xl border border-dashed border-slate-300/80 bg-white/50 p-6 flex flex-col items-center justify-center text-center select-none space-y-2"
           >
             <p className="text-xs font-medium text-slate-400">
               No tasks yet
             </p>
+            {onAddTask && (
+              <button
+                type="button"
+                onClick={() => onAddTask(column?.key || 'todo')}
+                className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-2 py-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add a task</span>
+              </button>
+            )}
           </div>
         )}
       </div>

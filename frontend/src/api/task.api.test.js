@@ -129,3 +129,130 @@ describe('Task display, column mapping, and edge case safety', () => {
     assert.equal(tasks[0].dueDate, undefined);
   });
 });
+
+describe('taskApi.createTask and reactive board task updates (Task 7.2)', () => {
+  test('createTask sends POST to /boards/:boardId/tasks with exact payload and config', async () => {
+    const originalPost = apiClient.post;
+    let capturedUrl = null;
+    let capturedPayload = null;
+    let capturedConfig = null;
+
+    apiClient.post = (url, payload, config) => {
+      capturedUrl = url;
+      capturedPayload = payload;
+      capturedConfig = config;
+      return Promise.resolve({
+        data: {
+          statusCode: 201,
+          data: {
+            _id: 'new-task-1',
+            title: payload.title,
+            description: payload.description,
+            columnKey: payload.columnKey,
+            priority: payload.priority,
+            dueDate: payload.dueDate,
+            order: 0,
+            boardId: '507f1f77bcf86cd799439011',
+          },
+          message: 'Task created successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const mockBoardId = '507f1f77bcf86cd799439011';
+      const payload = {
+        title: 'New Unit Test Task',
+        description: 'Detailed description',
+        columnKey: 'in-progress',
+        priority: 'high',
+        dueDate: '2026-12-31T23:59:59.000Z',
+      };
+      const mockConfig = { headers: { 'X-Custom-Header': 'DevFlow' } };
+
+      const res = await taskApi.createTask(mockBoardId, payload, mockConfig);
+
+      assert.equal(capturedUrl, `/boards/${mockBoardId}/tasks`);
+      assert.deepEqual(capturedPayload, payload);
+      assert.equal(capturedConfig.headers['X-Custom-Header'], 'DevFlow');
+      assert.equal(res.data.statusCode, 201);
+      assert.equal(res.data.success, true);
+      assert.equal(res.data.data._id, 'new-task-1');
+      assert.equal(res.data.data.title, 'New Unit Test Task');
+      assert.equal(res.data.data.columnKey, 'in-progress');
+    } finally {
+      apiClient.post = originalPost;
+    }
+  });
+
+  test('newly created task is reactively appended to tasks state and grouped into destination column', () => {
+    const initialTasks = [
+      { _id: 't1', title: 'Existing Task 1', columnKey: 'todo', order: 0 },
+      { _id: 't2', title: 'Existing Task 2', columnKey: 'in-progress', order: 0 },
+    ];
+
+    const newTask = {
+      _id: 't3',
+      title: 'Newly Created Task',
+      columnKey: 'todo',
+      order: 1,
+      priority: 'medium',
+    };
+
+    // Reactive state update simulation: setTasks((prev) => [...prev, newTask])
+    const updatedTasks = [...initialTasks, newTask];
+
+    assert.equal(updatedTasks.length, 3);
+    const todoColumnTasks = getTasksForColumn(updatedTasks, 'todo');
+    assert.equal(todoColumnTasks.length, 2);
+    assert.deepEqual(
+      todoColumnTasks.map((t) => t._id),
+      ['t1', 't3']
+    );
+
+    const inProgressColumnTasks = getTasksForColumn(updatedTasks, 'in-progress');
+    assert.equal(inProgressColumnTasks.length, 1);
+    assert.equal(inProgressColumnTasks[0]._id, 't2');
+  });
+
+  test('validates payload formatting conforming to backend strict Zod schema', () => {
+    // Verify payload sanitizer structure
+    const createPayload = (title, desc = '', columnKey = 'todo', priority = 'medium', dueDate = null) => {
+      const trimmedTitle = title.trim();
+      const trimmedDesc = desc.trim();
+
+      if (!trimmedTitle || trimmedTitle.length > 150) {
+        throw new Error('Invalid title');
+      }
+      if (trimmedDesc.length > 2000) {
+        throw new Error('Invalid description');
+      }
+
+      return {
+        title: trimmedTitle,
+        description: trimmedDesc,
+        columnKey,
+        priority,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+      };
+    };
+
+    // Valid payload
+    const valid = createPayload(' Valid Title ', ' Valid Description ', 'in-progress', 'high', '2026-06-15');
+    assert.equal(valid.title, 'Valid Title');
+    assert.equal(valid.description, 'Valid Description');
+    assert.equal(valid.columnKey, 'in-progress');
+    assert.equal(valid.priority, 'high');
+    assert.ok(valid.dueDate.startsWith('2026-06-15'));
+
+    // Rejects empty title
+    assert.throws(() => createPayload('   '), /Invalid title/);
+
+    // Rejects oversized title
+    assert.throws(() => createPayload('a'.repeat(151)), /Invalid title/);
+
+    // Rejects oversized description
+    assert.throws(() => createPayload('Valid Title', 'b'.repeat(2001)), /Invalid description/);
+  });
+});

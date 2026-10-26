@@ -10,9 +10,11 @@ import {
   RefreshCw,
   FolderX,
   CheckSquare,
+  Plus,
 } from 'lucide-react';
 import { Button } from '../components/common/Button.jsx';
 import KanbanColumn from '../components/boards/KanbanColumn.jsx';
+import CreateTaskModal from '../components/tasks/CreateTaskModal.jsx';
 import boardApi from '../api/board.api.js';
 import taskApi from '../api/task.api.js';
 import { sortBoardColumns } from '../utils/columnSorting.js';
@@ -34,6 +36,10 @@ export function BoardPage() {
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [taskError, setTaskError] = useState(null);
   const [taskReloadIndex, setTaskReloadIndex] = useState(0);
+
+  // Task creation modal state
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [selectedColumnKey, setSelectedColumnKey] = useState('todo');
 
   // Fetch board details on mount or when boardId route param / reloadIndex changes
   useEffect(() => {
@@ -162,6 +168,16 @@ export function BoardPage() {
     setTaskReloadIndex((prev) => prev + 1);
   };
 
+  const handleOpenCreateTask = (columnKey = 'todo') => {
+    setSelectedColumnKey(columnKey || 'todo');
+    setIsCreateTaskModalOpen(true);
+  };
+
+  const handleTaskCreated = (newTask) => {
+    if (!newTask || !newTask._id) return;
+    setTasks((prevTasks) => [...prevTasks, newTask]);
+  };
+
   const formattedDate = (() => {
     if (!board?.updatedAt) return null;
     const date = new Date(board.updatedAt);
@@ -287,44 +303,60 @@ export function BoardPage() {
 
           {/* Board Header Card */}
           <div className="bg-white rounded-2xl p-6 sm:p-7 border border-slate-200 shadow-2xs space-y-4">
-            <div className="space-y-2 max-w-3xl">
-              <div className="flex items-center gap-1.5 text-indigo-600">
-                <Kanban className="w-4 h-4" />
-                <span className="text-xs font-semibold uppercase tracking-wider">Board Workspace</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight break-words">
-                {board.title}
-              </h1>
-              {board.description ? (
-                <p className="text-sm text-slate-600 leading-relaxed break-words whitespace-pre-line max-w-3xl">
-                  {board.description}
-                </p>
-              ) : (
-                <p className="text-xs text-slate-400 italic">
-                  No description provided for this board.
-                </p>
-              )}
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <div className="space-y-2 max-w-3xl">
+                <div className="flex items-center gap-1.5 text-indigo-600">
+                  <Kanban className="w-4 h-4" />
+                  <span className="text-xs font-semibold uppercase tracking-wider">Board Workspace</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight break-words">
+                  {board.title}
+                </h1>
+                {board.description ? (
+                  <p className="text-sm text-slate-600 leading-relaxed break-words whitespace-pre-line max-w-3xl">
+                    {board.description}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">
+                    No description provided for this board.
+                  </p>
+                )}
 
-              {/* Board Metadata Pills */}
-              <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium border border-slate-200/80">
-                  <Layers className="w-3.5 h-3.5 text-slate-500" />
-                  <span>{columns.length} {columns.length === 1 ? 'Column' : 'Columns'}</span>
-                </span>
-
-                {!isLoadingTasks && !taskError && (
+                {/* Board Metadata Pills */}
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
                   <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium border border-slate-200/80">
-                    <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'}</span>
+                    <Layers className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{columns.length} {columns.length === 1 ? 'Column' : 'Columns'}</span>
                   </span>
-                )}
 
-                {formattedDate && (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60 font-medium">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Updated {formattedDate}</span>
-                  </span>
-                )}
+                  {!isLoadingTasks && !taskError && (
+                    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium border border-slate-200/80">
+                      <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
+                      <span>{tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'}</span>
+                    </span>
+                  )}
+
+                  {formattedDate && (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60 font-medium">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Updated {formattedDate}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons: Create Task */}
+              <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto">
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => handleOpenCreateTask('todo')}
+                  className="flex items-center justify-center gap-2 w-full md:w-auto cursor-pointer shadow-2xs"
+                  aria-label="Create new task"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Task</span>
+                </Button>
               </div>
             </div>
           </div>
@@ -382,6 +414,7 @@ export function BoardPage() {
                     column={column}
                     tasks={getTasksForColumn(tasks, column.key)}
                     isLoading={isLoadingTasks}
+                    onAddTask={(colKey) => handleOpenCreateTask(colKey)}
                   />
                 ))}
               </div>
@@ -389,6 +422,19 @@ export function BoardPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Create Task Modal */}
+      {isCreateTaskModalOpen && (
+        <CreateTaskModal
+          key={`${boardId}-${selectedColumnKey}`}
+          boardId={boardId}
+          columns={columns}
+          defaultColumnKey={selectedColumnKey}
+          isOpen={isCreateTaskModalOpen}
+          onClose={() => setIsCreateTaskModalOpen(false)}
+          onTaskCreated={handleTaskCreated}
+        />
+      )}
     </div>
   );
 }

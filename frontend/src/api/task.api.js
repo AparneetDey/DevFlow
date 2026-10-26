@@ -15,6 +15,18 @@ export const taskApi = {
    */
   getTasksByBoard: (boardId, config = {}) =>
     apiClient.get(`/boards/${boardId}/tasks`, config),
+
+  /**
+   * Creates a new task under a specified board.
+   * Route: POST /api/v1/boards/:boardId/tasks
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {Object} taskData - { title, description?, columnKey?, priority?, dueDate? }
+   * @param {Object} [config] - Optional Axios request configuration
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  createTask: (boardId, taskData, config = {}) =>
+    apiClient.post(`/boards/${boardId}/tasks`, taskData, config),
 };
 
 export default taskApi;

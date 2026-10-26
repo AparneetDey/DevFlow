@@ -2353,3 +2353,220 @@ Integrate the existing task-list API (`GET /api/v1/boards/:boardId/tasks`) into 
 ### 11. Scope Boundaries & Next Steps
 - **Completed in Task 7.1:** Task API service integration (`GET /api/v1/boards/:boardId/tasks`), `TaskCard` component, column task mapping, independent task loading/error handling, and unit test suite.
 - **Strictly Deferred to Subsequent Tasks:** Task creation modal (Task 7.2), task editing and deletion (Task 7.3), task drag-and-drop column transitions, and task movement reordering.
+
+---
+
+## Task 7.2: Create Tasks
+
+### 1. Task Objective
+Implement task creation in Kanban boards using the existing backend API endpoint `POST /api/v1/boards/:boardId/tasks`. Provide intuitive user entry points (both a board-level "Create Task" button in the board header and column-level "Add Task" buttons on column headers and empty column states), validate task form fields adhering to the backend's strict Zod schema constraints, and reactively append the created task into board state without refreshing the entire board. Maintain strict read-only compliance for the backend directory.
+
+---
+
+### 2. Files Inspected, Created, and Modified
+
+#### Files Inspected
+- `backend/src/models/task.model.js` (Mongoose task schema, fields, enums, auto-order logic)
+- `backend/src/validators/task.validator.js` (`createTaskSchema` strict constraints and defaults)
+- `backend/src/controllers/task.controller.js` (`createTask` HTTP controller and response envelope)
+- `frontend/src/pages/BoardPage.jsx` (Board header layout, task state, column rendering)
+- `frontend/src/components/boards/KanbanColumn.jsx` (Column header, task count, empty state)
+- `frontend/src/components/tasks/TaskCard.jsx` (Task card presentation component)
+- `frontend/src/components/boards/CreateBoardModal.jsx` (Modal patterns and styling conventions)
+- `frontend/src/api/task.api.js` (Existing task API service functions)
+
+#### Files Created
+- `frontend/src/components/tasks/CreateTaskModal.jsx`: Reusable modal dialog for creating a task with client-side length validation, stage column dropdown, priority selector, due date picker, submission guard, and error banner.
+
+#### Files Modified
+- `frontend/src/api/task.api.js`: Added `createTask(boardId, taskData, config = {})` method issuing `POST /boards/:boardId/tasks`.
+- `frontend/src/components/boards/KanbanColumn.jsx`: Added `onAddTask` callback prop, column header `+` action button, and empty state "Add a task" quick link.
+- `frontend/src/pages/BoardPage.jsx`: Added board header "Create Task" button, modal state management (`isCreateTaskModalOpen`, `selectedColumnKey`), `handleTaskCreated` reactive state update handler, and rendered `<CreateTaskModal />`.
+- `frontend/src/api/task.api.test.js`: Added unit tests covering `createTask` API service call, client payload validation, and reactive state appending into column groupings.
+
+---
+
+### 3. Backend API Contract & Validation Adherence
+
+#### Endpoint Details
+- **Route:** `POST /api/v1/boards/:boardId/tasks`
+- **Authentication:** Protected (`verifyJWT` via HttpOnly cookie or Authorization Bearer header).
+- **Route Param:** `:boardId` (valid 24-character hexadecimal MongoDB ObjectId).
+
+#### Backend Zod Validation (`createTaskSchema.strict()`)
+- `title`: Required string, length 1–150 characters, trimmed.
+- `description`: Optional string, length 0–2000 characters, trimmed.
+- `columnKey`: Optional enum `['todo', 'in-progress', 'done']`, defaults to `'todo'`.
+- `priority`: Optional enum `['low', 'medium', 'high']`, defaults to `'medium'`.
+- `dueDate`: Optional ISO 8601 string / Date / `null`.
+- **Strict Enforcement:** Excludes foreign fields (e.g. `order`, `boardId`) from the request body to avoid 400 Bad Request schema rejections.
+
+#### Response Envelope Contract
+- Returns HTTP status `201 Created` with standard `ApiResponse` envelope:
+  ```json
+  {
+    "statusCode": 201,
+    "data": {
+      "_id": "673f1f77bcf86cd799439099",
+      "boardId": "673f1f77bcf86cd799439011",
+      "title": "Build authentication flow",
+      "description": "Implement refresh token rotation",
+      "columnKey": "todo",
+      "priority": "high",
+      "dueDate": "2026-11-01T00:00:00.000Z",
+      "order": 0,
+      "createdAt": "2026-10-27T02:00:00.000Z",
+      "updatedAt": "2026-10-27T02:00:00.000Z"
+    },
+    "message": "Task created successfully",
+    "success": true
+  }
+  ```
+
+---
+
+### 4. Implementation Details & Architecture
+
+#### Modal Component (`CreateTaskModal.jsx`)
+- Built using shared `<Modal />`, `<Input />`, and `<Button />` components for visual and behavioral consistency.
+- Features:
+  - Title input with required validation and 150-character limit counter.
+  - Multi-line description textarea with 2000-character limit counter.
+  - Destination column selector populated from the board's configured columns (defaults to `'todo'`).
+  - Priority dropdown selector (`low`, `medium`, `high`).
+  - Date picker for optional task deadline.
+  - Inline error notifications via standard `extractErrorMessage` utility.
+  - Dual action buttons: "Cancel" and "Create Task" (with loading spinner during in-flight submission).
+  - Strict submission guard preventing concurrent duplicate requests.
+
+#### User Entry Points
+1. **Board Header Button:**
+   - Located in the upper right of the Board Header card in `BoardPage.jsx`.
+   - Click opens `CreateTaskModal` with default destination column `'todo'`.
+2. **Column Header Quick-Add (`+`) Button:**
+   - Appears next to the column task counter in `KanbanColumn.jsx`.
+   - Click opens `CreateTaskModal` pre-populated with that specific column's key.
+3. **Empty Column Quick-Add Button:**
+   - Rendered inside the empty state dashed container of `KanbanColumn.jsx`.
+   - Allows direct creation from an empty workflow stage.
+
+#### Reactive State Synchronization
+- When a task is successfully created:
+  1. The API response returns the authoritative created task document.
+  2. `BoardPage.jsx` invokes `handleTaskCreated(newTask)`:
+     ```javascript
+     setTasks((prevTasks) => [...prevTasks, newTask]);
+     ```
+  3. The board detail and remaining tasks are not refetched, avoiding unnecessary network traffic or layout re-renders.
+  4. The destination column immediately renders the new `TaskCard` via existing `getTasksForColumn` grouping logic.
+  5. The board task counter pill in the header updates reactively.
+
+---
+
+### 5. Automated Tests Performed and Results
+
+#### Native Test Suite Execution
+- **Command:** `cd frontend; npm.cmd test`
+- **Output:**
+  ```text
+  > frontend@0.0.0 test
+  > node --test src/utils/columnSorting.test.js src/utils/taskGrouping.test.js src/api/task.api.test.js
+
+  TAP version 13
+  # Subtest: taskApi service
+      # Subtest: getTasksByBoard constructs the correct endpoint and forwards config
+      ok 1 - getTasksByBoard constructs the correct endpoint and forwards config
+      # Subtest: response envelope contract verification
+      ok 2 - response envelope contract verification
+  ok 1 - taskApi service
+  # Subtest: Task display, column mapping, and edge case safety
+      # Subtest: tasks render in their correct matching columns in ascending order
+      ok 1 - tasks render in their correct matching columns in ascending order
+      # Subtest: columns without matching tasks return empty array (triggering empty state)
+      ok 2 - columns without matching tasks return empty array (triggering empty state)
+      # Subtest: tasks with missing or unknown columns are safely filtered out without crashing
+      ok 3 - tasks with missing or unknown columns are safely filtered out without crashing
+      # Subtest: missing optional fields (description, priority, dueDate) are handled gracefully
+      ok 4 - missing optional fields (description, priority, dueDate) are handled gracefully
+  ok 2 - Task display, column mapping, and edge case safety
+  # Subtest: taskApi.createTask and reactive board task updates (Task 7.2)
+      # Subtest: createTask sends POST to /boards/:boardId/tasks with exact payload and config
+      ok 1 - createTask sends POST to /boards/:boardId/tasks with exact payload and config
+      # Subtest: newly created task is reactively appended to tasks state and grouped into destination column
+      ok 2 - newly created task is reactively appended to tasks state and grouped into destination column
+      # Subtest: validates payload formatting conforming to backend strict Zod schema
+      ok 3 - validates payload formatting conforming to backend strict Zod schema
+  ok 3 - taskApi.createTask and reactive board task updates (Task 7.2)
+  # Subtest: isValidOrder helper (3 subtests)
+  ok 4 - isValidOrder helper
+  # Subtest: sortBoardColumns (8 subtests)
+  ok 5 - sortBoardColumns
+  # Subtest: getTasksForColumn (5 subtests)
+  ok 6 - getTasksForColumn
+  # Subtest: getUnmatchedTasks (1 subtest)
+  ok 7 - getUnmatchedTasks
+
+  1..7
+  # tests 26
+  # suites 7
+  # pass 26
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  ```
+- **Result:** **26 of 26 tests passed (0 failures, 0 skipped)** across all 7 test suites.
+
+---
+
+### 6. Static Analysis & Production Build Results
+
+#### ESLint Check
+- **Command:** `cd frontend; npm.cmd run lint`
+- **Result:**
+  ```text
+  > frontend@0.0.0 lint
+  > eslint .
+  ```
+  **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+#### Vite Production Build
+- **Command:** `cd frontend; npm.cmd run build`
+- **Result:**
+  ```text
+  vite v8.3.5 building client environment for production...
+  transforming...
+  ✓ 2028 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                   0.45 kB │ gzip:   0.29 kB
+  dist/assets/index-D2Hp9UKl.css   40.44 kB │ gzip:   7.69 kB
+  dist/assets/index-DBBBqJHt.js   379.61 kB │ gzip: 116.02 kB
+
+  ✓ built in 2.87s
+  ```
+  Production bundle compiled cleanly with **0 compilation errors and 0 warnings**.
+
+---
+
+### 7. Responsiveness & Mobile Inspection
+- Verified that `CreateTaskModal` adapts smoothly across device viewports:
+  - Uses full width with horizontal padding on narrow mobile screens and standard `max-w-md` on larger screens.
+  - Column and priority pickers stack vertically on small devices and display side-by-side on sm+ screens.
+  - Action buttons stack vertically on mobile screens (`flex-col-reverse`) and align horizontally on desktop (`sm:flex-row`).
+- Board header "Create Task" button expands full-width on mobile viewports (`w-full md:w-auto`) for easy thumb reachability.
+- Kanban column header and empty state add-task buttons provide minimum 44px tap target areas with accessible ARIA labels.
+- Note: Structural code inspection and CSS constraint checks were performed; in-browser visual verification was not conducted as no live browser environment was active.
+
+---
+
+### 8. Live Backend Server Status & Isolation
+- **Backend Status:** Offline (`http://localhost:8000` was not reachable during testing).
+- **Strict Read-Only Rule Enforcement:** Zero files in `backend/` were modified, created, or deleted.
+- **Git Status:** Verified via `git status --porcelain backend/` that the backend repository remains completely untouched.
+
+---
+
+### 9. Scope Boundaries & Next Steps
+- **Completed in Task 7.2:** Task creation API client function, `CreateTaskModal` component, board and column creation entry points, reactive task state appending, and automated unit tests.
+- **Strictly Deferred to Subsequent Tasks:** Task detail modal, task editing and deletion (Task 7.3), task drag-and-drop column transitions, and task movement reordering.
