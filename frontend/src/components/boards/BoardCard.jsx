@@ -57,19 +57,19 @@ export function BoardCard({ board, onEdit, onDelete }) {
     <Link
       to={`/boards/${board._id}`}
       aria-label={`Open ${title} board`}
-      className={`group relative bg-white rounded-xl border border-slate-200 p-5 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden min-h-[170px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${theme.hoverBorder}`}
+      className={`group relative bg-white rounded-xl border border-slate-200 p-5 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden min-h-[170px] min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${theme.hoverBorder}`}
     >
       {/* Top accent bar */}
       <div className={`absolute top-0 left-0 right-0 h-1 ${theme.bar}`} />
 
-      <div>
+      <div className="min-w-0">
         {/* Header: Icon, Actions & External Link hint */}
         <div className="flex items-start justify-between gap-3 mb-3">
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${theme.bg}`}>
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center border shrink-0 ${theme.bg}`}>
             <Kanban className="w-5 h-5" />
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {onEdit && (
               <button
                 type="button"
@@ -109,12 +109,12 @@ export function BoardCard({ board, onEdit, onDelete }) {
         </div>
 
         {/* Title */}
-        <h3 className="text-base font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1 mb-1.5">
+        <h3 className="text-base font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1 mb-1.5 break-words">
           {title}
         </h3>
 
         {/* Description */}
-        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-4">
+        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-4 break-words">
           {board.description || 'No description provided for this board.'}
         </p>
       </div>

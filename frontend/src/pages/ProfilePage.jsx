@@ -13,19 +13,19 @@ export function ProfilePage() {
     : 'Recently';
 
   return (
-    <div className="max-w-xl mx-auto bg-white rounded-xl border border-slate-200 shadow-xs p-8 space-y-6">
+    <div className="max-w-xl mx-auto bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-8 space-y-6">
       {/* Profile Header */}
-      <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
-        <div className="w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-xs">
-          <User className="w-8 h-8" />
+      <div className="flex items-center gap-3 sm:gap-4 border-b border-slate-100 pb-6 min-w-0">
+        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-xs shrink-0">
+          <User className="w-7 h-7 sm:w-8 sm:h-8" />
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight break-words">
             {user?.username || 'User Profile'}
           </h1>
-          <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-            <Mail className="w-3.5 h-3.5 text-slate-400" />
-            {user?.email || 'No email registered'}
+          <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 truncate" title={user?.email}>
+            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">{user?.email || 'No email registered'}</span>
           </p>
         </div>
       </div>

@@ -119,12 +119,12 @@ export function DashboardPage() {
     <div className="space-y-8">
       {/* Dashboard Header */}
       <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <div className="flex items-center gap-2 text-indigo-600">
             <LayoutDashboard className="w-5 h-5" />
             <span className="text-xs font-semibold uppercase tracking-wider">Workspaces Overview</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight break-words">
             Welcome back{displayName}!
           </h1>
           <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">
@@ -133,12 +133,12 @@ export function DashboardPage() {
         </div>
 
         {/* Create Board Entry Point (Header Action) */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
           <Button
             variant="primary"
             size="md"
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto"
             aria-label="Create board workspace"
           >
             <Plus className="w-4 h-4" />
@@ -203,7 +203,7 @@ export function DashboardPage() {
           /* 2. Error State: Request failure alert */
           <div
             role="alert"
-            className="bg-red-50 border border-red-200 rounded-2xl p-8 sm:p-10 text-center max-w-lg mx-auto my-8 space-y-4 shadow-2xs"
+            className="bg-red-50 border border-red-200 rounded-2xl p-6 sm:p-10 text-center max-w-lg mx-auto my-6 sm:my-8 space-y-4 shadow-2xs"
           >
             <div className="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-2xs">
               <AlertCircle className="w-6 h-6" />
@@ -230,7 +230,7 @@ export function DashboardPage() {
           <div
             role="region"
             aria-label="Empty boards state"
-            className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center max-w-lg mx-auto my-8 space-y-4"
+            className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-6 sm:p-12 text-center max-w-lg mx-auto my-6 sm:my-8 space-y-4"
           >
             <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto border border-indigo-100 shadow-2xs">
               <FolderPlus className="w-7 h-7" />

@@ -131,7 +131,7 @@ export function BoardPage() {
               <div className="w-4 h-4 bg-slate-200 rounded animate-pulse" />
               <div className="h-4 w-28 bg-slate-200 rounded animate-pulse" />
             </div>
-            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1">
+            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 min-w-0">
               {[1, 2, 3].map((colIndex) => (
                 <div
                   key={colIndex}
@@ -152,7 +152,7 @@ export function BoardPage() {
         <div
           role="region"
           aria-label="Board not found"
-          className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-10 sm:p-12 text-center max-w-lg mx-auto my-12 space-y-5"
+          className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-6 sm:p-12 text-center max-w-lg mx-auto my-6 sm:my-12 space-y-5"
         >
           <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-100 shadow-2xs">
             <FolderX className="w-7 h-7" />
@@ -174,7 +174,7 @@ export function BoardPage() {
         /* 3. Error State */
         <div
           role="alert"
-          className="bg-red-50 border border-red-200 rounded-2xl p-8 sm:p-10 text-center max-w-lg mx-auto my-12 space-y-5 shadow-2xs"
+          className="bg-red-50 border border-red-200 rounded-2xl p-6 sm:p-10 text-center max-w-lg mx-auto my-6 sm:my-12 space-y-5 shadow-2xs"
         >
           <div className="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-2xs">
             <AlertCircle className="w-6 h-6" />
@@ -183,18 +183,18 @@ export function BoardPage() {
             <h2 className="text-base font-bold text-red-900">Failed to load board</h2>
             <p className="text-xs text-red-700 max-w-sm mx-auto leading-relaxed">{error}</p>
           </div>
-          <div className="flex items-center justify-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 pt-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleRetry}
-              className="inline-flex items-center gap-1.5 border-red-200 text-red-700 hover:bg-red-100/60 cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 border-red-200 text-red-700 hover:bg-red-100/60 cursor-pointer w-full sm:w-auto"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Retry</span>
             </Button>
-            <Link to="/dashboard">
-              <Button variant="secondary" size="sm" className="inline-flex items-center gap-1.5">
+            <Link to="/dashboard" className="w-full sm:w-auto">
+              <Button variant="secondary" size="sm" className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto">
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Dashboard</span>
               </Button>
