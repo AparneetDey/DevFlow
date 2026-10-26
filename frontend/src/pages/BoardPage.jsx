@@ -11,6 +11,7 @@ import {
   FolderX,
 } from 'lucide-react';
 import { Button } from '../components/common/Button.jsx';
+import KanbanColumn from '../components/boards/KanbanColumn.jsx';
 import boardApi from '../api/board.api.js';
 import { extractErrorMessage } from '../api/error.js';
 
@@ -103,7 +104,9 @@ export function BoardPage() {
   })();
 
   const columns = Array.isArray(board?.columns)
-    ? [...board.columns].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    ? [...board.columns]
+        .filter((col) => col && typeof col === 'object' && typeof col.title === 'string')
+        .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
     : [];
 
   return (
@@ -124,18 +127,17 @@ export function BoardPage() {
             </div>
           </div>
 
-          {/* Columns Preview Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Kanban Columns Skeleton */}
+          <div className="flex items-start gap-5 overflow-x-auto pb-6 pt-1">
             {[1, 2, 3].map((colIndex) => (
               <div
                 key={colIndex}
-                className="bg-slate-100/70 border border-slate-200/80 rounded-xl p-4 min-h-[220px] animate-pulse space-y-3"
+                className="w-72 sm:w-80 shrink-0 bg-slate-100/70 border border-slate-200/80 rounded-2xl p-3.5 min-h-[420px] animate-pulse flex flex-col space-y-3"
               >
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                <div className="flex justify-between items-center px-1.5 py-2 mb-2 border-b border-slate-200/60">
                   <div className="h-4 w-24 bg-slate-200 rounded" />
-                  <div className="h-4 w-6 bg-slate-200 rounded-full" />
                 </div>
-                <div className="h-24 bg-white/70 border border-dashed border-slate-200 rounded-lg" />
+                <div className="flex-1 rounded-xl border-2 border-dashed border-slate-200/80 bg-white/40 p-6 flex flex-col items-center justify-center" />
               </div>
             ))}
           </div>
@@ -244,44 +246,35 @@ export function BoardPage() {
             </div>
           </div>
 
-          {/* Columns Preview Container (Task 6.1 Layout Foundation) */}
+          {/* Kanban Columns Container */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
                 <Layers className="w-4 h-4 text-indigo-600" />
                 <span>Workflow Stages</span>
               </h2>
-              <span className="text-xs text-slate-400">
-                Interactive Kanban columns & tasks will be enabled in Task 6.2 & Task 7
-              </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {columns.map((column) => (
-                <div
-                  key={column.key || column.title}
-                  className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-4 flex flex-col min-h-[220px]"
-                >
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
-                    <span className="text-sm font-semibold text-slate-800">
-                      {column.title}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600 font-medium text-[11px]">
-                      0
-                    </span>
-                  </div>
-
-                  <div className="flex-1 rounded-lg border-2 border-dashed border-slate-200 p-4 flex flex-col items-center justify-center text-center">
-                    <p className="text-xs text-slate-400">
-                      Column stage ready
-                    </p>
-                    <p className="text-[11px] text-slate-400/80 mt-0.5">
-                      Task cards will be managed here
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {columns.length === 0 ? (
+              <div
+                role="region"
+                aria-label="No workflow columns"
+                className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center max-w-md mx-auto my-6"
+              >
+                <p className="text-sm font-medium text-slate-500">
+                  No columns configured for this board.
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-start gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none">
+                {columns.map((column, index) => (
+                  <KanbanColumn
+                    key={column.key || column.title || `column-${index}`}
+                    column={column}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       ) : null}

@@ -1648,3 +1648,130 @@ Four distinct, mutually exclusive presentations:
 ### 12. Confirmation of Backend Read-Only Discipline
 - **Strict Isolation Maintained:** Zero files in `backend/` were modified, created, or deleted.
 - **Git Status:** Verified via `git status backend` that the backend repository directory remains 100% clean and untouched.
+
+
+---
+
+## Task 6.2: Kanban Column Layout
+
+### 1. Task Objective
+Replace the static column preview in the board detail view with a reusable, responsive Kanban column layout. Construct the presentation-only `KanbanColumn` component displaying column titles and an empty fallback state ("No tasks yet") with an insertion slot for future task cards. Dynamically sort and render board columns in `BoardPage.jsx` based on their `order` attribute, safe against malformed data and empty arrays, with horizontal scrolling to prevent layout breakage on narrow viewports, all while strictly honoring the backend read-only constraint.
+
+---
+
+### 2. Files Inspected & Modified / Created
+
+#### Files Inspected
+- `frontend/src/pages/BoardPage.jsx` (Board details page, loading skeletons, error states, and column layout)
+- `frontend/src/api/board.api.js` (Board API service with `getBoardById`)
+- `frontend/src/components/common/Button.jsx` (Common UI button component)
+- `backend/src/models/board.model.js` (Mongoose board schema verifying column subdocuments `{ title, key, order }`)
+- `frontend/WORK_REPORT.md` (Prior task reports)
+
+#### Files Created
+- [`frontend/src/components/boards/KanbanColumn.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/KanbanColumn.jsx) — Presentation component rendering column header and container slot.
+
+#### Files Modified
+- [`frontend/src/pages/BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx) — Integrated `KanbanColumn`, dynamic sorting, responsive horizontal scroll container, updated skeletons, and empty column array fallback.
+
+---
+
+### 3. KanbanColumn Component Architecture
+- **Component Path:** [`frontend/src/components/boards/KanbanColumn.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/KanbanColumn.jsx)
+- **Component Interface:**
+  - `column`: Object containing `{ title, key, order }`.
+  - `children`: Optional React nodes representing task cards (reserved for Task 7).
+  - `className`: Optional Tailwind class string for custom styling extensions.
+- **Design & Layout Specifications:**
+  - Fixed horizontal column width (`w-72 sm:w-80 shrink-0`) preventing horizontal shrinkage when columns exceed screen width.
+  - Generous column vertical height (`min-h-[420px]`) establishing a stable Kanban column structure.
+  - Column header with clear typography (`text-sm font-bold text-slate-800 tracking-tight`) and bottom separator border.
+  - Column body (`min-h-[320px]`) providing a clear task drop zone.
+  - Empty state fallback: when `children` are not provided, displays a dashed card container with `"No tasks yet"` (`text-xs font-medium text-slate-400`).
+  - Accessibility: Uses semantic `<section aria-labelledby={`column-header-${columnKey}`}>` and `<div role="region" aria-label={`Empty ${columnTitle} column`}>`.
+
+---
+
+### 4. BoardPage Dynamic Column Integration & Layout
+- **Component Path:** [`frontend/src/pages/BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx)
+- **Column Extraction & Sorting:**
+  ```javascript
+  const columns = Array.isArray(board?.columns)
+    ? [...board.columns]
+        .filter((col) => col && typeof col === 'object' && typeof col.title === 'string')
+        .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+    : [];
+  ```
+  - Sorts columns in ascending order according to backend `order` field (`Todo: 0`, `In Progress: 1`, `Done: 2`).
+  - Filters out malformed entries, non-objects, and missing titles.
+  - Safely falls back to empty array if `board.columns` is missing or invalid.
+- **Empty Column Array Presentation:**
+  - If `columns.length === 0`, renders an unobtrusive empty state notice (`"No columns configured for this board."`) without fabricating fake columns or breaking the layout.
+- **Responsive Kanban Viewport:**
+  - Container employs `flex items-start gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none`.
+  - On mobile screens, columns maintain their full width (`w-72`) and scroll horizontally within the board container without pushing the outer application layout or causing whole-page horizontal scrolling.
+  - On desktop viewports, columns align cleanly side-by-side with smooth horizontal panning when content overflows.
+
+---
+
+### 5. Skeleton Loading State Alignment
+- Updated the loading skeleton in `BoardPage.jsx` to match the exact dimensions and layout of the real Kanban columns:
+  - Container uses `flex items-start gap-5 overflow-x-auto pb-6 pt-1`.
+  - Column skeleton items are configured with `w-72 sm:w-80 shrink-0 min-h-[420px] rounded-2xl p-3.5`.
+  - Eliminates layout shift (CLS) between loading and populated board states.
+
+---
+
+### 6. Tests Performed and Actual Results
+
+#### Column Sorting & Edge Case Logic Test (Node.js)
+- Verified:
+  - Standard default columns sort correctly (`Todo (0) -> In Progress (1) -> Done (2)`).
+  - Reverse-ordered and unordered columns sort contiguously by `order`.
+  - Non-array inputs (`null`, `undefined`, `{}`) safely evaluate to `[]`.
+  - Malformed objects (missing title, string primitives, nulls) are safely filtered out.
+- Result: **All automated logic tests passed successfully.**
+
+#### Static Analysis & Linting
+- Command: `npm.cmd run lint`
+- Result:
+  ```text
+  > frontend@0.0.0 lint
+  > eslint .
+  ```
+  **0 problems (0 errors, 0 warnings)** across all source files.
+
+#### Production Build Verification
+- Command: `npm.cmd run build`
+- Result:
+  ```text
+  vite v8.3.5 building client environment for production...
+  transforming...
+  ✓ 2023 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                   0.45 kB │ gzip:   0.29 kB
+  dist/assets/index-DE9Z3AMD.css   34.48 kB │ gzip:   6.89 kB
+  dist/assets/index-Cj2XlOtD.js   364.96 kB │ gzip: 113.42 kB
+
+  ✓ built in 4.67s
+  ```
+  Built successfully with **0 build errors** and **0 compilation warnings**.
+
+---
+
+### 7. Live API Verification Status
+- **Backend Server Status:** Offline (`http://localhost:8000`).
+- **Status Distinction:** Frontend components, routing, accessibility attributes, dynamic sorting algorithms, and production bundling have been verified. Live round-trip HTTP verification remains pending local backend server startup. No successful server requests were fabricated.
+
+---
+
+### 8. Scope Boundaries & Next Steps
+- **Completed in Task 6.2:** Kanban column UI layout, dynamic ordering from `board.columns`, empty column array handling, responsive horizontal scrolling container, and skeleton alignment.
+- **Strictly Deferred to Task 7:** Task card components, task fetching (`GET /api/v1/boards/:boardId/tasks`), task creation, task editing, task deletion, and drag-and-drop movement across columns.
+
+---
+
+### 9. Confirmation of Backend Read-Only Discipline
+- **Strict Read-Only Enforcement:** Zero backend files were modified, created, or deleted.
+- **Git Status:** Verified via `git status backend` that the `backend/` directory remains 100% clean and untouched.
