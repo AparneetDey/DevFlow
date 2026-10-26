@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   Plus,
@@ -7,15 +7,14 @@ import {
   Layers,
   Sparkles,
   FolderPlus,
-  Info,
-  X,
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
-import { BoardCard } from '../components/boards/BoardCard';
-import { BoardSkeleton } from '../components/boards/BoardSkeleton';
-import { Button } from '../components/common/Button';
+import { useAuth } from '../hooks/useAuth.js';
+import { BoardCard } from '../components/boards/BoardCard.jsx';
+import { BoardSkeleton } from '../components/boards/BoardSkeleton.jsx';
+import { CreateBoardModal } from '../components/boards/CreateBoardModal.jsx';
+import { Button } from '../components/common/Button.jsx';
 import boardApi from '../api/board.api.js';
 import { extractErrorMessage } from '../api/error.js';
 
@@ -27,9 +26,7 @@ export function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reloadIndex, setReloadIndex] = useState(0);
-  const [showNotice, setShowNotice] = useState(false);
-
-  const noticeTimerRef = useRef(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Fetch boards on mount or when reloadIndex triggers a refresh
   useEffect(() => {
@@ -79,33 +76,14 @@ export function DashboardPage() {
     setReloadIndex((prev) => prev + 1);
   };
 
-  // UI-only placeholder handlers for Create Board actions (Task 5.2)
-  const handleCreatePlaceholder = () => {
-    setShowNotice(true);
-    if (noticeTimerRef.current) {
-      clearTimeout(noticeTimerRef.current);
-    }
-    noticeTimerRef.current = setTimeout(() => {
-      setShowNotice(false);
-      noticeTimerRef.current = null;
-    }, 4000);
+  /**
+   * Callback invoked when a board is successfully created via CreateBoardModal.
+   * Prepends the new board to state and transitions the view if previously empty.
+   */
+  const handleBoardCreated = (newBoard) => {
+    if (!newBoard || !newBoard._id) return;
+    setBoards((prevBoards) => [newBoard, ...prevBoards]);
   };
-
-  const handleDismissNotice = () => {
-    if (noticeTimerRef.current) {
-      clearTimeout(noticeTimerRef.current);
-      noticeTimerRef.current = null;
-    }
-    setShowNotice(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (noticeTimerRef.current) {
-        clearTimeout(noticeTimerRef.current);
-      }
-    };
-  }, []);
 
   const displayName = user?.username ? `, ${user.username}` : '';
 
@@ -126,12 +104,12 @@ export function DashboardPage() {
           </p>
         </div>
 
-        {/* Create Board Entry Point (Header Action - UI-Only Placeholder) */}
+        {/* Create Board Entry Point (Header Action) */}
         <div className="flex items-center gap-3 shrink-0">
           <Button
             variant="primary"
             size="md"
-            onClick={handleCreatePlaceholder}
+            onClick={() => setIsCreateModalOpen(true)}
             className="flex items-center gap-2"
             aria-label="Create board workspace"
           >
@@ -140,33 +118,6 @@ export function DashboardPage() {
           </Button>
         </div>
       </div>
-
-      {/* Temporary Notice when clicking Create Board placeholder */}
-      {showNotice && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-start justify-between gap-3 p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs transition-all duration-200"
-        >
-          <div className="flex items-start gap-3">
-            <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-semibold text-indigo-950">UI-Only Entry Point (Task 5.1)</p>
-              <p className="text-indigo-800 mt-0.5">
-                Board creation modal and live Backend Board creation API integration (<code>POST /api/v1/boards</code>) will be connected in Task 5.2.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleDismissNotice}
-            className="text-indigo-400 hover:text-indigo-600 p-1 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 shrink-0 cursor-pointer"
-            aria-label="Dismiss notification"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* Overview Statistics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -265,7 +216,7 @@ export function DashboardPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleCreatePlaceholder}
+              onClick={() => setIsCreateModalOpen(true)}
               className="inline-flex items-center gap-1.5"
               aria-label="Create your first board workspace"
             >
@@ -279,7 +230,7 @@ export function DashboardPage() {
             {/* Create Board Entry Point (Dashed Card) */}
             <button
               type="button"
-              onClick={handleCreatePlaceholder}
+              onClick={() => setIsCreateModalOpen(true)}
               aria-label="Create new board workspace"
               className="min-h-[170px] rounded-xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 p-6 flex flex-col items-center justify-center text-center transition-all duration-200 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             >
@@ -290,7 +241,7 @@ export function DashboardPage() {
                 Create New Board
               </span>
               <span className="text-[11px] text-slate-400 mt-0.5">
-                UI Entry Point (Task 5.2)
+                Add workspace
               </span>
             </button>
 
@@ -301,6 +252,13 @@ export function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Create Board Dialog */}
+      <CreateBoardModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onBoardCreated={handleBoardCreated}
+      />
     </div>
   );
 }

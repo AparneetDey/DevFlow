@@ -1078,3 +1078,132 @@ The dashboard presentation cleanly differentiates 4 mutually exclusive states:
 ### 12. Confirmation of Backend Read-Only Discipline
 - **Strict Isolation Maintained:** Zero files in `backend/` were modified, created, or deleted.
 - **Git Status:** Verified via `git status backend` that the backend repository directory remains 100% clean and untouched.
+
+
+---
+
+## Task 5.2: Create Board
+
+### 1. Summary of Board Creation Implementation
+Replaced the UI-only Create Board placeholder with a fully functional board creation dialog and backend integration. Extended [`boardApi`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.js) with `createBoard(boardData, config)` calling `POST /api/v1/boards`. Created [`CreateBoardModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/CreateBoardModal.jsx) reusing existing [`Modal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Modal.jsx), [`Input.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Input.jsx), and [`Button.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Button.jsx) components. Connected all three creation entry points (header button, empty-state button, and grid dashed card) to open the modal. Upon successful creation, the new board returned by the backend is immediately prepended to the dashboard state, automatically updating the Active Boards metric and transitioning from empty state without a page reload. Zero backend files were modified.
+
+---
+
+### 2. Actual Backend Endpoint and Request Fields
+- **Endpoint:** `POST /api/v1/boards`
+- **Authentication:** Protected endpoint via `verifyJWT` middleware; requires authenticated HttpOnly cookies.
+- **Controller Action:** `createBoard` in `backend/src/controllers/board.controller.js`.
+- **Backend Service:** `boardService.createBoard({ title, description }, req.user._id)` in `backend/src/services/board.service.js`.
+- **Accepted Request Fields:**
+  - `title`: String (required).
+  - `description`: String (optional).
+  - **Strictness:** The backend schema uses `.strict({ message: "Unrecognized field provided. Only title and description are allowed" })`. Submitting unrecognized properties (e.g. `color`, `columns`, `owner`, etc.) causes a 400 validation error. The frontend payload strictly transmits `{ title, description }`.
+
+---
+
+### 3. Actual Backend Validation Constraints Discovered
+Inspected `backend/src/validators/board.validator.js` (`createBoardSchema`):
+- `title`: Required string, trimmed, min 1 character (`"Title cannot be empty"`), max 100 characters (`"Title cannot exceed 100 characters"`).
+- `description`: Optional string, trimmed, max 500 characters (`"Description cannot exceed 500 characters"`).
+- Default behavior: Backend automatically initializes `owner: req.user._id` and immutable default columns: `[ { title: "Todo", key: "todo", order: 0 }, { title: "In Progress", key: "in-progress", order: 1 }, { title: "Done", key: "done", order: 2 } ]`.
+- Response structure: Standard `ApiResponse(201, board, "Board created successfully")`. The created board document is returned in `response.data.data` with `_id`, `title`, `description`, `owner`, `columns`, `createdAt`, and `updatedAt`.
+
+---
+
+### 4. Dialog and Form Behavior
+Implemented in [`CreateBoardModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/CreateBoardModal.jsx):
+- **Title Input:** Rendered via [`Input.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Input.jsx) with `autoFocus`, `maxLength={100}`, live character counter (`{title.length}/100`), and required indicator.
+- **Description Textarea:** Multiline text field styled consistently with design tokens, `maxLength={500}`, and live character counter (`{description.length}/500`).
+- **Duplicate Submission Protection:** `isSubmitting` state disables inputs, textarea, Cancel button, and renders a loading spinner on the submit button (`Button isLoading={isSubmitting}`).
+- **Escape / Backdrop Close:** Modal closes when pressing Escape or clicking backdrop, but ignores closing while a submission is actively pending.
+- **Form Reset:** Form inputs and errors are reset upon closing or after successful creation.
+
+---
+
+### 5. API Service Files Created or Modified
+- **Modified:** [`frontend/src/api/board.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.js)
+  - Added `createBoard: (boardData, config = {}) => apiClient.post('/boards', boardData, config)`.
+  - Reuses existing Axios credentials, base URL, and response interceptors.
+
+---
+
+### 6. Dashboard Files Modified
+- **Created:** [`frontend/src/components/boards/CreateBoardModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/CreateBoardModal.jsx) — Reusable creation modal with validation, error display, character counters, and API integration.
+- **Modified:** [`frontend/src/pages/DashboardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/DashboardPage.jsx)
+  - Removed obsolete temporary placeholder notice banner state and timer handlers.
+  - Added `isCreateModalOpen` state and wired all three creation triggers (header primary button, grid dashed card, and empty-state button) to set `isCreateModalOpen(true)`.
+  - Implemented `handleBoardCreated(newBoard)` callback to prepend the new board to `boards` state.
+  - Mounted `<CreateBoardModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onBoardCreated={handleBoardCreated} />`.
+
+---
+
+### 7. Validation and Error Handling
+- **Client-Side Validation:**
+  - Rejects empty or whitespace-only titles with `"Board title is required"`.
+  - Enforces `maxLength={100}` on title and `maxLength={500}` on description.
+  - Clearing or editing a field clears its respective field error dynamically.
+- **Server-Side / API Error Handling:**
+  - Catches API errors and displays a clear red alert box inside the modal via `extractErrorMessage(err)` (handling 400 validation issues, 401 unauthenticated, 409 conflict, or offline network disconnect).
+  - Preserves the modal in an open state upon error so the user does not lose entered input.
+  - Enables user to correct input and retry submission.
+
+---
+
+### 8. Successful Dashboard Update Behavior
+- **Immediate State Update:** Prepends the returned board document (`response.data.data`) directly to `boards` state (`setBoards(prev => [newBoard, ...prev])`).
+- **No Page Reload:** The newly created board renders immediately as the first board card in the grid.
+- **Active Boards Metric:** Automatically increments by 1 since metrics derive reactively from `boards.length`.
+- **Empty State Transition:** If the dashboard was previously in the empty state (`boards.length === 0`), adding the first board seamlessly transitions the view from empty state to the populated grid.
+- **Navigation Compatibility:** New board card uses the real MongoDB `_id` returned by the backend, properly navigating to `/boards/:boardId`.
+
+---
+
+### 9. Testing Performed and Actual Results
+- **Module Exports Verification (Node.js):**
+  - Verified `boardApi.createBoard` is exported as a function.
+- **Static Analysis & Linting:**
+  - Verified zero syntax, accessibility, or React hook warnings.
+- **Server Availability Note:**
+  - Local backend server on port 8000 remains offline during static development. Live request/response round-trip verification remains pending local server launch. No fake or mock board responses were fabricated.
+
+---
+
+### 10. Actual Lint Results
+- **Command:** `npm.cmd run lint`
+- **Result:**
+  ```text
+  > frontend@0.0.0 lint
+  > eslint .
+  ```
+  **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+---
+
+### 11. Actual Production Build Results
+- **Command:** `npm.cmd run build`
+- **Result:**
+  ```text
+  vite v8.3.5 building client environment for production...
+  transforming...
+  ✓ 2020 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                   0.45 kB │ gzip:   0.29 kB
+  dist/assets/index-kNGs2xXd.css   32.19 kB │ gzip:   6.61 kB
+  dist/assets/index-BHSUkqfs.js   351.36 kB │ gzip: 111.27 kB
+
+  ✓ built in 1.13s
+  ```
+  Production bundle generated with **0 build errors** and **0 compilation warnings**.
+
+---
+
+### 12. Remaining Limitations & Next Steps
+- **Board Editing & Deletion:** Modals for editing board details (`PATCH /api/v1/boards/:boardId`) and deleting boards (`DELETE /api/v1/boards/:boardId`) will be implemented in subsequent Task 5 sub-tasks.
+- **Board Details & Tasks:** Board detail page with 3-column Kanban layout (`/boards/:boardId`) is scheduled for Task 6 and Task 7.
+
+---
+
+### 13. Confirmation of Backend Read-Only Discipline
+- **Strict Isolation Maintained:** Zero files in `backend/` were modified, created, or deleted.
+- **Git Status:** Verified via `git status backend` that the backend repository directory remains 100% clean and untouched.
