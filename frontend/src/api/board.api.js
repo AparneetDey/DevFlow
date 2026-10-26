@@ -15,6 +15,17 @@ export const boardApi = {
   getBoards: (config = {}) => apiClient.get('/boards', config),
 
   /**
+   * Retrieves a single board by its identifier.
+   * Route: GET /api/v1/boards/:boardId
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {Object} [config] - Optional Axios request configuration (e.g. { signal })
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  getBoardById: (boardId, config = {}) =>
+    apiClient.get(`/boards/${boardId}`, config),
+
+  /**
    * Creates a new board owned by the authenticated user.
    * Route: POST /api/v1/boards
    *
