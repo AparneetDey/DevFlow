@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test src/utils/columnSorting.test.js",
+    "test": "node --test src/utils/columnSorting.test.js src/utils/taskGrouping.test.js src/api/task.api.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

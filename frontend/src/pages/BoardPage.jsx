@@ -9,21 +9,31 @@ import {
   AlertCircle,
   RefreshCw,
   FolderX,
+  CheckSquare,
 } from 'lucide-react';
 import { Button } from '../components/common/Button.jsx';
 import KanbanColumn from '../components/boards/KanbanColumn.jsx';
 import boardApi from '../api/board.api.js';
+import taskApi from '../api/task.api.js';
 import { sortBoardColumns } from '../utils/columnSorting.js';
+import { getTasksForColumn } from '../utils/taskGrouping.js';
 import { extractErrorMessage } from '../api/error.js';
 
 export function BoardPage() {
   const { boardId } = useParams();
 
+  // Board details state
   const [board, setBoard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isNotFound, setIsNotFound] = useState(false);
   const [reloadIndex, setReloadIndex] = useState(0);
+
+  // Task fetching state
+  const [tasks, setTasks] = useState([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+  const [taskError, setTaskError] = useState(null);
+  const [taskReloadIndex, setTaskReloadIndex] = useState(0);
 
   // Fetch board details on mount or when boardId route param / reloadIndex changes
   useEffect(() => {
@@ -85,11 +95,71 @@ export function BoardPage() {
     };
   }, [boardId, reloadIndex]);
 
+  // Fetch tasks separately on mount, boardId change, or task retry
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
+    async function loadTasks() {
+      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(boardId || '');
+
+      if (!isValidObjectId) {
+        await Promise.resolve();
+        if (isMounted) {
+          setTasks([]);
+          setTaskError(null);
+          setIsLoadingTasks(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await taskApi.getTasksByBoard(boardId, {
+          signal: controller.signal,
+        });
+
+        if (isMounted) {
+          const taskData = response.data?.data;
+          setTasks(Array.isArray(taskData) ? taskData : []);
+          setTaskError(null);
+          setIsLoadingTasks(false);
+        }
+      } catch (err) {
+        if (axios.isCancel(err) || err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+          return;
+        }
+
+        if (isMounted) {
+          // If board is not found (404), the board effect already handles notFound
+          if (err.response?.status !== 404) {
+            setTaskError(extractErrorMessage(err));
+          }
+          setTasks([]);
+          setIsLoadingTasks(false);
+        }
+      }
+    }
+
+    loadTasks();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [boardId, taskReloadIndex]);
+
   const handleRetry = () => {
     setIsLoading(true);
     setError(null);
     setIsNotFound(false);
     setReloadIndex((prev) => prev + 1);
+    setTaskReloadIndex((prev) => prev + 1);
+  };
+
+  const handleTaskRetry = () => {
+    setIsLoadingTasks(true);
+    setTaskError(null);
+    setTaskReloadIndex((prev) => prev + 1);
   };
 
   const formattedDate = (() => {
@@ -242,6 +312,13 @@ export function BoardPage() {
                   <span>{columns.length} {columns.length === 1 ? 'Column' : 'Columns'}</span>
                 </span>
 
+                {!isLoadingTasks && !taskError && (
+                  <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium border border-slate-200/80">
+                    <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'}</span>
+                  </span>
+                )}
+
                 {formattedDate && (
                   <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60 font-medium">
                     <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -261,6 +338,32 @@ export function BoardPage() {
               </h2>
             </div>
 
+            {/* Task Fetching Error Banner (preserves loaded board) */}
+            {taskError && (
+              <div
+                role="alert"
+                className="p-3.5 sm:p-4 bg-amber-50/90 border border-amber-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-amber-900 shadow-2xs"
+              >
+                <div className="flex items-center gap-2.5 text-xs">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div>
+                    <span className="font-semibold">Unable to load tasks: </span>
+                    <span className="text-amber-800">{taskError}</span>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTaskRetry}
+                  className="inline-flex items-center gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0 self-start sm:self-auto cursor-pointer"
+                  aria-label="Retry loading tasks"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry Tasks</span>
+                </Button>
+              </div>
+            )}
+
             {columns.length === 0 ? (
               <div
                 role="region"
@@ -277,6 +380,8 @@ export function BoardPage() {
                   <KanbanColumn
                     key={column.key || column.title || `column-${index}`}
                     column={column}
+                    tasks={getTasksForColumn(tasks, column.key)}
+                    isLoading={isLoadingTasks}
                   />
                 ))}
               </div>

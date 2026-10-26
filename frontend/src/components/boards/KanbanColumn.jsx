@@ -1,16 +1,33 @@
+import React from 'react';
+import TaskCard from '../tasks/TaskCard.jsx';
+
 /**
  * Reusable presentation component for a Kanban workflow column.
- * Displays column header and a task container with an empty message fallback.
+ * Displays column header with task counter and a task container with an empty message fallback.
  *
  * @param {Object} props
  * @param {Object} props.column - Column metadata { title, key, order }
- * @param {React.ReactNode} [props.children] - Task cards to render within the column
+ * @param {Array<Object>} [props.tasks] - List of task objects to render within the column
+ * @param {React.ReactNode} [props.children] - Custom children to render within the column
+ * @param {boolean} [props.isLoading=false] - Whether tasks are currently loading
  * @param {string} [props.className] - Optional custom CSS classes
  */
-export function KanbanColumn({ column, children, className = '' }) {
-  const hasTasks = Boolean(children);
+export function KanbanColumn({
+  column,
+  tasks,
+  children,
+  isLoading = false,
+  className = '',
+}) {
   const columnTitle = column?.title || 'Untitled Column';
   const columnKey = column?.key || columnTitle;
+
+  const hasTasksArray = Array.isArray(tasks) && tasks.length > 0;
+  const hasChildren = Boolean(children);
+
+  const taskCount = Array.isArray(tasks)
+    ? tasks.length
+    : React.Children.count(children);
 
   return (
     <section
@@ -32,12 +49,32 @@ export function KanbanColumn({ column, children, className = '' }) {
             {columnTitle}
           </h3>
         </div>
+
+        {/* Task Count Badge */}
+        <span
+          className="text-xs px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-600 font-semibold text-[11px] shrink-0"
+          aria-label={`${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${columnTitle}`}
+        >
+          {taskCount}
+        </span>
       </div>
 
-      {/* Column Body / Content Area */}
+      {/* Column Body / Task Content Area */}
       <div className="flex-1 flex flex-col gap-2.5 min-h-[350px]">
-        {hasTasks ? (
+        {isLoading ? (
+          <div className="space-y-2.5" aria-busy="true">
+            <div className="h-20 bg-white/70 rounded-xl border border-slate-200/60 animate-pulse" />
+            <div className="h-20 bg-white/70 rounded-xl border border-slate-200/60 animate-pulse" />
+          </div>
+        ) : hasChildren ? (
           children
+        ) : hasTasksArray ? (
+          tasks.map((task, index) => (
+            <TaskCard
+              key={task._id || task.id || `task-${columnKey}-${index}`}
+              task={task}
+            />
+          ))
         ) : (
           <div
             role="region"

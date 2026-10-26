@@ -2149,3 +2149,207 @@ Responsive analysis was conducted across standard device breakpoints:
 ### 10. Scope Boundaries & Next Steps
 - **Completed in Task 6.4:** Board UI verification, mobile layout audit and repairs across all frontend pages, dialogs, and navigation, strict column sorting verification, and production build checks.
 - **Strictly Deferred to Task 7:** Task management, task cards, task CRUD endpoints (`/api/v1/boards/:boardId/tasks`), drag-and-drop column transitions, and task reordering.
+
+
+---
+
+## Task 7.1: Task API Integration and Kanban Task Display
+
+### 1. Task Objective
+Integrate the existing task-list API (`GET /api/v1/boards/:boardId/tasks`) into the DevFlow frontend and display live tasks inside their corresponding Kanban columns on the board details page. Construct a reusable `TaskCard` component, extend `KanbanColumn` to render task cards with real-time column counters, decouple board fetching from task fetching so task failures do not obscure or discard successfully loaded boards, gracefully handle empty, error, and loading states, maintain strict deterministic column and task ordering, and preserve all mobile responsiveness rules while keeping the backend strictly read-only.
+
+---
+
+### 2. Files Created or Modified
+
+#### Files Created
+- [`frontend/src/api/task.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/task.api.js) — Dedicated task API service exporting `getTasksByBoard(boardId, config)` leveraging the shared Axios client with credentials.
+- [`frontend/src/components/tasks/TaskCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/tasks/TaskCard.jsx) — Presentation component rendering task title, optional description, priority badge, and formatted due date.
+- [`frontend/src/utils/taskGrouping.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/taskGrouping.js) — Pure helper module containing `getTasksForColumn` (filtering and deterministic ascending ordering) and `getUnmatchedTasks` (orphan task diagnostics).
+- [`frontend/src/utils/taskGrouping.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/taskGrouping.test.js) — Native test suite validating task column matching, order sorting, malformed entry filtering, and non-array safety.
+- [`frontend/src/api/task.api.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/task.api.test.js) — Integration tests verifying API endpoint construction, response envelope parsing, and optional field handling.
+
+#### Files Modified
+- [`frontend/src/components/boards/KanbanColumn.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/KanbanColumn.jsx) — Extended to accept `tasks` and `isLoading` props, rendering `TaskCard` items or column task loading skeletons while displaying a count pill in the header and preserving the `"No tasks yet"` fallback.
+- [`frontend/src/pages/BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx) — Integrated task fetching using `AbortController` cancellation, decoupled task loading/error states from board details, added task failure retry banner, and displayed total board task count badge.
+- [`frontend/package.json`](file:///e:/GitHub-Repo/DevFlow/frontend/package.json) — Updated test script to run all native test suites (`node --test src/utils/columnSorting.test.js src/utils/taskGrouping.test.js src/api/task.api.test.js`).
+
+---
+
+### 3. Backend Task API Contract & Discovered Schema
+
+#### Endpoint Contract
+- **HTTP Method & Path:** `GET /api/v1/boards/:boardId/tasks`
+- **Authentication:** Protected by `verifyJWT` (HttpOnly browser cookie authentication).
+- **Route Validation:** `:boardId` must match a 24-character hex MongoDB ObjectId.
+- **Backend Envelope (`ApiResponse`):**
+  ```json
+  {
+    "statusCode": 200,
+    "data": [
+      {
+        "_id": "67...",
+        "title": "Task title string",
+        "description": "Optional description string",
+        "boardId": "67...",
+        "columnKey": "todo",
+        "order": 0,
+        "priority": "medium",
+        "dueDate": "2026-10-31T00:00:00.000Z",
+        "createdAt": "...",
+        "updatedAt": "..."
+      }
+    ],
+    "message": "Tasks fetched successfully",
+    "success": true
+  }
+  ```
+
+#### Actual Task Schema Fields (`task.model.js`)
+- `_id`: MongoDB ObjectId (unique task identifier).
+- `title`: String (required, 1-150 characters, trimmed).
+- `description`: String (optional, up to 2000 characters, defaults to `""`).
+- `boardId`: ObjectId (required, reference to parent `Board`).
+- `columnKey`: String (required, enum: `["todo", "in-progress", "done"]`, defaults to `"todo"`). **This is the actual association field linking tasks to board columns.**
+- `order`: Number (required, non-negative integer, defaults to `0`). **This is the position index within the column.**
+- `priority`: String (enum: `["low", "medium", "high"]`, defaults to `"medium"`).
+- `dueDate`: Date (optional, defaults to `null`).
+- `createdAt` / `updatedAt`: Timestamps managed by Mongoose.
+
+---
+
+### 4. Task Loading, Empty, Error, and Retry Behavior
+- **Decoupled Architecture:** Board details and task collections maintain independent state:
+  - Board state: `board`, `isLoading`, `error`, `isNotFound`, `reloadIndex`.
+  - Task state: `tasks`, `isLoadingTasks`, `taskError`, `taskReloadIndex`.
+- **Loading State:** While tasks are in flight, each `KanbanColumn` renders pulse skeleton cards (`h-20 bg-white/70 rounded-xl animate-pulse`) without shifting column dimensions.
+- **Empty State (Column Level):** When a column has zero assigned tasks, it renders an accessible dashed fallback container with `"No tasks yet"` (`text-xs font-medium text-slate-400`).
+- **Empty State (Board Level):** When all columns have zero tasks, columns remain fully rendered with their headers, counters (`0`), and empty drop zones.
+- **Error State:** If the task endpoint fails (e.g. network failure, 500 error):
+  - The loaded board header, description, and column structure remain visible.
+  - An accessible warning banner (`role="alert"`) displays above the Kanban columns indicating the failure.
+  - A `"Retry Tasks"` button triggers `handleTaskRetry`, refetching tasks without re-requesting or clearing the board.
+- **Request Cancellation:** In-flight task requests are cancelled via `AbortController.abort()` on board change or unmount, preventing stale task responses from overwriting the view.
+
+---
+
+### 5. Task Association and Ordering Rules
+- **Column Association:** Tasks are matched to columns strictly by `task.columnKey === column.key`.
+- **Intra-Column Ordering:** The backend query pre-sorts tasks via `Task.find().sort({ columnKey: 1, order: 1 })`. In the frontend, `getTasksForColumn` ensures deterministic client-side ascending ordering based on finite numerical `order`.
+- **Missing or Invalid Orders:** Tasks with missing or non-finite orders are placed at the bottom of the column preserving input order.
+- **Malformed Tasks & Orphaned Columns:**
+  - Tasks without a valid string `title` or malformed non-object entries are safely filtered out.
+  - Tasks that reference unknown or deleted columns (e.g. `columnKey: "archived"`) are safely excluded from the column render list rather than arbitrarily assigned to a random column or causing layout failure.
+
+---
+
+### 6. TaskCard Component Design
+- **Path:** [`frontend/src/components/tasks/TaskCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/tasks/TaskCard.jsx)
+- **Visual Presentation:**
+  - Semantic `<article>` with `aria-labelledby` linked to the task title.
+  - Title: Bold slate typography (`text-sm font-semibold text-slate-800 break-words`).
+  - Description: Muted body copy (`text-xs text-slate-500 break-words line-clamp-3`).
+  - Priority Badge:
+    - High: `bg-rose-50 text-rose-700 border-rose-200/80`
+    - Medium: `bg-amber-50 text-amber-700 border-amber-200/80`
+    - Low: `bg-blue-50 text-blue-700 border-blue-200/80`
+  - Due Date: Formatted date string (`MMM d` or `MMM d, yyyy`) preceded by a `Calendar` icon.
+  - Graceful Fallback: When optional fields (`description`, `priority`, `dueDate`) are absent, the card renders compactly without blank gaps or broken layout.
+
+---
+
+### 7. Tests Performed and Actual Results
+
+#### Native Test Suite Execution
+- **Command:** `npm.cmd test`
+- **Output:**
+  ```text
+  > frontend@0.0.0 test
+  > node --test src/utils/columnSorting.test.js src/utils/taskGrouping.test.js src/api/task.api.test.js
+
+  TAP version 13
+  # Subtest: taskApi service
+      # Subtest: getTasksByBoard constructs the correct endpoint and forwards config
+      ok 1 - getTasksByBoard constructs the correct endpoint and forwards config
+      # Subtest: response envelope contract verification
+      ok 2 - response envelope contract verification
+  ok 1 - taskApi service
+  # Subtest: Task display, column mapping, and edge case safety
+      # Subtest: tasks render in their correct matching columns in ascending order
+      ok 1 - tasks render in their correct matching columns in ascending order
+      # Subtest: columns without matching tasks return empty array (triggering empty state)
+      ok 2 - columns without matching tasks return empty array (triggering empty state)
+      # Subtest: tasks with missing or unknown columns are safely filtered out without crashing
+      ok 3 - tasks with missing or unknown columns are safely filtered out without crashing
+      # Subtest: missing optional fields (description, priority, dueDate) are handled gracefully
+      ok 4 - missing optional fields (description, priority, dueDate) are handled gracefully
+  ok 2 - Task display, column mapping, and edge case safety
+  # Subtest: isValidOrder helper (3 subtests)
+  ok 3 - isValidOrder helper
+  # Subtest: sortBoardColumns (8 subtests)
+  ok 4 - sortBoardColumns
+  # Subtest: getTasksForColumn (5 subtests)
+  ok 5 - getTasksForColumn
+  # Subtest: getUnmatchedTasks (1 subtest)
+  ok 6 - getUnmatchedTasks
+
+  1..6
+  # tests 23
+  # suites 6
+  # pass 23
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  ```
+- **Result:** **23 of 23 tests passed (0 failures, 0 skipped)** across all unit and integration test suites.
+
+---
+
+### 8. Static Analysis & Production Build Results
+
+#### ESLint Check
+- **Command:** `npm.cmd run lint`
+- **Result:**
+  ```text
+  > frontend@0.0.0 lint
+  > eslint .
+  ```
+  **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+#### Vite Production Build
+- **Command:** `npm.cmd run build`
+- **Result:**
+  ```text
+  vite v8.3.5 building client environment for production...
+  transforming...
+  ✓ 2027 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                   0.45 kB │ gzip:   0.29 kB
+  dist/assets/index-DfxqEjIR.css   40.11 kB │ gzip:   7.65 kB
+  dist/assets/index-xcwAmfi3.js   372.17 kB │ gzip: 114.95 kB
+
+  ✓ built in 5.36s
+  ```
+  Production bundle compiled with **0 compilation errors and 0 warnings**.
+
+---
+
+### 9. Responsiveness & Mobile Inspection
+- Verified that `TaskCard` elements use `break-words` and `min-w-0` so long task titles and descriptions wrap cleanly within column boundaries without causing horizontal page overflow.
+- Confirmed that Kanban columns preserve their standard `w-72 sm:w-80 shrink-0` dimensions with localized horizontal scrolling across all tested viewports (320px, 375px, 390px, 430px, 768px, and desktop).
+- Note: Structural code inspection and CSS constraint checks were performed; in-browser visual verification was not conducted as no live browser environment was active.
+
+---
+
+### 10. Live Backend Server Status & Isolation
+- **Backend Status:** Offline (`http://localhost:8000` was not reachable during testing).
+- **Strict Read-Only Enforcement:** Zero files in `backend/` were modified, created, or deleted.
+- **Git Status:** Verified via `git status backend` that the backend repository remains 100% clean and untouched.
+
+---
+
+### 11. Scope Boundaries & Next Steps
+- **Completed in Task 7.1:** Task API service integration (`GET /api/v1/boards/:boardId/tasks`), `TaskCard` component, column task mapping, independent task loading/error handling, and unit test suite.
+- **Strictly Deferred to Subsequent Tasks:** Task creation modal (Task 7.2), task editing and deletion (Task 7.3), task drag-and-drop column transitions, and task movement reordering.
