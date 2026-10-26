@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Kanban, ArrowUpRight, Clock } from 'lucide-react';
+import { Kanban, ArrowUpRight, Clock, Pencil, Trash2 } from 'lucide-react';
 
 const colorThemes = {
   indigo: {
@@ -26,11 +26,14 @@ const colorThemes = {
 
 /**
  * Reusable presentation component for displaying board summaries in the dashboard grid.
+ * Exposes explicit Edit and Delete action controls while preserving card navigation.
  *
  * @param {Object} props
  * @param {Object} props.board - Board metadata { _id, title, description, color, updatedAt, columns }
+ * @param {Function} [props.onEdit] - Edit action callback receiving the board object
+ * @param {Function} [props.onDelete] - Delete action callback receiving the board object
  */
-export function BoardCard({ board }) {
+export function BoardCard({ board, onEdit, onDelete }) {
   const theme = colorThemes[board.color] || colorThemes.indigo;
 
   const columnCount = Array.isArray(board.columns) && board.columns.length > 0
@@ -60,14 +63,49 @@ export function BoardCard({ board }) {
       <div className={`absolute top-0 left-0 right-0 h-1 ${theme.bar}`} />
 
       <div>
-        {/* Header: Icon & External Link hint */}
+        {/* Header: Icon, Actions & External Link hint */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${theme.bg}`}>
             <Kanban className="w-5 h-5" />
           </div>
-          <span className="text-slate-400 group-hover:text-indigo-600 transition-colors p-1">
-            <ArrowUpRight className="w-4 h-4" />
-          </span>
+
+          <div className="flex items-center gap-1">
+            {onEdit && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEdit(board);
+                }}
+                aria-label={`Edit ${title} board`}
+                title="Edit board"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete(board);
+                }}
+                aria-label={`Delete ${title} board`}
+                title="Delete board"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            <span className="text-slate-400 group-hover:text-indigo-600 transition-colors p-1">
+              <ArrowUpRight className="w-4 h-4" />
+            </span>
+          </div>
         </div>
 
         {/* Title */}

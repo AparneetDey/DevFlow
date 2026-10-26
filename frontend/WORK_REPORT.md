@@ -1207,3 +1207,153 @@ Implemented in [`CreateBoardModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/
 ### 13. Confirmation of Backend Read-Only Discipline
 - **Strict Isolation Maintained:** Zero files in `backend/` were modified, created, or deleted.
 - **Git Status:** Verified via `git status backend` that the backend repository directory remains 100% clean and untouched.
+
+
+---
+
+## Task 5.3: Board Update & Delete
+
+### 1. Summary of Board Update and Delete Functionality
+Implemented full board update and deletion capabilities integrated into the DevFlow dashboard. Extended [`boardApi`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.js) with `updateBoard(boardId, updateData)` (`PATCH /api/v1/boards/:boardId`) and `deleteBoard(boardId)` (`DELETE /api/v1/boards/:boardId`). Updated [`BoardCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardCard.jsx) to expose discrete Edit (Pencil) and Delete (Trash2) action buttons with click and keyboard event stopping to preserve card navigation. Created [`EditBoardModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/EditBoardModal.jsx) with field prepopulation and strict backend validation, and [`DeleteBoardModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/DeleteBoardModal.jsx) with confirmation warnings and cascade awareness. Synchronized dashboard state reactively: updates modify only the target board in place, while deletions remove the board and automatically decrement metrics or trigger empty state if the last board is removed. Zero backend files were modified.
+
+---
+
+### 2. Actual Backend Endpoints and Request Fields
+- **Update Board:**
+  - **Endpoint:** `PATCH /api/v1/boards/:boardId`
+  - **Authentication:** Protected endpoint via `verifyJWT` middleware; requires authenticated HttpOnly cookies.
+  - **Params:** `boardId` validated by `boardIdParamSchema` (valid 24-character hexadecimal MongoDB ObjectId).
+  - **Request Body:** `{ title?: string, description?: string }`.
+  - **Strictness:** Validated by `updateBoardSchema` with `.strict()`. Unrecognized fields (e.g. `owner`, `columns`, `tasks`) are rejected with 400 Bad Request.
+  - **Controller & Service:** `updateBoard` in `board.controller.js` calling `boardService.updateBoard(boardId, { title, description }, req.user._id)`.
+- **Delete Board:**
+  - **Endpoint:** `DELETE /api/v1/boards/:boardId`
+  - **Authentication:** Protected endpoint via `verifyJWT` middleware; requires authenticated HttpOnly cookies.
+  - **Params:** `boardId` validated by `boardIdParamSchema` (valid MongoDB ObjectId).
+  - **Controller & Service:** `deleteBoard` in `board.controller.js` calling `boardService.deleteBoard(boardId, req.user._id)`. Cascades on backend to delete all tasks where `board === boardId`.
+
+---
+
+### 3. Validation Constraints and Response Structures Discovered
+- **Update Schema Constraints (`updateBoardSchema`):**
+  - `title`: Optional string, trimmed, min 1 character (`"Title cannot be empty"`), max 100 characters (`"Title cannot exceed 100 characters"`).
+  - `description`: Optional string, trimmed, max 500 characters (`"Description cannot exceed 500 characters"`).
+  - At least one field (`title` or `description`) must be provided for update.
+- **Update Response Structure:**
+  - Status: `200 OK`.
+  - Body: `ApiResponse(200, board, "Board updated successfully")`.
+  - Data: Complete updated board document (`_id`, `title`, `description`, `owner`, `columns`, `createdAt`, `updatedAt`).
+- **Delete Response Structure:**
+  - Status: `200 OK`.
+  - Body: `ApiResponse(200, { message: "Board and associated tasks deleted successfully", boardId }, "Board deleted successfully")`.
+
+---
+
+### 4. API Service Files Created or Modified
+- **Modified:** [`frontend/src/api/board.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.js)
+  - Added `updateBoard: (boardId, updateData, config = {}) => apiClient.patch(`/boards/${boardId}`, updateData, config)`.
+  - Added `deleteBoard: (boardId, config = {}) => apiClient.delete(`/boards/${boardId}`, config)`.
+  - Reuses existing Axios credentials, base URL, and silent 401 token refresh queue.
+
+---
+
+### 5. Components Created or Modified
+- **Created:** [`frontend/src/components/boards/EditBoardModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/EditBoardModal.jsx) — Edit dialog prefilled with selected board metadata, validation, character counters, and API integration.
+- **Created:** [`frontend/src/components/boards/DeleteBoardModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/DeleteBoardModal.jsx) — Delete confirmation dialog with title warning, destructive action styling, and API integration.
+- **Modified:** [`frontend/src/components/boards/BoardCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardCard.jsx) — Added Edit (`Pencil`) and Delete (`Trash2`) buttons in the card header with `e.preventDefault()` / `e.stopPropagation()`, high-contrast focus rings, and accessible labels.
+- **Modified:** [`frontend/src/pages/DashboardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/DashboardPage.jsx) — Added `editingBoard` and `deletingBoard` states, connected `BoardCard` actions, wired `handleBoardUpdated` and `handleBoardDeleted`, and rendered keyed modals.
+
+---
+
+### 6. Edit Dialog Behavior
+- **Trigger:** Clicking the Edit icon button on any `BoardCard`.
+- **Prepopulation & Lifecycle:** Component is keyed by `editingBoard._id`, ensuring initial state is cleanly populated from `board.title` and `board.description` without effect-driven state cascades.
+- **Validation:** Enforces non-empty title (1–100 chars) and description (0–500 chars).
+- **Submission:** Submits `{ title: title.trim(), description: description.trim() }` via `boardApi.updateBoard`.
+- **Duplicate Prevention:** Disables inputs and buttons during submission with a spinner on "Save Changes".
+- **Error Retention:** Keeps dialog open upon API failure, displaying errors in a red alert container.
+
+---
+
+### 7. Delete Confirmation Behavior
+- **Trigger:** Clicking the Delete icon button on any `BoardCard`.
+- **Safety Warning:** Clearly displays board title in quotes, explaining that deletion is permanent and associated tasks will be removed.
+- **Cancellation:** Cancel button or Escape key dismisses the dialog without executing any API request.
+- **Submission:** Invokes `boardApi.deleteBoard(board._id)`.
+- **Duplicate Prevention:** Disables buttons and shows spinner on "Delete Board" while request is pending.
+- **Error Retention:** Displays API error message if deletion fails; keeps modal open for retry or cancellation.
+
+---
+
+### 8. Dashboard State Synchronization After Success
+- **Update Synchronization:**
+  - Uses the updated board returned by the backend (`response.data.data`).
+  - Updates only the matching board in `boards` state via `prevBoards.map(b => b._id === updatedBoard._id ? updatedBoard : b)`.
+  - Preserves all other boards and board order.
+  - Keeps the Active Boards metric count unchanged.
+  - Zero browser reload required.
+- **Delete Synchronization:**
+  - Removes the target board via `prevBoards.filter(b => b._id !== boardId)`.
+  - Automatically decrements the Active Boards metric reactively.
+  - If the deleted board was the last board in the workspace (`boards.length === 1`), removing it immediately transitions the dashboard to the existing Empty State (`No boards available`).
+  - Zero browser reload required.
+
+---
+
+### 9. Error and Authentication Handling
+- **Input Validation Errors:** Handled client-side before making requests; displays field-specific error messages.
+- **API Errors:** Formatted via `extractErrorMessage(err)` (handling 400 validation issues, 404 not found, 401 unauthorized, or network disconnects) and rendered inside the active modal.
+- **Authentication & Token Expiry:** All requests route through `apiClient` with `withCredentials: true`. Expired access tokens trigger the central 401 refresh-token interceptor for silent session renewal.
+- **Safety on Failure:** Failed update or delete requests never alter the `boards` state, preventing false positive UI drift.
+
+---
+
+### 10. Tests Performed and Actual Results
+- **Module Resolution & Exports Verification (Node.js):**
+  - Verified `boardApi.updateBoard` and `boardApi.deleteBoard` are exported as callable functions.
+- **Component & Dependency Static Verification:**
+  - Verified explicit ESM imports, absence of unused imports, and compliance with React 19 hook guidelines.
+- **Server Availability Note:**
+  - Local backend server on port 8000 remains offline during static development. Live request/response round-trip verification remains pending local server launch. No fake or mock board responses were fabricated.
+
+---
+
+### 11. Actual Lint Results
+- **Command:** `npm.cmd run lint`
+- **Result:**
+  ```text
+  > frontend@0.0.0 lint
+  > eslint .
+  ```
+  **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+---
+
+### 12. Actual Production Build Results
+- **Command:** `npm.cmd run build`
+- **Result:**
+  ```text
+  vite v8.3.5 building client environment for production...
+  transforming...
+  ✓ 2022 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                   0.45 kB │ gzip:   0.29 kB
+  dist/assets/index-C0sjfOhP.css   32.41 kB │ gzip:   6.63 kB
+  dist/assets/index-DkaoDap4.js   358.39 kB │ gzip: 112.38 kB
+
+  ✓ built in 5.50s
+  ```
+  Production bundle generated with **0 build errors** and **0 compilation warnings**.
+
+---
+
+### 13. Remaining Limitations & Next Steps
+- **Board Detail Page:** Clicking a card navigates to `/boards/:boardId`, currently presenting the route placeholder in [`BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx).
+- **Kanban Columns & Task Management:** Task creation, card dragging, column management, and task movement are scheduled for Task 6 and Task 7.
+
+---
+
+### 14. Confirmation of Backend Read-Only Discipline
+- **Strict Isolation Maintained:** Zero files in `backend/` were modified, created, or deleted.
+- **Git Status:** Verified via `git status backend` that the backend repository directory remains 100% clean and untouched.

@@ -23,6 +23,29 @@ export const boardApi = {
    * @returns {Promise<import('axios').AxiosResponse>}
    */
   createBoard: (boardData, config = {}) => apiClient.post('/boards', boardData, config),
+
+  /**
+   * Updates an existing board owned by the authenticated user.
+   * Route: PATCH /api/v1/boards/:boardId
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {Object} updateData - { title?, description? }
+   * @param {Object} [config] - Optional Axios request configuration
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  updateBoard: (boardId, updateData, config = {}) =>
+    apiClient.patch(`/boards/${boardId}`, updateData, config),
+
+  /**
+   * Deletes a board and cascades deletion to all associated tasks.
+   * Route: DELETE /api/v1/boards/:boardId
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {Object} [config] - Optional Axios request configuration
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  deleteBoard: (boardId, config = {}) =>
+    apiClient.delete(`/boards/${boardId}`, config),
 };
 
 export default boardApi;

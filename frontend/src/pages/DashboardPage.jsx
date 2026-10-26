@@ -14,6 +14,8 @@ import { useAuth } from '../hooks/useAuth.js';
 import { BoardCard } from '../components/boards/BoardCard.jsx';
 import { BoardSkeleton } from '../components/boards/BoardSkeleton.jsx';
 import { CreateBoardModal } from '../components/boards/CreateBoardModal.jsx';
+import { EditBoardModal } from '../components/boards/EditBoardModal.jsx';
+import { DeleteBoardModal } from '../components/boards/DeleteBoardModal.jsx';
 import { Button } from '../components/common/Button.jsx';
 import boardApi from '../api/board.api.js';
 import { extractErrorMessage } from '../api/error.js';
@@ -26,7 +28,11 @@ export function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reloadIndex, setReloadIndex] = useState(0);
+
+  // Modal dialog states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingBoard, setEditingBoard] = useState(null);
+  const [deletingBoard, setDeletingBoard] = useState(null);
 
   // Fetch boards on mount or when reloadIndex triggers a refresh
   useEffect(() => {
@@ -83,6 +89,28 @@ export function DashboardPage() {
   const handleBoardCreated = (newBoard) => {
     if (!newBoard || !newBoard._id) return;
     setBoards((prevBoards) => [newBoard, ...prevBoards]);
+  };
+
+  /**
+   * Callback invoked when a board is successfully updated via EditBoardModal.
+   * Updates only the target board in state, preserving all others and metrics.
+   */
+  const handleBoardUpdated = (updatedBoard) => {
+    if (!updatedBoard || !updatedBoard._id) return;
+    setBoards((prevBoards) =>
+      prevBoards.map((b) => (b._id === updatedBoard._id ? updatedBoard : b))
+    );
+    setEditingBoard(null);
+  };
+
+  /**
+   * Callback invoked when a board is successfully deleted via DeleteBoardModal.
+   * Removes the board from state, reactively updating metrics or triggering empty state.
+   */
+  const handleBoardDeleted = (boardId) => {
+    if (!boardId) return;
+    setBoards((prevBoards) => prevBoards.filter((b) => b._id !== boardId));
+    setDeletingBoard(null);
   };
 
   const displayName = user?.username ? `, ${user.username}` : '';
@@ -247,7 +275,12 @@ export function DashboardPage() {
 
             {/* Board Cards */}
             {boards.map((board) => (
-              <BoardCard key={board._id} board={board} />
+              <BoardCard
+                key={board._id}
+                board={board}
+                onEdit={(b) => setEditingBoard(b)}
+                onDelete={(b) => setDeletingBoard(b)}
+              />
             ))}
           </div>
         )}
@@ -259,6 +292,28 @@ export function DashboardPage() {
         onClose={() => setIsCreateModalOpen(false)}
         onBoardCreated={handleBoardCreated}
       />
+
+      {/* Edit Board Dialog */}
+      {editingBoard && (
+        <EditBoardModal
+          key={editingBoard._id}
+          board={editingBoard}
+          isOpen={Boolean(editingBoard)}
+          onClose={() => setEditingBoard(null)}
+          onBoardUpdated={handleBoardUpdated}
+        />
+      )}
+
+      {/* Delete Board Confirmation Dialog */}
+      {deletingBoard && (
+        <DeleteBoardModal
+          key={deletingBoard._id}
+          board={deletingBoard}
+          isOpen={Boolean(deletingBoard)}
+          onClose={() => setDeletingBoard(null)}
+          onBoardDeleted={handleBoardDeleted}
+        />
+      )}
     </div>
   );
 }
