@@ -9,7 +9,7 @@ export function Navbar() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const navLinkClass = ({ isActive }) =>
-    `flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+    `flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
       isActive
         ? 'bg-indigo-600 text-white'
         : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -30,7 +30,7 @@ export function Navbar() {
     <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand */}
-        <Link to="/dashboard" className="flex items-center gap-2.5 group">
+        <Link to="/dashboard" className="flex items-center gap-2 sm:gap-2.5 group shrink-0">
           <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm group-hover:bg-indigo-500 transition-colors">
             <Kanban className="w-5 h-5" />
           </div>
@@ -40,19 +40,19 @@ export function Navbar() {
         </Link>
 
         {/* Navigation & Auth Controls */}
-        <nav className="flex items-center gap-2">
+        <nav className="flex items-center gap-1 sm:gap-2">
           {isAuthenticated ? (
             <>
-              <NavLink to="/dashboard" className={navLinkClass}>
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Dashboard</span>
+              <NavLink to="/dashboard" className={navLinkClass} title="Dashboard" aria-label="Dashboard">
+                <LayoutDashboard className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Dashboard</span>
               </NavLink>
-              <NavLink to="/boards/demo-101" className={navLinkClass}>
-                <Kanban className="w-4 h-4" />
+              <NavLink to="/boards/demo-101" className={navLinkClass} title="Board" aria-label="Board">
+                <Kanban className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Board</span>
               </NavLink>
-              <NavLink to="/profile" className={navLinkClass}>
-                <User className="w-4 h-4" />
+              <NavLink to="/profile" className={navLinkClass} title="Profile" aria-label="Profile">
+                <User className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Profile</span>
               </NavLink>
 
@@ -69,9 +69,10 @@ export function Navbar() {
                 onClick={handleLogout}
                 disabled={isLoggingOut}
                 aria-label="Log out"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-slate-300 hover:text-red-400 hover:bg-slate-800 transition-colors disabled:opacity-50"
+                title="Log out"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium text-slate-300 hover:text-red-400 hover:bg-slate-800 transition-colors disabled:opacity-50"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">
                   {isLoggingOut ? 'Logging out...' : 'Logout'}
                 </span>
@@ -80,11 +81,11 @@ export function Navbar() {
           ) : (
             <>
               <NavLink to="/login" className={navLinkClass}>
-                <LogIn className="w-4 h-4" />
+                <LogIn className="w-4 h-4 shrink-0" />
                 <span>Login</span>
               </NavLink>
               <NavLink to="/register" className={navLinkClass}>
-                <UserPlus className="w-4 h-4" />
+                <UserPlus className="w-4 h-4 shrink-0" />
                 <span>Register</span>
               </NavLink>
             </>

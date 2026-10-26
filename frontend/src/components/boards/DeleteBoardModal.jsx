@@ -68,8 +68,8 @@ export function DeleteBoardModal({ board, isOpen, onClose, onBoardDeleted }) {
           <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 border border-red-200">
             <AlertTriangle className="w-5 h-5" />
           </div>
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-900">
+          <div className="space-y-1 min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-900 break-words">
               Are you sure you want to delete <span className="text-red-600 font-bold">"{board.title}"</span>?
             </p>
             <p className="text-xs text-slate-500 leading-relaxed">
@@ -78,13 +78,14 @@ export function DeleteBoardModal({ board, isOpen, onClose, onBoardDeleted }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
           <Button
             type="button"
             variant="secondary"
             size="md"
             onClick={handleClose}
             disabled={isDeleting}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -95,6 +96,7 @@ export function DeleteBoardModal({ board, isOpen, onClose, onBoardDeleted }) {
             onClick={handleDelete}
             isLoading={isDeleting}
             disabled={isDeleting}
+            className="w-full sm:w-auto"
           >
             Delete Board
           </Button>

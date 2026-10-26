@@ -167,13 +167,14 @@ export function CreateBoardModal({ isOpen, onClose, onBoardCreated }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
           <Button
             type="button"
             variant="secondary"
             size="md"
             onClick={handleClose}
             disabled={isSubmitting}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -183,6 +184,7 @@ export function CreateBoardModal({ isOpen, onClose, onBoardCreated }) {
             size="md"
             isLoading={isSubmitting}
             disabled={isSubmitting}
+            className="w-full sm:w-auto"
           >
             Create Board
           </Button>

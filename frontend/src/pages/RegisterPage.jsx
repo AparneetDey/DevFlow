@@ -92,7 +92,7 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto my-12 bg-white rounded-xl border border-slate-200 shadow-sm p-8 space-y-6">
+    <div className="max-w-md mx-auto my-6 sm:my-12 bg-white rounded-xl border border-slate-200 shadow-sm p-5 sm:p-8 space-y-6">
       {/* Header */}
       <div className="text-center space-y-1">
         <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 border border-indigo-100 shadow-xs">
