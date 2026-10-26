@@ -6,7 +6,11 @@
  * @param {number} [props.count=1] - Number of skeleton cards to render
  */
 export function BoardSkeleton({ count = 1 }) {
-  if (count <= 1) {
+  if (count <= 0) {
+    return null;
+  }
+
+  if (count === 1) {
     return (
       <div
         className="relative bg-white rounded-xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between overflow-hidden animate-pulse min-h-[170px]"

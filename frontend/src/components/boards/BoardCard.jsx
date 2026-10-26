@@ -33,12 +33,16 @@ const colorThemes = {
 export function BoardCard({ board }) {
   const theme = colorThemes[board.color] || colorThemes.indigo;
 
-  const formattedDate = board.updatedAt
-    ? new Date(board.updatedAt).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-      })
-    : null;
+  const formattedDate = (() => {
+    if (!board.updatedAt) return null;
+    const date = new Date(board.updatedAt);
+    return isNaN(date.getTime())
+      ? null
+      : date.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        });
+  })();
 
   return (
     <Link

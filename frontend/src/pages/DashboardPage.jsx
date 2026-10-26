@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Plus, LayoutDashboard, Kanban, Layers, Sparkles, FolderPlus, Info, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { BoardCard } from '../components/boards/BoardCard';
@@ -48,11 +48,34 @@ export function DashboardPage() {
   const [boards] = useState(INITIAL_MOCK_BOARDS);
   const [isLoading] = useState(false);
   const [showNotice, setShowNotice] = useState(false);
+  const noticeTimerRef = useRef(null);
 
   const handleCreatePlaceholder = () => {
     setShowNotice(true);
-    setTimeout(() => setShowNotice(false), 4000);
+    if (noticeTimerRef.current) {
+      clearTimeout(noticeTimerRef.current);
+    }
+    noticeTimerRef.current = setTimeout(() => {
+      setShowNotice(false);
+      noticeTimerRef.current = null;
+    }, 4000);
   };
+
+  const handleDismissNotice = () => {
+    if (noticeTimerRef.current) {
+      clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = null;
+    }
+    setShowNotice(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current) {
+        clearTimeout(noticeTimerRef.current);
+      }
+    };
+  }, []);
 
   const displayName = user?.username ? `, ${user.username}` : '';
 
@@ -106,8 +129,8 @@ export function DashboardPage() {
           </div>
           <button
             type="button"
-            onClick={() => setShowNotice(false)}
-            className="text-indigo-400 hover:text-indigo-600 p-1 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            onClick={handleDismissNotice}
+            className="text-indigo-400 hover:text-indigo-600 p-1 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 shrink-0 cursor-pointer"
             aria-label="Dismiss notification"
           >
             <X className="w-4 h-4" />
