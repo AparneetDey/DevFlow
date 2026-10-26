@@ -919,3 +919,162 @@ During comprehensive code and edge-case review, three minor stability issues wer
 ### 10. Confirmation of Backend Read-Only Discipline
 - **Strict Isolation Maintained:** Zero files in `backend/` were touched, inspected for edits, or modified.
 - **Git Status:** Verified via `git status backend` that the working tree for `backend/` remains completely clean and untouched.
+
+
+---
+
+## Task 5.1: Board API Integration
+
+### 1. Summary of the Integration
+Replaced the dashboard’s locally defined mock board dataset with real, dynamic board fetching connected to the existing DevFlow backend. Created a lightweight, focused API service module [`boardApi.getBoards`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.js) leveraging the central `apiClient` Axios instance with credentials and silent token refresh. Refactored [`DashboardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/DashboardPage.jsx) to asynchronously request boards on mount and manage four mutually exclusive presentation states: Loading (skeleton grid), Error (failure banner with retry), Empty (no boards available prompt), and Populated (live board cards). Preserved existing design tokens, responsive breakpoints, accessibility tags, and UI-only creation placeholders. Zero backend files were modified.
+
+---
+
+### 2. Board API Endpoint Used
+- **Endpoint:** `GET /api/v1/boards`
+- **Authentication:** Protected endpoint via `verifyJWT` middleware; requires authenticated HttpOnly cookies (`accessToken` / `refreshToken`).
+- **Controller Action:** `getUserBoards` in `backend/src/controllers/board.controller.js`.
+- **Backend Service:** `boardService.getUserBoards(req.user._id)` in `backend/src/services/board.service.js`.
+- **Database Query:** `Board.find({ owner: userId }).sort({ updatedAt: -1 })`.
+
+---
+
+### 3. Actual Backend Response Structure Discovered
+Inspected backend controller, service, and Mongoose model without modifying them:
+- **Envelope:** Standard `ApiResponse` class wrapping payloads:
+  ```json
+  {
+    "statusCode": 200,
+    "data": [
+      {
+        "_id": "67bda49f3e...",
+        "title": "Project Roadmap",
+        "description": "Optional board description",
+        "owner": "67bda4503e...",
+        "columns": [
+          { "title": "Todo", "key": "todo", "order": 0 },
+          { "title": "In Progress", "key": "in-progress", "order": 1 },
+          { "title": "Done", "key": "done", "order": 2 }
+        ],
+        "createdAt": "2026-10-25T14:30:00.000Z",
+        "updatedAt": "2026-10-25T14:30:00.000Z"
+      }
+    ],
+    "message": "Boards fetched successfully",
+    "success": true
+  }
+  ```
+- **Empty State Payload:** When the user has no boards, `data` is an empty array `[]`.
+- **Field Mappings & Adaptations:**
+  - `_id`: Primary MongoDB identifier string used for navigation routes (`/boards/:boardId`).
+  - `title`: String (1–100 chars); fallback provided for edge cases.
+  - `description`: String (max 500 chars, default `""`); empty values display default notice.
+  - `columns`: Array of embedded subdocuments (`title`, `key`, `order`). Column count is derived dynamically from `board.columns.length` (defaults to 3).
+  - `updatedAt`: ISO 8601 timestamp formatted with localized short month and day.
+  - `color`: Not present in backend schema. Handled safely in [`BoardCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardCard.jsx) by falling back to the default `indigo` theme without fabricating data or altering schemas.
+
+---
+
+### 4. API Service Files Created or Modified
+- **Created:** [`frontend/src/api/board.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.js)
+  - Exports `boardApi` service object.
+  - Implements `getBoards(config = {})` delegating directly to `apiClient.get('/boards', config)`.
+  - Reuses existing Axios credentials, base URL, and silent 401 token refresh queue.
+  - Supports passing an `AbortSignal` for request lifecycle cancellation.
+
+---
+
+### 5. Dashboard Files Modified
+- **Modified:** [`frontend/src/pages/DashboardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/DashboardPage.jsx)
+  - Removed `INITIAL_MOCK_BOARDS` constant from production flow.
+  - Added `boards`, `isLoading`, `error`, and `reloadIndex` React state.
+  - Wired `useEffect` with `AbortController` and `isMounted` guard to fetch live boards on initial load or retry.
+  - Added Error State banner with `AlertCircle`, friendly error message via `extractErrorMessage(err)`, and a manual "Retry" button.
+  - Preserved UI-only Create Board notice banner with clean timer disposal.
+- **Modified:** [`frontend/src/components/boards/BoardCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/BoardCard.jsx)
+  - Adapted column count derivation from `board.columns?.length` (falling back to `3`).
+  - Safely handled optional `title` and missing/empty `description`.
+
+---
+
+### 6. Loading, Empty, Populated, and Error Behavior
+The dashboard presentation cleanly differentiates 4 mutually exclusive states:
+1. **Loading State (`isLoading === true`):**
+   - Renders 6 skeleton cards (`<BoardSkeleton count={6} />`) matching card dimensions and spacing.
+   - Shows animated pulse placeholder for the "Active Boards" metric counter.
+   - Hides error alert, empty state, and populated cards.
+2. **Error State (`!isLoading && error`):**
+   - Renders high-visibility alert banner (`bg-red-50 border-red-200`) detailing the error message extracted via `extractErrorMessage(err)`.
+   - Displays "Retry" button to initiate a fresh fetch without reloading the browser.
+   - Sets "Active Boards" metric to `—`.
+   - Never incorrectly shows empty state or falls back to stale mock data.
+3. **Empty State (`!isLoading && !error && boards.length === 0`):**
+   - Renders clean dashed container (`border-2 border-dashed border-slate-200`) indicating no active workspaces exist.
+   - Provides "Create Your First Board" action button (UI-only placeholder banner for Task 5.1).
+   - "Active Boards" metric displays `0`.
+4. **Populated State (`!isLoading && !error && boards.length > 0`):**
+   - Renders responsive grid with the "Create New Board" dashed card followed by all real `BoardCard` items.
+   - "Active Boards" metric displays `boards.length`.
+   - Board cards navigate to `/boards/:boardId` with actual MongoDB `_id`.
+
+---
+
+### 7. Authentication and Request Lifecycle Handling
+- **Authentication Credentials:** All requests use `apiClient` with `withCredentials: true`, transmitting HttpOnly cookies.
+- **Token Expiry & Silent Refresh:** Expired access tokens trigger the central Axios response interceptor, which requests a silent token rotation via `POST /api/v1/auth/refresh-token` and retries the original request seamlessly.
+- **Request Cancellation:** Mount effect uses `AbortController` to abort in-flight requests when unmounting or re-fetching.
+- **Cancellation Detection:** `axios.isCancel(err)` ignores abort cancellations, preventing unmounted state updates or erroneous failure alerts.
+- **Cascading Render Prevention:** Asynchronous fetch function is scoped within `useEffect` with state setters called strictly post-resolution, conforming to ESLint `react-hooks/set-state-in-effect`.
+
+---
+
+### 8. Testing Performed and Actual Results
+- **Module Resolution & Service Verification:**
+  - Executed Node.js verification script inspecting [`frontend/src/api/board.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.js). Confirmed `boardApi.getBoards` is defined and callable.
+- **Static Type & Lint Checks:**
+  - Verified no unused imports, strict dependency arrays, and no syntax or hook errors.
+- **Server Availability Note:**
+  - Probed `http://localhost:8000/api/v1/auth/me`. Backend server was offline during static test run (`fetch failed`). As per instructions, live API response verification remains pending backend server startup. No successful responses were fabricated.
+
+---
+
+### 9. Actual Lint Results
+- **Command:** `npm.cmd run lint`
+- **Result:**
+  ```text
+  > frontend@0.0.0 lint
+  > eslint .
+  ```
+  **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+---
+
+### 10. Actual Production Build Results
+- **Command:** `npm.cmd run build`
+- **Result:**
+  ```text
+  vite v8.3.5 building client environment for production...
+  transforming...
+  ✓ 2018 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                   0.45 kB │ gzip:   0.29 kB
+  dist/assets/index-CnwtLOnQ.css   32.27 kB │ gzip:   6.59 kB
+  dist/assets/index-DotDYiS1.js   348.29 kB │ gzip: 110.60 kB
+
+  ✓ built in 5.63s
+  ```
+  Production bundle successfully created in **5.63s** with **0 build errors** and **0 compilation warnings**.
+
+---
+
+### 11. Remaining Limitations & Next Steps
+- **Create Board Action:** Remained strictly UI-only in this task; creation modal and `POST /api/v1/boards` integration will be implemented in Task 5.2.
+- **Board Edit & Delete:** Modals and endpoints (`PATCH /api/v1/boards/:boardId`, `DELETE /api/v1/boards/:boardId`) will follow in upcoming tasks.
+- **Board Detail & Task Management:** Routes to `/boards/:boardId` display the route placeholder in [`BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx), scheduled for Task 6 and Task 7.
+
+---
+
+### 12. Confirmation of Backend Read-Only Discipline
+- **Strict Isolation Maintained:** Zero files in `backend/` were modified, created, or deleted.
+- **Git Status:** Verified via `git status backend` that the backend repository directory remains 100% clean and untouched.

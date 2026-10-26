@@ -28,10 +28,14 @@ const colorThemes = {
  * Reusable presentation component for displaying board summaries in the dashboard grid.
  *
  * @param {Object} props
- * @param {Object} props.board - Board metadata { _id, title, description, color, updatedAt, columnCount }
+ * @param {Object} props.board - Board metadata { _id, title, description, color, updatedAt, columns }
  */
 export function BoardCard({ board }) {
   const theme = colorThemes[board.color] || colorThemes.indigo;
+
+  const columnCount = Array.isArray(board.columns) && board.columns.length > 0
+    ? board.columns.length
+    : (board.columnCount || 3);
 
   const formattedDate = (() => {
     if (!board.updatedAt) return null;
@@ -44,10 +48,12 @@ export function BoardCard({ board }) {
         });
   })();
 
+  const title = board.title || 'Untitled Board';
+
   return (
     <Link
       to={`/boards/${board._id}`}
-      aria-label={`Open ${board.title} board`}
+      aria-label={`Open ${title} board`}
       className={`group relative bg-white rounded-xl border border-slate-200 p-5 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden min-h-[170px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${theme.hoverBorder}`}
     >
       {/* Top accent bar */}
@@ -66,7 +72,7 @@ export function BoardCard({ board }) {
 
         {/* Title */}
         <h3 className="text-base font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1 mb-1.5">
-          {board.title}
+          {title}
         </h3>
 
         {/* Description */}
@@ -78,7 +84,7 @@ export function BoardCard({ board }) {
       {/* Footer: Metadata */}
       <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
         <span className="font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-          3 Columns
+          {columnCount} {columnCount === 1 ? 'Column' : 'Columns'}
         </span>
 
         {formattedDate && (

@@ -1,55 +1,85 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, LayoutDashboard, Kanban, Layers, Sparkles, FolderPlus, Info, X } from 'lucide-react';
+import axios from 'axios';
+import {
+  Plus,
+  LayoutDashboard,
+  Kanban,
+  Layers,
+  Sparkles,
+  FolderPlus,
+  Info,
+  X,
+  AlertCircle,
+  RefreshCw,
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { BoardCard } from '../components/boards/BoardCard';
 import { BoardSkeleton } from '../components/boards/BoardSkeleton';
 import { Button } from '../components/common/Button';
-
-// Locally defined mock board dataset mirroring backend Board model fields
-const INITIAL_MOCK_BOARDS = [
-  {
-    _id: 'mock-board-1',
-    title: 'Product Roadmap 2026',
-    description: 'Quarterly feature milestones, core infrastructure updates, and customer-facing releases.',
-    color: 'indigo',
-    updatedAt: '2026-10-25T14:30:00.000Z',
-    columnCount: 3,
-  },
-  {
-    _id: 'mock-board-2',
-    title: 'Sprint Backlog',
-    description: 'Current agile sprint user stories, bug fixes, and development workflows.',
-    color: 'emerald',
-    updatedAt: '2026-10-25T11:15:00.000Z',
-    columnCount: 3,
-  },
-  {
-    _id: 'mock-board-3',
-    title: 'DevOps & CI/CD Pipelines',
-    description: 'Docker containerization, automated testing workflows, and cloud deployments.',
-    color: 'violet',
-    updatedAt: '2026-10-24T18:45:00.000Z',
-    columnCount: 3,
-  },
-  {
-    _id: 'mock-board-4',
-    title: 'Design System & UI Library',
-    description: 'Component token standards, responsive layouts, accessibility audits, and icons.',
-    color: 'amber',
-    updatedAt: '2026-10-23T09:20:00.000Z',
-    columnCount: 3,
-  },
-];
+import boardApi from '../api/board.api.js';
+import { extractErrorMessage } from '../api/error.js';
 
 export function DashboardPage() {
   const { user } = useAuth();
 
-  // Dashboard presentation states (isolated for Task 5 API integration)
-  const [boards] = useState(INITIAL_MOCK_BOARDS);
-  const [isLoading] = useState(false);
+  // Dashboard state: Live boards from backend API
+  const [boards, setBoards] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadIndex, setReloadIndex] = useState(0);
   const [showNotice, setShowNotice] = useState(false);
+
   const noticeTimerRef = useRef(null);
 
+  // Fetch boards on mount or when reloadIndex triggers a refresh
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
+    async function fetchBoards() {
+      try {
+        const response = await boardApi.getBoards({ signal: controller.signal });
+        const boardData = response.data?.data;
+
+        if (isMounted) {
+          if (Array.isArray(boardData)) {
+            setBoards(boardData);
+          } else {
+            setBoards([]);
+          }
+          setIsLoading(false);
+        }
+      } catch (err) {
+        // Ignore client-side cancellation on component unmount
+        if (axios.isCancel(err) || err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+          return;
+        }
+
+        if (isMounted) {
+          setError(extractErrorMessage(err));
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchBoards();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [reloadIndex]);
+
+  /**
+   * User-triggered retry action when a request fails.
+   */
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError(null);
+    setReloadIndex((prev) => prev + 1);
+  };
+
+  // UI-only placeholder handlers for Create Board actions (Task 5.2)
   const handleCreatePlaceholder = () => {
     setShowNotice(true);
     if (noticeTimerRef.current) {
@@ -96,7 +126,7 @@ export function DashboardPage() {
           </p>
         </div>
 
-        {/* Create Board Entry Point (Header Action) */}
+        {/* Create Board Entry Point (Header Action - UI-Only Placeholder) */}
         <div className="flex items-center gap-3 shrink-0">
           <Button
             variant="primary"
@@ -121,9 +151,9 @@ export function DashboardPage() {
           <div className="flex items-start gap-3">
             <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold text-indigo-950">UI-Only Entry Point (Task 4)</p>
+              <p className="font-semibold text-indigo-950">UI-Only Entry Point (Task 5.1)</p>
               <p className="text-indigo-800 mt-0.5">
-                Board creation modal and live Backend Board API integration (<code>POST /api/v1/boards</code>) will be connected in Task 5.
+                Board creation modal and live Backend Board creation API integration (<code>POST /api/v1/boards</code>) will be connected in Task 5.2.
               </p>
             </div>
           </div>
@@ -148,6 +178,8 @@ export function DashboardPage() {
             <p className="text-xs font-medium text-slate-500">Active Boards</p>
             {isLoading ? (
               <div className="h-5 w-8 bg-slate-200 rounded animate-pulse mt-1" />
+            ) : error ? (
+              <p className="text-lg font-bold text-slate-400">—</p>
             ) : (
               <p className="text-lg font-bold text-slate-900">{boards.length}</p>
             )}
@@ -182,14 +214,40 @@ export function DashboardPage() {
           <p className="text-xs text-slate-500 mt-0.5">Select any workspace to view and organize Kanban tasks.</p>
         </div>
 
-        {/* Mutually Exclusive Presentation States: Loading vs Empty vs Populated */}
+        {/* Mutually Exclusive Presentation States: Loading vs Error vs Empty vs Populated */}
         {isLoading ? (
           /* 1. Loading State: Skeleton cards */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" aria-busy="true">
             <BoardSkeleton count={6} />
           </div>
+        ) : error ? (
+          /* 2. Error State: Request failure alert */
+          <div
+            role="alert"
+            className="bg-red-50 border border-red-200 rounded-2xl p-8 sm:p-10 text-center max-w-lg mx-auto my-8 space-y-4 shadow-2xs"
+          >
+            <div className="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-2xs">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-red-900">Failed to load boards</h3>
+              <p className="text-xs text-red-700 max-w-sm mx-auto leading-relaxed">
+                {error}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              className="inline-flex items-center gap-1.5 border-red-200 text-red-700 hover:bg-red-100/60 cursor-pointer"
+              aria-label="Retry loading boards"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </Button>
+          </div>
         ) : boards.length === 0 ? (
-          /* 2. Empty State: No boards available */
+          /* 3. Empty State: No boards available */
           <div
             role="region"
             aria-label="Empty boards state"
@@ -216,7 +274,7 @@ export function DashboardPage() {
             </Button>
           </div>
         ) : (
-          /* 3. Populated State: Display board cards */
+          /* 4. Populated State: Display board cards */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {/* Create Board Entry Point (Dashed Card) */}
             <button
@@ -232,7 +290,7 @@ export function DashboardPage() {
                 Create New Board
               </span>
               <span className="text-[11px] text-slate-400 mt-0.5">
-                UI Entry Point (Task 5)
+                UI Entry Point (Task 5.2)
               </span>
             </button>
 
