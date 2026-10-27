@@ -46,9 +46,9 @@ export function Modal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 shrink-0">
-          <h2 id="modal-title" className="text-base font-semibold text-slate-900 truncate pr-2">
+          <div id="modal-title" className="text-base font-semibold text-slate-900 truncate pr-2">
             {title}
-          </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -60,7 +60,7 @@ export function Modal({
         </div>
 
         {/* Content */}
-        <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1 min-h-0">
           {children}
         </div>
       </div>

@@ -2570,3 +2570,278 @@ Implement task creation in Kanban boards using the existing backend API endpoint
 ### 9. Scope Boundaries & Next Steps
 - **Completed in Task 7.2:** Task creation API client function, `CreateTaskModal` component, board and column creation entry points, reactive task state appending, and automated unit tests.
 - **Strictly Deferred to Subsequent Tasks:** Task detail modal, task editing and deletion (Task 7.3), task drag-and-drop column transitions, and task movement reordering.
+
+---
+
+## Task 7.3A: View Task Details
+
+### 1. Task Objective
+Implement Task 7.3A: allow users to open a task card from any Kanban column and view its complete available details in a reusable modal (`TaskDetailsModal.jsx`). Inspect backend task contracts to determine the simplest reliable data source, make task card selection accessible and discoverable, support keyboard interaction, and preserve existing board and task workflows without triggering redundant API calls. Maintain strict read-only compliance for the backend directory.
+
+---
+
+### 2. Files Inspected, Created, and Modified
+
+#### Files Inspected
+- `backend/src/models/task.model.js` (Mongoose schema, field definitions, timestamps)
+- `backend/src/routes/task.routes.js` (`GET /api/v1/boards/:boardId/tasks/:taskId` endpoint verification)
+- `backend/src/controllers/task.controller.js` (`getTask` controller and ApiResponse structure)
+- `backend/src/services/task.service.js` (`getBoardTasks` vs `getTaskById` field return comparison)
+- `frontend/src/pages/BoardPage.jsx` (Board detail and column layout integration)
+- `frontend/src/components/boards/KanbanColumn.jsx` (Column task rendering)
+- `frontend/src/components/tasks/TaskCard.jsx` (Task card presentation component)
+- `frontend/src/components/common/Modal.jsx` (Shared accessible modal dialog)
+
+#### Files Created
+- `frontend/src/components/tasks/TaskDetailsModal.jsx`: Reusable modal dialog displaying complete task metadata (title, full description with preserved line breaks, stage badge, priority badge, formatted due date, creation and updated timestamps, close button).
+
+#### Files Modified
+- `frontend/src/api/task.api.js`: Added `getTaskById(boardId, taskId, config = {})` method issuing `GET /boards/:boardId/tasks/:taskId`.
+- `frontend/src/components/tasks/TaskCard.jsx`: Added accessible interactive `<button>` wrapper with focus indicators and hover feedback when `onClick` is provided, retaining semantic `<article>` tags.
+- `frontend/src/components/boards/KanbanColumn.jsx`: Added `onTaskClick` prop forwarding task selection to `TaskCard`.
+- `frontend/src/pages/BoardPage.jsx`: Added `selectedTask` and `isTaskDetailsModalOpen` state management, `handleOpenTaskDetails` and `handleCloseTaskDetails` handlers, and rendered `<TaskDetailsModal />`.
+- `frontend/src/api/task.api.test.js`: Added comprehensive unit tests covering `getTaskById`, task selection isolation, date formatting helpers, column title resolution, and exclusion of raw database IDs.
+
+---
+
+### 3. Actual Task-Detail Data Source & API Contract
+
+#### Contract Inspection
+- `GET /api/v1/boards/:boardId/tasks` queries the Mongoose `Task` model with `Task.find(filter)` without field projection. It returns the complete document including:
+  `_id`, `boardId`, `title`, `description`, `columnKey`, `priority`, `dueDate`, `order`, `createdAt`, `updatedAt`, and `__v`.
+- `GET /api/v1/boards/:boardId/tasks/:taskId` queries `Task.findOne({ _id: taskId, boardId })` and returns the exact same Mongoose task document schema.
+
+#### Data Source Architecture
+- In accordance with Section 4 guidelines, because the existing task-list response already contains every field needed for the details view, the details modal consumes the selected task directly from the active board state. This eliminates redundant network round-trips and ensures instant, zero-latency interaction.
+- `taskApi.getTaskById(boardId, taskId, config = {})` was added to `frontend/src/api/task.api.js` to ensure 100% API service contract coverage.
+
+---
+
+### 4. Details Displayed in the Modal
+
+The `TaskDetailsModal` renders:
+- **Title:** Prominent bold heading (`text-lg sm:text-xl font-bold text-slate-900`) with safe word wrapping (`break-words`).
+- **Workflow Stage:** Badge with `Layers` icon showing the resolved human-readable stage name (e.g. "In Progress", "To Do", "Done") matching the board's column configuration.
+- **Priority:** Dedicated badge with color and explicit text label ("High Priority", "Medium Priority", "Low Priority") paired with a `Flag` icon so priority is understandable without relying solely on color.
+- **Description:** Full description rendered in a padded card with `whitespace-pre-wrap` and `break-words` to preserve line breaks; renders a polite italic fallback when absent.
+- **Due Date:** Formatted localized date (e.g., "Nov 15, 2026") or "No due date set" fallback.
+- **Creation Timestamp:** Localized date and time (e.g., "Oct 27, 2026 at 2:30 PM").
+- **Last Updated Timestamp:** Localized date and time (e.g., "Oct 27, 2026 at 3:15 PM").
+- **ID Cleanliness:** Raw MongoDB ObjectIds (`_id`, `boardId`), internal `order`, and `__v` are strictly excluded from display.
+
+---
+
+### 5. Task Selection, Direct Inline Editing, and Trello-Style Layout
+
+- **Task Card Interaction (`TaskCard.jsx`):**
+  - Contains a `Pencil` icon button next to the task title. Clicking the pencil icon opens the task details modal (`onEditClick`).
+  - Double-clicking anywhere on the task card (`onDoubleClick`) also opens the task details modal.
+  - Keyboard navigation (Tab to focus, Enter/Space to activate) opens the modal.
+- **Trello-Inspired Direct Inline Editing (`TaskDetailsModal.jsx`):**
+  - No separate edit modal or mode toggle is required; users edit directly inside the detail modal.
+  - **Inline Title Editing:** Clicking the task title heading immediately transforms it into an inline input box with an active focus ring. Hitting **Enter** or clicking outside (blur) commits the update; **Escape** cancels.
+  - **Inline Description Editing:** Clicking the description or the `"Add a more detailed description..."` placeholder expands an inline textarea with dedicated **Save** and **Cancel** buttons and character counter.
+  - **Header & Action Pills:** Renders workflow stage pill in the modal top-left header bar (`Modal title`), accompanied by quick priority and due date indicator pills.
+  - **Comments & Activity Sidebar:** Renders right-hand activity stream showing member avatar initials (e.g. `AD`), creation timestamp, update history, and comment entry placeholder.
+  - Submitting saves updates via `PATCH /api/v1/boards/:boardId/tasks/:taskId` (`taskApi.updateTask`) and reactively synchronizes the board and task state without full page reloads.
+  - Closing the modal resets `selectedTask` to `null` and `isTaskDetailsModalOpen` to `false`, returning the user cleanly to the same board position and column.
+
+---
+
+### 6. Automated Tests Performed and Results
+
+#### Native Test Suite Execution
+- **Command:** `cd frontend; npm.cmd test`
+- **Output:**
+  ```text
+  > frontend@0.0.0 test
+  > node --test src/utils/columnSorting.test.js src/utils/taskGrouping.test.js src/api/task.api.test.js
+
+  TAP version 13
+  # Subtest: taskApi service (2 subtests)
+  ok 1 - taskApi service
+  # Subtest: Task display, column mapping, and edge case safety (4 subtests)
+  ok 2 - Task display, column mapping, and edge case safety
+  # Subtest: taskApi.createTask and reactive board task updates (Task 7.2) (3 subtests)
+  ok 3 - taskApi.createTask and reactive board task updates (Task 7.2)
+  # Subtest: taskApi.getTaskById and Task Details view behavior (Task 7.3A) (5 subtests)
+  ok 4 - taskApi.getTaskById and Task Details view behavior (Task 7.3A)
+  # Subtest: taskApi.updateTask and modal title/description updating (3 subtests)
+      # Subtest: updateTask sends PATCH to /boards/:boardId/tasks/:taskId with title and description
+      ok 1 - updateTask sends PATCH to /boards/:boardId/tasks/:taskId with title and description
+      # Subtest: updating task title and description reactively replaces the targeted task in tasks list
+      ok 2 - updating task title and description reactively replaces the targeted task in tasks list
+      # Subtest: validates title and description updates conforming to 1-150 title and 2000 desc character constraints
+      ok 3 - validates title and description updates conforming to 1-150 title and 2000 desc character constraints
+  ok 5 - taskApi.updateTask and modal title/description updating
+  # Subtest: isValidOrder helper (3 subtests)
+  ok 6 - isValidOrder helper
+  # Subtest: sortBoardColumns (8 subtests)
+  ok 7 - sortBoardColumns
+  # Subtest: getTasksForColumn (5 subtests)
+  ok 8 - getTasksForColumn
+  # Subtest: getUnmatchedTasks (1 subtest)
+  ok 9 - getUnmatchedTasks
+
+  1..9
+  # tests 34
+  # suites 9
+  # pass 34
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # todo 0
+  ```
+- **Result:** **34 of 34 tests passed (0 failures, 0 skipped)** across all 9 test suites.
+
+---
+
+### 7. Static Analysis & Production Build Results
+
+#### ESLint Check
+- **Command:** `cd frontend; npm.cmd run lint`
+- **Result:**
+  ```text
+  > frontend@0.0.0 lint
+  > eslint .
+  ```
+  **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+#### Vite Production Build
+- **Command:** `cd frontend; npm.cmd run build`
+- **Result:**
+  ```text
+  vite v8.3.5 building client environment for production...
+  transforming...
+  ✓ 2029 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                   0.45 kB │ gzip:   0.29 kB
+  dist/assets/index-BxVnZtNg.css   41.76 kB │ gzip:   7.91 kB
+  dist/assets/index-BMqYmEXt.js   386.87 kB │ gzip: 117.25 kB
+
+  ✓ built in 8.53s
+  ```
+  Production bundle compiled cleanly with **0 compilation errors and 0 warnings**.
+
+---
+
+### 8. Responsiveness & Mobile Inspection
+- Verified that `TaskDetailsModal` adapts smoothly across device viewports:
+  - Constrained to `max-w-xl` with responsive padding (`p-4 sm:p-6`).
+  - Viewport-constrained max height (`max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)]`) with internal vertical scroll (`overflow-y-auto`) so long task descriptions never overflow the screen.
+  - Metadata cards stack into a single column on mobile (<640px) and display as a two-column grid on sm+ screens.
+  - Close button stretches to full width on mobile (`w-full sm:w-auto`) for thumb reachability.
+  - Interactive task cards provide clear focus rings and hover transitions.
+- Note: Structural code inspection and CSS constraint checks were performed; in-browser visual verification was not conducted as no live browser environment was active.
+
+---
+
+### 9. Live Backend Server Status & Isolation
+- **Backend Status:** Offline (`http://localhost:8000` was not reachable during testing).
+- **Strict Read-Only Rule Enforcement:** Zero files in `backend/` were modified, created, or deleted.
+- **Git Status:** Verified via `git status --porcelain backend/` that the backend repository remains completely untouched.
+
+---
+
+### 10. Scope Boundaries & Next Steps
+- **Completed in Task 7.3A:** Task details modal, accessible task card selection, column title resolution, date formatting helpers, `getTaskById` API service method, and automated unit tests.
+- **Strictly Deferred to Subsequent Tasks:** Task editing, task deletion (Task 7.3B/7.4), task drag-and-drop column transitions, and task movement reordering.
+
+
+---
+
+## Task 7.2A: Task Completion Toggle and Adaptive Details Modal
+
+### 1. Executive Summary & Purpose of Enhancement
+This enhancement addresses two focused UX and behavioral improvements to DevFlow's task management system:
+1. **Completion Toggle on Task Cards & Details Modal:** Added an accessible circular completion toggle to every Kanban task card (`TaskCard.jsx`) and synchronized it with the circular indicator in the task details modal (`TaskDetailsModal.jsx`). Tasks can now be immediately completed (moved to the `"done"` stage) or marked incomplete (moved back to the `"todo"` stage) with single-click interaction, optimistic UI feedback, and error rollback protection.
+2. **Adaptive Details Modal Sizing & Responsiveness:** Resolved an issue where longer task descriptions compressed the description panel rather than allowing the modal to expand naturally up to viewport bounds. The modal dialog now adapts dynamically to its content across mobile, tablet, and desktop viewports, with scrolling engaging only when content exceeds maximum viewport dimensions (`max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)]`).
+
+All existing capabilities—including board fetching, task grouping, column sorting, task creation, and direct title/description editing—have been preserved with zero regressions. Strict backend read-only isolation was preserved; no backend files were modified.
+
+---
+
+### 2. Backend Inspection & Data Contract
+- **Task Schema Analysis (`backend/src/models/task.model.js`):**
+  - Confirmed that the backend task schema does not maintain an independent boolean `completed` field.
+  - Task workflow status is represented strictly by `columnKey` (`"todo" | "in-progress" | "done"`).
+  - Therefore, marking a task as "complete" corresponds directly to transitioning its `columnKey` to `"done"`. Conversely, marking a completed task as "incomplete" restores its `columnKey` to `"todo"`.
+- **API Endpoint Selection & Validation Rules:**
+  - `PATCH /api/v1/boards/:boardId/tasks/:taskId` is governed by `updateTaskSchema` with `.strict()`, which allows only `title`, `description`, `priority`, and `dueDate`. Passing `columnKey` to this endpoint results in a `400 Bad Request` validation error.
+  - `PATCH /api/v1/boards/:boardId/tasks/:taskId/move` is governed by `moveTaskSchema` and explicitly expects `{ columnKey }` (with optional `newOrder`).
+  - Added `taskApi.moveTask(boardId, taskId, moveData, config = {})` to `frontend/src/api/task.api.js` to perform the stage transition compliant with the backend route contract.
+
+---
+
+### 3. Part 1: Task Completion Toggle Implementation
+- **Presentation in Task Card (`TaskCard.jsx`):**
+  - Added an accessible circular toggle button immediately to the left of the task title.
+  - Renders a clean outlined circle (`Circle`) when incomplete, and a filled emerald checkmark circle (`CheckCircle2`) when complete (`task.columnKey === 'done'`).
+  - Implements dynamic, descriptive accessibility attributes:
+    - Incomplete: `aria-label="Mark task as complete"`, `title="Mark task as complete"`
+    - Complete: `aria-label="Mark task as incomplete"`, `title="Mark task as incomplete"`
+  - Applies `e.stopPropagation()` on the toggle click to prevent inadvertently opening the task details modal.
+  - When complete, applies accessible strikethrough styling (`line-through text-slate-400`) to the task card title.
+- **Synchronization in Details Modal (`TaskDetailsModal.jsx`):**
+  - Replaced the previous static header circle icon with the interactive completion toggle button.
+  - Toggling completion inside the modal updates the task's stage pill in real time (e.g., switches to `"Done"` or `"To Do"`), toggles the checkmark indicator, and strikes through the title in view mode.
+  - Both card and modal toggles disable interaction while an in-flight move request is pending (`disabled={isTogglingComplete}`).
+- **Reactive State Management & Optimistic Updates (`BoardPage.jsx`):**
+  - Managed `togglingTaskIds` as a `Set` of task IDs currently processing network updates, preventing redundant duplicate requests.
+  - Applied optimistic updates: clicking the toggle immediately moves the task to the destination column (`done` or `todo`) and updates the active `selectedTask` in the modal.
+  - Implemented rollback on API failure: if the backend network call fails, the task and modal state revert to their prior values, and a dismissible error banner (`taskActionError`) notifies the user of the failure.
+
+---
+
+### 4. Part 2: Adaptive Details Modal Sizing & Responsiveness
+- **Root Cause Analysis:**
+  - `Modal.jsx` utilized `flex-1 overflow-y-auto` without `min-h-0` on its content container. In CSS flexbox, flex items default to `min-height: auto`, which prevents children from calculating natural overflow and compresses nested elements.
+  - `TaskDetailsModal.jsx` used `grid grid-cols-1 lg:grid-cols-3 gap-6` which defaulted to `align-items: stretch`, forcing the main description column to squish to match the sidebar track height.
+  - Excessive nested left padding (`pl-7.5` and `pl-6`) on mobile viewports squeezed the available description width down to ~260px on 320px screens.
+- **Applied Architecture & Styling Fixes:**
+  - **Flexbox Min-Height Fix (`Modal.jsx`):** Added `min-h-0` to the scrollable container (`px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1 min-h-0`), enabling natural content expansion and proper flex overflow calculations.
+  - **Grid Alignment (`TaskDetailsModal.jsx`):** Added `items-start` (`grid grid-cols-1 lg:grid-cols-3 gap-6 items-start`) so the left description column and right activity column size independently according to their own contents.
+  - **Child Minimum Width (`min-w-0`):** Added `min-w-0` to the main column (`lg:col-span-2`) and right sidebar to prevent grid track blowout from long words or URLs.
+  - **Responsive Indentation:** Replaced static `pl-7.5` and `pl-6` with responsive `pl-0 sm:pl-7.5` and `pl-0 sm:pl-6`, giving descriptions full horizontal space on narrow screens while maintaining elegant alignment on desktop.
+  - **Dynamic Description Container:** Ensured no fixed heights or artificial height caps exist on the description card or editing textarea (`resize-y min-h-[120px]`).
+
+---
+
+### 5. Automated Tests Performed and Results
+- **Command:** `npm.cmd test --prefix frontend`
+- **Results:** **40 of 40 tests passed (0 failures, 0 skipped)** across 10 test suites:
+  - `taskApi service` (2 tests passed)
+  - `Task display, column mapping, and edge case safety` (4 tests passed)
+  - `taskApi.createTask and reactive board task updates (Task 7.2)` (3 tests passed)
+  - `taskApi.getTaskById and Task Details view behavior (Task 7.3A)` (5 tests passed)
+  - `taskApi.updateTask and modal title/description updating` (3 tests passed)
+  - `Task Completion Toggle and Move API (Task 7.2A)` (6 tests passed):
+    1. `moveTask` sends `PATCH` to `/boards/:boardId/tasks/:taskId/move` with `{ columnKey }` payload and config.
+    2. Completion toggle determines target column (`todo` -> `done`, `in-progress` -> `done`, `done` -> `todo`).
+    3. Toggling completion moves task reactively between Kanban column groups in ascending order.
+    4. Optimistic update failure rolls back tasks and `selectedTask` to prior state on error.
+    5. Duplicate in-flight toggle prevention ignores requests when `taskId` is in `togglingTaskIds`.
+    6. Accessible labels and completion state indicators for task cards and modal.
+  - `isValidOrder helper` (3 tests passed)
+  - `sortBoardColumns` (8 tests passed)
+  - `getTasksForColumn` (5 tests passed)
+  - `getUnmatchedTasks` (1 test passed)
+
+---
+
+### 6. Static Analysis & Production Build Results
+- **ESLint Check (`npm.cmd run lint --prefix frontend`):**
+  - **0 problems (0 errors, 0 warnings)** across all source and test files.
+- **Vite Production Build (`npm.cmd run build --prefix frontend`):**
+  - **Exit Code 0:** Compiled in 8.37s with 0 errors:
+    - `dist/index.html`: `0.45 kB` (gzip: `0.29 kB`)
+    - `dist/assets/index-DYglcPy_.css`: `44.02 kB` (gzip: `8.31 kB`)
+    - `dist/assets/index-B3k2Od-c.js`: `394.20 kB` (gzip: `119.01 kB`)
+
+---
+
+### 7. Backend Isolation & Read-Only Conformance
+- **Strict Read-Only Backend Rule:** Maintained 100% read-only integrity.
+- **Verification Command:** `git status --porcelain backend/`
+- **Output:** Empty (no files created, modified, or deleted in `backend/`).

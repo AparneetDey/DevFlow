@@ -15,6 +15,7 @@ import {
 import { Button } from '../components/common/Button.jsx';
 import KanbanColumn from '../components/boards/KanbanColumn.jsx';
 import CreateTaskModal from '../components/tasks/CreateTaskModal.jsx';
+import TaskDetailsModal from '../components/tasks/TaskDetailsModal.jsx';
 import boardApi from '../api/board.api.js';
 import taskApi from '../api/task.api.js';
 import { sortBoardColumns } from '../utils/columnSorting.js';
@@ -37,9 +38,17 @@ export function BoardPage() {
   const [taskError, setTaskError] = useState(null);
   const [taskReloadIndex, setTaskReloadIndex] = useState(0);
 
+  // Task action / completion toggle state
+  const [togglingTaskIds, setTogglingTaskIds] = useState(new Set());
+  const [taskActionError, setTaskActionError] = useState(null);
+
   // Task creation modal state
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [selectedColumnKey, setSelectedColumnKey] = useState('todo');
+
+  // Task details modal state
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [isTaskDetailsModalOpen, setIsTaskDetailsModalOpen] = useState(false);
 
   // Fetch board details on mount or when boardId route param / reloadIndex changes
   useEffect(() => {
@@ -176,6 +185,79 @@ export function BoardPage() {
   const handleTaskCreated = (newTask) => {
     if (!newTask || !newTask._id) return;
     setTasks((prevTasks) => [...prevTasks, newTask]);
+  };
+
+  const handleOpenTaskDetails = (task) => {
+    if (!task) return;
+    setSelectedTask(task);
+    setIsTaskDetailsModalOpen(true);
+  };
+
+  const handleCloseTaskDetails = () => {
+    setIsTaskDetailsModalOpen(false);
+    setSelectedTask(null);
+  };
+
+  const handleUpdateTask = async (taskId, updateData) => {
+    const response = await taskApi.updateTask(boardId, taskId, updateData);
+    const updatedTask = response.data?.data;
+    if (updatedTask && updatedTask._id) {
+      setTasks((prevTasks) =>
+        prevTasks.map((t) => (t._id === updatedTask._id ? updatedTask : t))
+      );
+      if (selectedTask?._id === updatedTask._id) {
+        setSelectedTask(updatedTask);
+      }
+    }
+    return updatedTask;
+  };
+
+  const handleToggleComplete = async (task) => {
+    if (!task || !task._id || togglingTaskIds.has(task._id)) return;
+    const targetColumnKey = task.columnKey === 'done' ? 'todo' : 'done';
+
+    setTogglingTaskIds((prev) => new Set(prev).add(task._id));
+    setTaskActionError(null);
+
+    const prevTasks = tasks;
+    const prevSelectedTask = selectedTask;
+    const optimisticTask = { ...task, columnKey: targetColumnKey };
+
+    // Optimistic UI update
+    setTasks((prev) =>
+      prev.map((t) => (t._id === task._id ? optimisticTask : t))
+    );
+    if (selectedTask?._id === task._id) {
+      setSelectedTask(optimisticTask);
+    }
+
+    try {
+      const response = await taskApi.moveTask(boardId, task._id, {
+        columnKey: targetColumnKey,
+      });
+      const updatedTask = response.data?.data;
+      if (updatedTask && updatedTask._id) {
+        setTasks((prev) =>
+          prev.map((t) => (t._id === updatedTask._id ? updatedTask : t))
+        );
+        if (selectedTask?._id === updatedTask._id) {
+          setSelectedTask(updatedTask);
+        }
+      }
+    } catch (err) {
+      // Revert on error
+      setTasks(prevTasks);
+      if (prevSelectedTask) {
+        setSelectedTask(prevSelectedTask);
+      }
+      setTaskActionError(extractErrorMessage(err));
+    } finally {
+      setTogglingTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(task._id);
+        return next;
+      });
+    }
   };
 
   const formattedDate = (() => {
@@ -370,6 +452,29 @@ export function BoardPage() {
               </h2>
             </div>
 
+            {/* Task Action Error Banner (completion toggle or update rollback) */}
+            {taskActionError && (
+              <div
+                role="alert"
+                className="p-3.5 sm:p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between text-rose-900 shadow-2xs text-xs"
+              >
+                <div className="flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <div>
+                    <span className="font-semibold">Task action failed: </span>
+                    <span className="text-rose-800">{taskActionError}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTaskActionError(null)}
+                  className="text-xs font-semibold text-rose-700 hover:text-rose-900 underline ml-2 shrink-0 cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {/* Task Fetching Error Banner (preserves loaded board) */}
             {taskError && (
               <div
@@ -415,6 +520,12 @@ export function BoardPage() {
                     tasks={getTasksForColumn(tasks, column.key)}
                     isLoading={isLoadingTasks}
                     onAddTask={(colKey) => handleOpenCreateTask(colKey)}
+                    onTaskDoubleClick={handleOpenTaskDetails}
+                    onTaskEditClick={handleOpenTaskDetails}
+                    onTaskClick={handleOpenTaskDetails}
+                    onUpdateTask={handleUpdateTask}
+                    onToggleComplete={handleToggleComplete}
+                    togglingTaskIds={togglingTaskIds}
                   />
                 ))}
               </div>
@@ -433,6 +544,20 @@ export function BoardPage() {
           isOpen={isCreateTaskModalOpen}
           onClose={() => setIsCreateTaskModalOpen(false)}
           onTaskCreated={handleTaskCreated}
+        />
+      )}
+
+      {/* Task Details Modal */}
+      {isTaskDetailsModalOpen && selectedTask && (
+        <TaskDetailsModal
+          key={selectedTask._id}
+          task={selectedTask}
+          columns={columns}
+          isOpen={isTaskDetailsModalOpen}
+          onClose={handleCloseTaskDetails}
+          onUpdateTask={handleUpdateTask}
+          onToggleComplete={handleToggleComplete}
+          isTogglingComplete={togglingTaskIds.has(selectedTask._id)}
         />
       )}
     </div>

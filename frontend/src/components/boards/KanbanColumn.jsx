@@ -12,6 +12,11 @@ import TaskCard from '../tasks/TaskCard.jsx';
  * @param {React.ReactNode} [props.children] - Custom children to render within the column
  * @param {boolean} [props.isLoading=false] - Whether tasks are currently loading
  * @param {Function} [props.onAddTask] - Callback when user clicks add task for this column
+ * @param {Function} [props.onTaskClick] - Callback when user selects a task
+ * @param {Function} [props.onTaskDoubleClick] - Callback when user double-clicks a task to view details
+ * @param {Function} [props.onTaskEditClick] - Callback when user clicks the pencil icon on a task
+ * @param {Function} [props.onToggleComplete] - Callback when completion toggle is clicked
+ * @param {Set<string>} [props.togglingTaskIds] - Set of task IDs currently toggling completion
  * @param {string} [props.className] - Optional custom CSS classes
  */
 export function KanbanColumn({
@@ -20,6 +25,11 @@ export function KanbanColumn({
   children,
   isLoading = false,
   onAddTask,
+  onTaskClick,
+  onTaskDoubleClick,
+  onTaskEditClick,
+  onToggleComplete,
+  togglingTaskIds,
   className = '',
 }) {
   const columnTitle = column?.title || 'Untitled Column';
@@ -89,6 +99,11 @@ export function KanbanColumn({
             <TaskCard
               key={task._id || task.id || `task-${columnKey}-${index}`}
               task={task}
+              onDoubleClick={onTaskDoubleClick || onTaskClick}
+              onEditClick={onTaskEditClick || onTaskDoubleClick || onTaskClick}
+              onClick={onTaskClick}
+              onToggleComplete={onToggleComplete}
+              isToggling={togglingTaskIds?.has?.(task._id)}
             />
           ))
         ) : (
