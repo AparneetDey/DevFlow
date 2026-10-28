@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Modal } from '../common/Modal.jsx';
 import { Button } from '../common/Button.jsx';
 import {
@@ -6,7 +6,6 @@ import {
   Layers,
   Flag,
   AlignLeft,
-  Pencil,
   Circle,
   CheckCircle2,
   AlertCircle,
@@ -108,8 +107,8 @@ function resolveColumnTitle(columnKey, columns = []) {
 }
 
 /**
- * Trello-inspired card detail modal with inline title and description editing.
- * Supports adaptive layout and completion toggle.
+ * Trello-inspired card detail modal with inline direct title and description editing.
+ * Title is rendered as a borderless heading input that reveals its border on click/focus.
  *
  * @param {Object} props
  * @param {Object} props.task - Selected task object
@@ -130,12 +129,22 @@ export function TaskDetailsModal({
   isTogglingComplete = false,
 }) {
   const { user } = useAuth();
+  const isEscapePressedRef = useRef(false);
 
-  // Inline Title Editing State
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  // Title Editing State - input only, border appears on focus
   const [titleInput, setTitleInput] = useState(task?.title || '');
+  const [isTitleFocused, setIsTitleFocused] = useState(false);
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [titleError, setTitleError] = useState(null);
+
+  // Sync external task title updates when not focused
+  const [prevTaskTitle, setPrevTaskTitle] = useState(task?.title);
+  if (task?.title !== prevTaskTitle) {
+    setPrevTaskTitle(task?.title);
+    if (!isTitleFocused) {
+      setTitleInput(task?.title || '');
+    }
+  }
 
   // Inline Description Editing State
   const [isEditingDesc, setIsEditingDesc] = useState(false);
@@ -178,12 +187,11 @@ export function TaskDetailsModal({
     }
 
     if (trimmed === task.title) {
-      setIsEditingTitle(false);
+      setTitleError(null);
       return;
     }
 
     if (typeof onUpdateTask !== 'function') {
-      setIsEditingTitle(false);
       return;
     }
 
@@ -192,7 +200,6 @@ export function TaskDetailsModal({
 
     try {
       await onUpdateTask(task._id, { title: trimmed });
-      setIsEditingTitle(false);
     } catch (err) {
       setTitleError(extractErrorMessage(err));
     } finally {
@@ -256,90 +263,83 @@ export function TaskDetailsModal({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Main Content Area (Left 2 Columns) */}
         <div className="lg:col-span-2 space-y-5 min-w-0">
-          {/* Title Area with Interactive Completion Toggle */}
-          <div className="flex items-start gap-2.5 min-w-0">
-            <button
-              type="button"
-              onClick={() => onToggleComplete?.(task)}
-              disabled={isTogglingComplete}
-              aria-label={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
-              title={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
-              className="mt-1 p-0.5 rounded-full text-slate-400 hover:text-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer shrink-0 transition-colors disabled:opacity-50"
-            >
-              {isCompleted ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 fill-emerald-100/70" />
-              ) : (
-                <Circle className="w-5 h-5 hover:stroke-indigo-600" />
-              )}
-            </button>
-            <div className="flex-1 min-w-0">
-              {isEditingTitle ? (
-                <div className="space-y-1">
-                  <input
-                    type="text"
-                    value={titleInput}
-                    onChange={(e) => {
-                      setTitleInput(e.target.value);
-                      if (titleError) setTitleError(null);
-                    }}
-                    onBlur={handleSaveTitle}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleSaveTitle();
-                      } else if (e.key === 'Escape') {
-                        setIsEditingTitle(false);
-                        setTitleInput(task.title || '');
-                        setTitleError(null);
-                      }
-                    }}
-                    maxLength={150}
-                    disabled={isSavingTitle}
-                    autoFocus
-                    placeholder="Task title..."
-                    className="w-full text-xl sm:text-2xl font-bold text-slate-900 border-2 border-indigo-500 rounded-lg px-2.5 py-1 focus:outline-none bg-white shadow-2xs"
-                  />
-                  {titleError && (
-                    <div className="flex items-center gap-1 text-xs text-red-600 font-medium pl-1">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>{titleError}</span>
-                    </div>
-                  )}
-                  <p className="text-[11px] text-slate-400 pl-1">
-                    Press Enter to save, Esc to cancel
-                  </p>
-                </div>
-              ) : (
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
+          {/* Title Area with Interactive Completion Toggle and Direct Title Input */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Circle Completion Toggle */}
+              <button
+                type="button"
+                onClick={() => onToggleComplete?.(task)}
+                disabled={isTogglingComplete}
+                aria-label={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
+                title={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
+                className="p-1 rounded-full text-slate-400 hover:text-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer shrink-0 transition-colors disabled:opacity-50"
+              >
+                {isCompleted ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 fill-emerald-100/70" />
+                ) : (
+                  <Circle className="w-5 h-5 hover:stroke-indigo-600" />
+                )}
+              </button>
+
+              {/* Title Input: looks like a heading in resting state, border appears on click/focus */}
+              <input
+                type="text"
+                value={titleInput}
+                onChange={(e) => {
+                  setTitleInput(e.target.value);
+                  if (titleError) setTitleError(null);
+                }}
+                onFocus={() => {
+                  setIsTitleFocused(true);
+                  if (titleError) setTitleError(null);
+                }}
+                onBlur={() => {
+                  setIsTitleFocused(false);
+                  if (isEscapePressedRef.current) {
+                    isEscapePressedRef.current = false;
+                    return;
+                  }
+                  handleSaveTitle();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  } else if (e.key === 'Escape') {
+                    isEscapePressedRef.current = true;
                     setTitleInput(task.title || '');
-                    setIsEditingTitle(true);
                     setTitleError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setTitleInput(task.title || '');
-                      setIsEditingTitle(true);
-                      setTitleError(null);
-                    }
-                  }}
-                  className="group flex items-center justify-between text-xl sm:text-2xl font-bold text-slate-900 tracking-tight break-words hover:bg-slate-100/80 rounded-lg px-2 py-1 -mx-2 transition-colors cursor-pointer"
-                  title="Click to edit title"
-                >
-                  <span className={`flex-1 break-words ${isCompleted ? 'line-through text-slate-400' : ''}`}>
-                    {task.title || 'Untitled Task'}
-                  </span>
-                  <Pencil className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" />
-                </div>
-              )}
+                    e.currentTarget.blur();
+                  }
+                }}
+                maxLength={150}
+                disabled={isSavingTitle}
+                placeholder="Task title..."
+                className={`w-full text-xl sm:text-2xl font-bold tracking-tight rounded-lg px-2.5 py-1.5 transition-all border-2 ${
+                  isCompleted && !isTitleFocused
+                    ? 'line-through text-slate-400'
+                    : 'text-slate-900'
+                } ${
+                  isTitleFocused
+                    ? 'border-indigo-500 bg-white shadow-2xs outline-none ring-2 ring-indigo-100 cursor-text'
+                    : 'border-transparent bg-transparent hover:bg-slate-100/70 hover:border-slate-200/60 cursor-pointer'
+                }`}
+                title="Click to edit title"
+              />
             </div>
+
+            {/* Error or Shortcut Hint */}
+            {titleError ? (
+              <div className="flex items-center gap-1 text-xs text-red-600 font-medium pl-0 sm:pl-9.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{titleError}</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Quick Metadata Pills */}
-          <div className="flex flex-wrap items-center gap-2 pl-0 sm:pl-7.5">
+          <div className="flex flex-wrap items-center gap-2 pl-0 sm:pl-9.5">
             {/* Priority Pill */}
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${priorityInfo.badge}`}
@@ -384,7 +384,7 @@ export function TaskDetailsModal({
                     disabled={isSavingDesc}
                     autoFocus
                     placeholder="Add a more detailed description..."
-                    className="w-full px-3.5 py-2.5 text-sm bg-white text-slate-900 border-2 border-indigo-500 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-y min-h-[120px] shadow-2xs"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white text-slate-900 border-2 border-indigo-500 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-y min-h-[120px] shadow-2xs custom-scrollbar"
                   />
                   {descError && (
                     <div className="flex items-center gap-1 text-xs text-red-600 font-medium">

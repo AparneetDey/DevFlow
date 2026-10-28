@@ -299,7 +299,7 @@ export function BoardPage() {
               <div className="w-4 h-4 bg-slate-200 rounded animate-pulse" />
               <div className="h-4 w-28 bg-slate-200 rounded animate-pulse" />
             </div>
-            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 min-w-0">
+            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 min-w-0 custom-scrollbar">
               {[1, 2, 3].map((colIndex) => (
                 <div
                   key={colIndex}
@@ -512,7 +512,7 @@ export function BoardPage() {
                 </p>
               </div>
             ) : (
-              <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0">
+              <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0 custom-scrollbar">
                 {columns.map((column, index) => (
                   <KanbanColumn
                     key={column.key || column.title || `column-${index}`}

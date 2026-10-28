@@ -2845,3 +2845,115 @@ All existing capabilities—including board fetching, task grouping, column sort
 - **Strict Read-Only Backend Rule:** Maintained 100% read-only integrity.
 - **Verification Command:** `git status --porcelain backend/`
 - **Output:** Empty (no files created, modified, or deleted in `backend/`).
+
+
+---
+
+### Scrollbar Styling Enhancement
+
+#### 1. Files Modified
+- `frontend/src/index.css`: Implemented the global custom scrollbar system, including design tokens (`--scrollbar-thumb`, `--scrollbar-thumb-hover`, `--scrollbar-thumb-active`, `--scrollbar-track`), standard CSS scrollbar properties for Firefox/Level 1 spec, WebKit pseudo-elements with `background-clip: padding-box` hover expansion, touch device accommodations, and reduced-motion media queries.
+- `frontend/src/pages/BoardPage.jsx`: Added `.custom-scrollbar` to both the Kanban column loading skeleton container and the populated workflow stages horizontal scroll container.
+- `frontend/src/components/common/Modal.jsx`: Added `.custom-scrollbar` to the backdrop viewport scrolling container and the modal content scroll container.
+- `frontend/src/components/tasks/TaskDetailsModal.jsx`: Added `.custom-scrollbar` to the multi-line task description textarea.
+- `frontend/src/components/tasks/CreateTaskModal.jsx`: Added `.custom-scrollbar` to the task description textarea.
+- `frontend/src/components/boards/CreateBoardModal.jsx`: Added `.custom-scrollbar` to the board description textarea.
+- `frontend/src/components/boards/EditBoardModal.jsx`: Added `.custom-scrollbar` to the board description textarea.
+
+#### 2. Scrollable Areas Covered
+1. **Kanban Horizontal Workspace (`BoardPage.jsx`):** Horizontal scroll track for board columns across small, medium, and wide desktop viewports.
+2. **Modal Backdrop Dialog Wrapper (`Modal.jsx`):** Vertical scroll container for narrow/short viewports where modal dialog height exceeds window height.
+3. **Modal Body Content Wrapper (`Modal.jsx`):** Vertical scroll container for modal content exceeding maximum height (`max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)]`), used by task details, board creation, and task creation modals.
+4. **Description Textareas:** Multi-line text inputs across `TaskDetailsModal`, `CreateTaskModal`, `CreateBoardModal`, and `EditBoardModal`.
+5. **Global Viewport (`html`, `body`):** System-wide page scrollbars for general application routing and dashboard views.
+
+#### 3. CSS Strategy & Browser Compatibility
+- **Zero-Layout-Shift Hover Expansion:**
+  - In WebKit/Blink (Chromium, Chrome, Edge, Brave, Safari), `::-webkit-scrollbar` reserves a stable 10px track so expanding the scrollbar never reflows or causes adjacent elements or layout to shift.
+  - In the default resting state, the thumb is styled with `border: 3px solid transparent` and `background-clip: padding-box`, giving a thin, subtle 4px visible thumb (`#cbd5e1`, Slate-300).
+  - When the user hovers over the scrollable container (`:hover`), the transparent border smoothly transitions from `3px` to `1.5px`, expanding the visible thumb to `7px` with `#94a3b8` (Slate-400).
+  - When hovering directly on the thumb (`::-webkit-scrollbar-thumb:hover`), the border shrinks to `1px` (8px visible thumb).
+  - On active dragging (`::-webkit-scrollbar-thumb:active`), the border shrinks to `0px` (full 10px width) with `#64748b` (Slate-500) for tactile feedback.
+- **Standards-Compliant Fallback (Firefox & CSS Scrollbars Level 1):**
+  - Utilizes `scrollbar-width: thin` and `scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track)`.
+  - On hover/active, `scrollbar-color` dynamically shifts to hover/active tokens.
+
+#### 4. Touch & Reduced-Motion Handling
+- **Touch Devices (`@media (pointer: coarse)`):** Touch devices rely on native gesture scrolling and momentum fling. Scrollbars are rendered with a fixed 8px width with `border-width: 1.5px` and subtle slate color, ensuring usability without requiring pointer hover states.
+- **Reduced Motion (`@media (prefers-reduced-motion: reduce)`):** Transition animations on `border-width` and `background-color` are strictly disabled (`transition: none !important`), respecting user system accessibility preferences.
+
+#### 5. Verification Results
+- **Unit Tests:** `npm.cmd test --prefix frontend` — **40 of 40 tests passed (0 failures, 0 skipped)** across all 10 suites.
+- **ESLint:** `npm.cmd run lint --prefix frontend` — **0 problems (0 errors, 0 warnings)**.
+- **Production Build:** `npm.cmd run build --prefix frontend` — Vite build compiled in 6.24s with **0 compilation errors**.
+
+#### 6. Browser-Specific Limitations
+- **Firefox Limitations:** Firefox implements the CSS Scrollbars Module Level 1 specification (`scrollbar-width` and `scrollbar-color`). It supports `scrollbar-width: thin`, but does not support custom pixel widths or CSS transitions on scrollbar width. On Firefox, scrollbars smoothly adapt color on hover/active, maintaining a standard thin native track.
+- **Operating System Overlay Scrollbars:** On macOS or Windows with "Automatically hide scrollbars" enabled, the operating system controls overlay scrollbar visibility and native auto-hide behavior. DevFlow's CSS gracefully layers on top of native behavior without breaking native platform scrolling.
+
+
+---
+
+### Global Scrollbar Thickness Correction
+
+#### 1. Root Cause Diagnosis
+- **Scroll Container Hierarchy:** The application layout in `AppLayout.jsx` uses `min-h-screen flex flex-col` without clipping or nested full-height overflow wrappers. Consequently, the primary page-level vertical scrollbar belongs directly to the document root element (`html` and `body`).
+- **Chromium / CSS Scrollbars Specification Conflict:** Modern Chromium (Chrome 121+, Microsoft Edge) implements the W3C CSS Scrollbars Module Level 1 specification (`scrollbar-width` and `scrollbar-color`). In accordance with the spec, if `scrollbar-width` or `scrollbar-color` is declared on an element (such as `html` or `body`), Chromium completely disables all `::-webkit-scrollbar*` pseudo-elements on that element.
+- **Windows Native Scrollbar Fallback:** Because `scrollbar-width: thin` was previously declared globally on `html, body`, Chromium disabled the custom `::-webkit-scrollbar` rules and defaulted to the native Windows scrollbar (a thick 15–17px gray bar with arrow buttons).
+- **Hover Selector Interference:** The previous stylesheet declared `html:hover::-webkit-scrollbar-thumb`. Because `html:hover` is continuously active whenever the mouse cursor is inside the browser viewport, the resting state could never be displayed while the user was interacting with the page.
+
+#### 2. Exact CSS Changes Applied
+- **Isolated Firefox Standard Scrollbars via `@supports (-moz-appearance: none)`:**
+  Scoped `scrollbar-width: thin` and `scrollbar-color` exclusively to Firefox. Chromium evaluates `-moz-appearance` as unsupported, ensuring it never encounters standard properties that would deactivate `::-webkit-scrollbar`.
+- **Configured WebKit / Blink Root & Global Scrollbar (`index.css`):**
+  - **Track Width:** Fixed at `8px` (`width: 8px; height: 8px; background-color: transparent`), preventing layout shifts during expansion.
+  - **Resting State (3px Thumb):** Styled with `border: 2.5px solid transparent; background-clip: padding-box; border-radius: 9999px;` using `--scrollbar-thumb` (`#cbd5e1`, Slate-300). The resulting visible thumb width is `8px - (2 * 2.5px) = 3px`.
+  - **Hover State (8px Thumb):** On `::-webkit-scrollbar-thumb:hover`, transitions `border-width` to `0px` and changes color to `--scrollbar-thumb-hover` (`#94a3b8`, Slate-400), expanding the visible thumb to `8px`.
+  - **Active State (Dragging):** On `::-webkit-scrollbar-thumb:active`, maintains `border-width: 0px` and shifts color to `--scrollbar-thumb-active` (`#64748b`, Slate-500).
+  - **Transition:** Configured `transition: border-width 180ms ease-in-out, background-color 180ms ease-in-out`.
+  - **Root Scroll Stability:** Added `overflow-y: scroll; overflow-x: hidden;` to `html` to guarantee stable viewport dimensions across navigation and eliminate accidental page-level horizontal overflow.
+
+#### 3. Nested Panes & Touch Accommodations
+- **Nested Scrollable Panes:** Dedicated scroll containers (`.custom-scrollbar`, Kanban horizontal workspace, modal body, textarea) expand their thumb from 3px to 6px on container hover (`border-width: 1px`), and expand to 8px on direct thumb hover.
+- **Touch Devices (`@media (pointer: coarse)`):** Thumb width defaults to an accessible 6px with `border-width: 1px` without requiring mouse hover.
+- **Reduced Motion (`@media (prefers-reduced-motion: reduce)`):** Scrollbar transitions are disabled (`transition: none !important`).
+
+#### 4. Verification Results
+- **Unit Tests:** `npm.cmd test --prefix frontend` — **40 of 40 tests passed** (0 failures, 0 skipped).
+- **ESLint:** `npm.cmd run lint --prefix frontend` — **0 problems (0 errors, 0 warnings)**.
+- **Production Build:** `npm.cmd run build --prefix frontend` — Vite build compiled in 8.06s with **0 compilation errors**.
+- **Visual Verification Note:** In headless / CLI environments without live browser viewport inspection, visual verification remains pending manual user inspection in the target browser.
+
+#### 5. Browser Limitations Documented
+- **Chromium / WebKit (Chrome, Edge, Brave, Safari):** Fully supports the 3px resting thumb, smooth 180ms transition, and 8px hover expansion via `::-webkit-scrollbar-thumb`.
+- **Firefox (Gecko):** Standard `scrollbar-width: thin` displays the browser's standard thin scrollbar; CSS does not support arbitrary pixel widths or animated width transitions on `scrollbar-width`. Color transitions on hover/active are supported.
+
+
+---
+
+### Minimal Dark Thumb Scrollbar Adjustment
+
+#### 1. Requirements & Design Alignment
+- **Track:** Completely transparent across all states (`background: transparent;`).
+- **Scrollbar Thumb:** Dark gray (`#454545`), subtly rounded (`border-radius: 4px`).
+- **Thickness:** Fixed at 4px on desktop (`width: 4px; height: 4px;`).
+- **Hover Behavior:** No width expansion, animation, or layout-shifting hover effects. The thumb maintains a clean, static 4px profile across idle, hover, and active states.
+- **Removed Complexity:** Eliminated dynamic `border-width` expanding tricks, padding-box clipping hacks, and CSS transitions from previous iterations in favor of a minimal, robust design.
+
+#### 2. Technical Implementation (`frontend/src/index.css`)
+- **Chromium / WebKit Rules:**
+  - `::-webkit-scrollbar, .custom-scrollbar::-webkit-scrollbar`: `width: 4px; height: 4px; background: transparent;`
+  - `::-webkit-scrollbar-track, .custom-scrollbar::-webkit-scrollbar-track`: `background: transparent;`
+  - `::-webkit-scrollbar-thumb, .custom-scrollbar::-webkit-scrollbar-thumb`: `background-color: var(--scrollbar-thumb) (#454545); border-radius: 4px;`
+  - `::-webkit-scrollbar-thumb:hover`, `::-webkit-scrollbar-thumb:active`: `background-color: var(--scrollbar-thumb);`
+  - `::-webkit-scrollbar-corner, .custom-scrollbar::-webkit-scrollbar-corner`: `background: transparent;`
+- **Firefox Rules (Scoped via `@supports (-moz-appearance: none)`):**
+  - Configured `scrollbar-width: thin` and `scrollbar-color: #454545 transparent` on `html, body, *`. Scoping inside `@supports (-moz-appearance: none)` prevents modern Chromium from disabling its `::-webkit-scrollbar` rules.
+- **Scope Covered:** Universal document root (`html`, `body`), Kanban column horizontal scroll container (`.custom-scrollbar`), modal dialog backdrop and internal body (`Modal.jsx`), and multi-line form textareas (`TaskDetailsModal`, `CreateTaskModal`, `CreateBoardModal`, `EditBoardModal`).
+
+#### 3. Verification & Compliance
+- **Unit Tests:** `npm.cmd test --prefix frontend` — **40 of 40 tests passed (0 failures, 0 skipped)** across all 10 suites.
+- **ESLint:** `npm.cmd run lint --prefix frontend` — **0 problems (0 errors, 0 warnings)**.
+- **Production Build:** `npm.cmd run build --prefix frontend` — Vite build compiled in 6.32s with **0 compilation errors**.
+- **Backend Isolation:** `git status --porcelain backend/` — verified completely untouched.
+- **Visual Verification Status:** Visual inspection in a live browser remains pending manual user confirmation in the target browser environment.
