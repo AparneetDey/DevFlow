@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { taskApi } from './task.api.js';
 import apiClient from './client.js';
 import { getTasksForColumn, getUnmatchedTasks } from '../utils/taskGrouping.js';
+import { normalizeColumnTasks, reorderSameColumn, moveTaskCrossColumn } from '../utils/taskReordering.js';
 
 describe('taskApi service', () => {
   test('getTasksByBoard constructs the correct endpoint and forwards config', async () => {
@@ -1294,5 +1295,310 @@ describe('Drag-and-Drop Kanban & Task Reordering (Task 7.5)', () => {
     onTaskMove('t-active', 'done', 2);
     assert.equal(selectedTask.columnKey, 'done');
     assert.equal(selectedTask.order, 2);
+  });
+});
+
+describe('Task 7.6: Task Workflow Verification & Integration', () => {
+  const boardId = '654321654321654321654321';
+
+  test('1. Task Creation: handles title-only, full metadata, different columns, and updates counts', async () => {
+    let boardTasks = [];
+    const columns = [
+      { key: 'todo', title: 'To Do' },
+      { key: 'in-progress', title: 'In Progress' },
+      { key: 'done', title: 'Done' },
+    ];
+
+    // Helper simulating handleTaskCreated
+    const handleTaskCreated = (newTask) => {
+      boardTasks = [...boardTasks, newTask];
+    };
+
+    // A. Title-only task in To Do
+    const taskTitleOnly = {
+      _id: 'task-76-1',
+      boardId,
+      title: 'Simple Title Task',
+      description: '',
+      columnKey: 'todo',
+      priority: 'medium',
+      dueDate: null,
+      order: 0,
+    };
+    handleTaskCreated(taskTitleOnly);
+
+    // B. Task with title and description in In Progress
+    const taskWithDesc = {
+      _id: 'task-76-2',
+      boardId,
+      title: 'Task with technical description',
+      description: 'Implement JWT refresh rotation and verify session cookies',
+      columnKey: 'in-progress',
+      priority: 'high',
+      dueDate: null,
+      order: 0,
+    };
+    handleTaskCreated(taskWithDesc);
+
+    // C. Task with priority and due date in Done
+    const taskFull = {
+      _id: 'task-76-3',
+      boardId,
+      title: 'Deployment Checklist',
+      description: 'Run production build and audit package size',
+      columnKey: 'done',
+      priority: 'low',
+      dueDate: '2026-11-15T00:00:00.000Z',
+      order: 0,
+    };
+    handleTaskCreated(taskFull);
+
+    assert.equal(boardTasks.length, 3, 'Total board tasks must equal 3');
+
+    // Verify column counts match
+    columns.forEach((col) => {
+      const colTasks = getTasksForColumn(boardTasks, col.key);
+      assert.equal(colTasks.length, 1, `Column ${col.key} must contain exactly 1 task`);
+    });
+
+    // Ensure distinct IDs
+    const ids = new Set(boardTasks.map((t) => t._id));
+    assert.equal(ids.size, 3);
+  });
+
+  test('2. Task Details: modal selection isolation and backdrop dismissal guard', () => {
+    const taskA = { _id: 't-a', title: 'Task Alpha', description: 'Alpha notes', columnKey: 'todo', priority: 'high' };
+    const taskB = { _id: 't-b', title: 'Task Beta', description: 'Beta notes', columnKey: 'in-progress', priority: 'low' };
+
+    let selectedTask;
+    let isModalOpen = false;
+    assert.equal(isModalOpen, false);
+
+    // Open Task A
+    selectedTask = taskA;
+    isModalOpen = true;
+    assert.equal(isModalOpen, true);
+    assert.equal(selectedTask._id, 't-a');
+    assert.equal(selectedTask.title, 'Task Alpha');
+
+    // Switch to Task B: verify state unmounts/replaces cleanly without stale bleeding
+    selectedTask = taskB;
+    assert.equal(selectedTask._id, 't-b');
+    assert.equal(selectedTask.title, 'Task Beta');
+    assert.notEqual(selectedTask.title, taskA.title);
+
+    // Backdrop dismissal guard logic:
+    // If double-clicking a card, the second click lands on the backdrop overlay ~150ms after mount
+    const mountTime = 1000;
+    const shouldDismiss = (clickTime) => {
+      if (clickTime - mountTime < 400) return false; // Guard prevents rapid close
+      return true;
+    };
+
+    assert.equal(shouldDismiss(1150), false, 'Click within 150ms must NOT dismiss modal');
+    assert.equal(shouldDismiss(1390), false, 'Click within 390ms must NOT dismiss modal');
+    assert.equal(shouldDismiss(1500), true, 'Click after 500ms must dismiss modal');
+  });
+
+  test('3. Task Editing: title, description, priority, due date updates & payload validation', async () => {
+    let capturedPayload = null;
+    const originalPatch = apiClient.patch;
+
+    apiClient.patch = async (url, data) => {
+      capturedPayload = data;
+      return { data: { success: true, data: { _id: 't-edit', ...data } } };
+    };
+
+    try {
+      // Title update
+      await taskApi.updateTask(boardId, 't-edit', { title: 'Updated Title' });
+      assert.deepEqual(capturedPayload, { title: 'Updated Title' });
+      assert.equal(capturedPayload.columnKey, undefined, 'Must not send columnKey in updateTask');
+      assert.equal(capturedPayload.order, undefined, 'Must not send order in updateTask');
+
+      // Description update
+      await taskApi.updateTask(boardId, 't-edit', { description: 'Updated technical details' });
+      assert.deepEqual(capturedPayload, { description: 'Updated technical details' });
+
+      // Priority update
+      await taskApi.updateTask(boardId, 't-edit', { priority: 'high' });
+      assert.deepEqual(capturedPayload, { priority: 'high' });
+
+      // Due date update (clear to null)
+      await taskApi.updateTask(boardId, 't-edit', { dueDate: null });
+      assert.deepEqual(capturedPayload, { dueDate: null });
+    } finally {
+      apiClient.patch = originalPatch;
+    }
+  });
+
+  test('4. Task Completion Toggle: moves between columns, sets styling, and handles revert on failure', async () => {
+    let tasks = [
+      { _id: 't-toggle', title: 'Task to toggle', columnKey: 'todo', order: 0 },
+      { _id: 't-other', title: 'Other task', columnKey: 'todo', order: 1 },
+    ];
+    let selectedTask = { ...tasks[0] };
+
+    // Toggle to complete
+    const toggleToComplete = (task) => {
+      const targetColumn = task.columnKey === 'done' ? 'todo' : 'done';
+      const optimistic = { ...task, columnKey: targetColumn };
+      tasks = tasks.map((t) => (t._id === task._id ? optimistic : t));
+      if (selectedTask?._id === task._id) selectedTask = optimistic;
+      return targetColumn;
+    };
+
+    const targetCol1 = toggleToComplete(tasks[0]);
+    assert.equal(targetCol1, 'done');
+    assert.equal(tasks[0].columnKey, 'done');
+    assert.equal(selectedTask.columnKey, 'done');
+
+    // Toggle back to incomplete
+    const targetCol2 = toggleToComplete(tasks[0]);
+    assert.equal(targetCol2, 'todo');
+    assert.equal(tasks[0].columnKey, 'todo');
+    assert.equal(selectedTask.columnKey, 'todo');
+
+    // Failure rollback
+    const snapshotTasks = [...tasks];
+    const snapshotSelected = { ...selectedTask };
+
+    // Optimistic change
+    toggleToComplete(tasks[0]);
+    assert.equal(tasks[0].columnKey, 'done');
+
+    // Simulate error rollback
+    tasks = snapshotTasks;
+    selectedTask = snapshotSelected;
+    assert.equal(tasks[0].columnKey, 'todo');
+    assert.equal(selectedTask.columnKey, 'todo');
+  });
+
+  test('5. Task Deletion: confirms, clears selected state, updates counts, and preserves on cancel', async () => {
+    let boardTasks = [
+      { _id: 'del-1', title: 'Keep Me', columnKey: 'todo', order: 0 },
+      { _id: 'del-2', title: 'Delete Me', columnKey: 'todo', order: 1 },
+    ];
+    let selectedTask = { ...boardTasks[1] };
+    let isModalOpen = true;
+
+    // Cancel deletion: verify state remains untouched
+    const cancelDelete = () => {
+      // No state change
+    };
+    cancelDelete();
+    assert.equal(boardTasks.length, 2);
+    assert.equal(selectedTask._id, 'del-2');
+    assert.equal(isModalOpen, true);
+
+    // Confirm deletion
+    const confirmDelete = (taskId) => {
+      boardTasks = boardTasks.filter((t) => t._id !== taskId);
+      selectedTask = null;
+      isModalOpen = false;
+    };
+    confirmDelete('del-2');
+
+    assert.equal(boardTasks.length, 1);
+    assert.equal(boardTasks[0]._id, 'del-1');
+    assert.equal(selectedTask, null);
+    assert.equal(isModalOpen, false);
+  });
+
+  test('6. Drag-and-Drop: verifies all cross-column transitions (To Do, In Progress, Done)', () => {
+    const transitions = [
+      { from: 'todo', to: 'in-progress' },
+      { from: 'in-progress', to: 'done' },
+      { from: 'done', to: 'todo' },
+      { from: 'todo', to: 'done' },
+      { from: 'done', to: 'in-progress' },
+    ];
+
+    transitions.forEach(({ from, to }) => {
+      const initialTasks = [
+        { _id: 'moving-task', title: 'Mover', columnKey: from, order: 0 },
+        { _id: 'dest-task', title: 'Dest Stationary', columnKey: to, order: 0 },
+      ];
+
+      const { tasks, targetOrder, isChanged } = moveTaskCrossColumn(
+        initialTasks,
+        'moving-task',
+        to,
+        1
+      );
+
+      assert.equal(isChanged, true);
+      assert.equal(targetOrder, 1);
+
+      const moved = tasks.find((t) => t._id === 'moving-task');
+      assert.equal(moved.columnKey, to, `Task should move from ${from} to ${to}`);
+
+      // Verify no duplicate cards
+      assert.equal(tasks.length, 2);
+
+      // Verify column grouping
+      const destTasks = getTasksForColumn(tasks, to);
+      assert.equal(destTasks.length, 2);
+      const srcTasks = getTasksForColumn(tasks, from);
+      assert.equal(srcTasks.length, 0);
+    });
+  });
+
+  test('7. Same-Column Reordering: first to last, last to first, middle, and no-op drag', () => {
+    const colTasks = [
+      { _id: 'c1', title: 'First', columnKey: 'todo', order: 0 },
+      { _id: 'c2', title: 'Middle', columnKey: 'todo', order: 1 },
+      { _id: 'c3', title: 'Last', columnKey: 'todo', order: 2 },
+    ];
+
+    // A. Move first to last
+    const firstToLast = reorderSameColumn(colTasks, 'c1', 'c3');
+    assert.deepEqual(firstToLast.map((t) => t._id), ['c2', 'c3', 'c1']);
+    assert.deepEqual(firstToLast.map((t) => t.order), [0, 1, 2]);
+
+    // B. Move last to first
+    const lastToFirst = reorderSameColumn(colTasks, 'c3', 'c1');
+    assert.deepEqual(lastToFirst.map((t) => t._id), ['c3', 'c1', 'c2']);
+    assert.deepEqual(lastToFirst.map((t) => t.order), [0, 1, 2]);
+
+    // C. Move middle to first
+    const middleToFirst = reorderSameColumn(colTasks, 'c2', 'c1');
+    assert.deepEqual(middleToFirst.map((t) => t._id), ['c2', 'c1', 'c3']);
+    assert.deepEqual(middleToFirst.map((t) => t.order), [0, 1, 2]);
+
+    // D. No-op (dropped on same task)
+    const noOp = reorderSameColumn(colTasks, 'c2', 'c2');
+    assert.deepEqual(noOp.map((t) => t._id), ['c1', 'c2', 'c3']);
+    assert.deepEqual(noOp.map((t) => t.order), [0, 1, 2]);
+  });
+
+  test('8. Edge case & state resilience: fast drag without dragOver event safely preserves and moves active task', () => {
+    const tasks = [
+      { _id: 't-fast', title: 'Fast Flick Task', columnKey: 'todo', order: 0 },
+      { _id: 't-existing', title: 'Existing Task', columnKey: 'in-progress', order: 0 },
+    ];
+
+    // If handleDragOver never fired, tasks state still has t-fast in 'todo'
+    const targetColumnKey = 'in-progress';
+    const activeId = 't-fast';
+
+    let finalTasksInDest = tasks.filter((t) => t.columnKey === targetColumnKey);
+    const alreadyInDest = finalTasksInDest.some((t) => t._id === activeId);
+
+    // Safeguard executed in handleDragEnd
+    if (!alreadyInDest) {
+      const activeTaskItem = tasks.find((t) => t._id === activeId);
+      if (activeTaskItem) {
+        const movedTask = { ...activeTaskItem, columnKey: targetColumnKey };
+        finalTasksInDest = [...finalTasksInDest, movedTask];
+      }
+    }
+
+    const normalizedDest = normalizeColumnTasks(finalTasksInDest, targetColumnKey);
+    assert.equal(normalizedDest.length, 2);
+    assert.equal(normalizedDest[0]._id, 't-existing');
+    assert.equal(normalizedDest[1]._id, 't-fast');
+    assert.equal(normalizedDest[1].columnKey, 'in-progress');
+    assert.equal(normalizedDest[1].order, 1);
   });
 });

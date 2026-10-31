@@ -433,8 +433,28 @@ export function BoardPage() {
         finalTasksInDest = originalColTasks;
       }
     } else {
-      // Cross-column move: tasks were already shifted in tasks state
+      // Cross-column move: ensure active task is present in final destination list
       finalTasksInDest = tasks.filter((t) => t.columnKey === targetColumnKey);
+      const alreadyInDest = finalTasksInDest.some((t) => t._id === activeId);
+      if (!alreadyInDest) {
+        const activeTaskItem =
+          tasks.find((t) => t._id === activeId) ||
+          snapshot.tasks.find((t) => t._id === activeId);
+
+        if (activeTaskItem) {
+          const movedTask = { ...activeTaskItem, columnKey: targetColumnKey };
+          const overIndex = finalTasksInDest.findIndex((t) => t._id === over.id);
+          if (overIndex !== -1) {
+            finalTasksInDest = [
+              ...finalTasksInDest.slice(0, overIndex),
+              movedTask,
+              ...finalTasksInDest.slice(overIndex),
+            ];
+          } else {
+            finalTasksInDest = [...finalTasksInDest, movedTask];
+          }
+        }
+      }
     }
 
     // Re-index target column tasks with sequential 0-based orders
