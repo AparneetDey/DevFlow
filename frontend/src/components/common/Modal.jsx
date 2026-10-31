@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 /**
@@ -11,6 +11,16 @@ export function Modal({
   children,
   maxWidth = 'max-w-md',
 }) {
+  const mountTimeRef = useRef(0);
+  const backdropMouseDownRef = useRef(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      mountTimeRef.current = Date.now();
+      backdropMouseDownRef.current = false;
+    }
+  }, [isOpen]);
+
   // Close modal on Escape key press
   useEffect(() => {
     function handleKeyDown(event) {
@@ -32,10 +42,23 @@ export function Modal({
 
   if (!isOpen) return null;
 
+  const handleBackdropMouseDown = (e) => {
+    backdropMouseDownRef.current = e.target === e.currentTarget;
+  };
+
+  const handleBackdropClick = (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (!backdropMouseDownRef.current) return;
+    // Guard against rapid accidental dismissals (e.g. double-clicking a card where the 2nd click lands on the newly mounted backdrop)
+    if (Date.now() - mountTimeRef.current < 400) return;
+    onClose();
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto"
-      onClick={onClose}
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
@@ -46,9 +69,9 @@ export function Modal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 shrink-0">
-          <h2 id="modal-title" className="text-base font-semibold text-slate-900 truncate pr-2">
+          <div id="modal-title" className="text-base font-semibold text-slate-900 truncate pr-2">
             {title}
-          </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -60,7 +83,7 @@ export function Modal({
         </div>
 
         {/* Content */}
-        <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1 min-h-0">
           {children}
         </div>
       </div>
