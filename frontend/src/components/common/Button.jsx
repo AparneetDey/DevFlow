@@ -1,10 +1,14 @@
 import { Loader2 } from 'lucide-react';
 
 const variantClasses = {
-  primary: 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm focus-visible:ring-indigo-500',
-  secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-700 focus-visible:ring-slate-400',
-  outline: 'border border-slate-300 hover:bg-slate-50 text-slate-700 focus-visible:ring-slate-400',
-  danger: 'bg-red-600 hover:bg-red-700 text-white shadow-sm focus-visible:ring-red-500',
+  primary:
+    'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-[var(--color-text)] shadow-xs focus-visible:ring-[var(--color-focus)]',
+  secondary:
+    'bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] text-[var(--color-text)] border border-[var(--color-border)] focus-visible:ring-[var(--color-focus)]',
+  outline:
+    'border border-[var(--color-border)] hover:bg-[var(--color-surface)] text-[var(--color-text)] focus-visible:ring-[var(--color-focus)]',
+  danger:
+    'bg-[var(--color-danger)] hover:bg-[var(--color-accent-hover)] text-white shadow-xs focus-visible:ring-[var(--color-danger)]',
 };
 
 const sizeClasses = {
@@ -15,6 +19,7 @@ const sizeClasses = {
 
 /**
  * Reusable Button component with multiple variants, sizing, and loading states.
+ * Styled via centralized DevFlow CSS custom properties.
  */
 export function Button({
   children,
@@ -26,7 +31,8 @@ export function Button({
   type = 'button',
   ...rest
 }) {
-  const baseClasses = 'inline-flex items-center justify-center rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none';
+  const baseClasses =
+    'inline-flex items-center justify-center rounded-lg transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)] disabled:opacity-50 disabled:cursor-not-allowed select-none cursor-pointer';
   const variantClass = variantClasses[variant] || variantClasses.primary;
   const sizeClass = sizeClasses[size] || sizeClasses.md;
 

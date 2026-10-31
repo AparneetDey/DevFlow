@@ -11,8 +11,8 @@ export function Navbar() {
   const navLinkClass = ({ isActive }) =>
     `flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
       isActive
-        ? 'bg-indigo-600 text-white'
-        : 'text-slate-300 hover:text-white hover:bg-slate-800'
+        ? 'bg-[var(--color-primary)] text-[var(--color-text)]'
+        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)]'
     }`;
 
   const handleLogout = async () => {
@@ -27,15 +27,15 @@ export function Navbar() {
   };
 
   return (
-    <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
+    <header className="bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand */}
         <Link to="/dashboard" className="flex items-center gap-2 sm:gap-2.5 group shrink-0">
-          <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm group-hover:bg-indigo-500 transition-colors">
+          <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)] flex items-center justify-center text-[var(--color-text)] shadow-xs group-hover:bg-[var(--color-primary-hover)] transition-colors">
             <Kanban className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-lg font-bold text-white tracking-tight">DevFlow</span>
+            <span className="text-lg font-bold text-[var(--color-text)] tracking-tight">DevFlow</span>
           </div>
         </Link>
 
@@ -56,10 +56,10 @@ export function Navbar() {
                 <span className="hidden sm:inline">Profile</span>
               </NavLink>
 
-              <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
+              <div className="h-4 w-px bg-[var(--color-border)] mx-1 hidden sm:block" />
 
               {/* User Identity Indicator */}
-              <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+              <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]">
                 {user?.username}
               </span>
 
@@ -70,7 +70,7 @@ export function Navbar() {
                 disabled={isLoggingOut}
                 aria-label="Log out"
                 title="Log out"
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium text-slate-300 hover:text-red-400 hover:bg-slate-800 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-surface)] transition-colors disabled:opacity-50 cursor-pointer"
               >
                 <LogOut className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">
