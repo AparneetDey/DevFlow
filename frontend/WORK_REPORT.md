@@ -3006,3 +3006,430 @@ All legitimate layout, overflow, and scrolling capabilities were preserved intac
 - **ESLint:** `npm.cmd run lint --prefix frontend` — **0 problems (0 errors, 0 warnings)**.
 - **Production Build:** `npm.cmd run build --prefix frontend` — Vite build compiled cleanly in 5.78s with **0 compilation errors**.
 - **Backend Isolation:** `git status --porcelain backend/` confirmed that zero files in `backend/` were modified or touched.
+
+---
+
+## Task 7.3B: Complete Task Editing
+
+### 1. Overview & Objective
+Completed Task 7.3B by extending and hardening the inline editing capabilities within the existing Task Details Modal (`TaskDetailsModal.jsx`) without introducing a redundant edit modal or altering the established UI architecture. Added inline priority selection and due-date management, audited and reinforced existing title and description editing, strictly satisfied backend validation constraints, and established robust state synchronization and error recovery across the Kanban board.
+
+### 2. Files Inspected, Modified, and Created
+
+#### Files Inspected:
+- `backend/src/validators/task.validator.js`: Inspected `updateTaskSchema` with `.strict()`; verified accepted fields are exclusively `title`, `description`, `priority`, and `dueDate`. Unrecognized fields (e.g. `columnKey`, `order`, `boardId`) are rejected with HTTP 400.
+- `backend/src/controllers/task.controller.js`: Inspected `updateTask` handler and verified response format (`{ success: true, message: 'Task updated successfully', data: { task } }`).
+- `backend/src/services/task.service.js`: Inspected `updateTask` service method; confirmed that `dueDate` accepts an ISO date string or `null` (which maps to `dueDate: dueDate ? new Date(dueDate) : null`), and verified priority accepts `'low'`, `'medium'`, or `'high'`.
+- `backend/src/routes/task.routes.js`: Inspected `PATCH /api/v1/boards/:boardId/tasks/:taskId`.
+- `frontend/src/api/task.api.js`: Inspected `taskApi.updateTask(boardId, taskId, payload)`.
+- `frontend/src/pages/BoardPage.jsx`: Inspected `handleUpdateTask` callback and modal state integration.
+- `frontend/src/components/tasks/TaskCard.jsx`: Inspected task rendering, badge presentation, and completion indicator.
+
+#### Files Modified:
+- `frontend/src/components/tasks/TaskDetailsModal.jsx`: Added inline priority dropdown popover and inline due-date picker popover with clear action; hardened Escape key propagation; added in-flight submission guards and rollback handling; synced updated props without resetting active edits.
+- `frontend/src/api/task.api.test.js`: Added 6 unit tests in a dedicated `Complete Task Editing Functionality (Task 7.3B)` test suite covering priority update payloads, due-date setting and null-clearing, backend strict schema validation, board state synchronization, rollback on failure, and duplicate in-flight submission prevention.
+- `frontend/WORK_REPORT.md`: Appended technical report for Task 7.3B.
+
+#### Files Created:
+- None (extended existing components and test suites cleanly).
+
+### 3. Feature Breakdown: Retained vs. New
+
+#### Retained & Hardened Existing Features:
+- **Single Modal Architecture:** Preserved the adaptive `TaskDetailsModal` without creating a duplicate edit modal.
+- **Inline Title Editing:** Seamless input styling with hover indicator, click-to-edit, auto-save on blur or `Enter`, cancel on `Escape` (restoring previous value), trimming, and strict 1–150 character validation.
+- **Inline Description Editing:** Expandable textarea with character counter (max 2000), Save and Cancel buttons, `Escape` key cancellation, and preserved line breaks.
+- **Escape Key Isolation:** Hardened `Escape` key handlers in title input, description textarea, priority popover, and due-date popover by calling `e.stopPropagation()` and `e.nativeEvent.stopImmediatePropagation()`, preventing cancellation of active edits from bubbling up to the window listener and closing the entire modal.
+- **Fresh State Sync:** When `task` prop updates (e.g., from server response or board state sync), local form state updates if the user is not actively editing that specific field, preventing stale values upon reopen.
+
+#### New Features Added:
+- **Inline Priority Popover:**
+  - Interactive priority trigger button displaying current badge styling (`high` = red, `medium` = amber, `low` = emerald, or default slate).
+  - Popover dropdown containing options for `High`, `Medium`, and `Low` with color-coded dot indicators and active checkmark.
+  - Submits `{ priority }` to `onUpdateTask`.
+  - Outside click (`mousedown`) and `Escape` dismiss the popover without saving.
+  - In-flight saving spinner and disabled state (`isSavingPriority`) preventing duplicate requests.
+  - Inline error alert (`priorityError`) if the update request fails.
+- **Inline Due-Date Popover & Clear Support:**
+  - Interactive date trigger button showing formatted date (e.g., `"Oct 31, 2026"`) with calendar icon.
+  - Popover dialog with a native `<input type="date" />`, "Save Date", "Cancel", and "Clear Date" buttons.
+  - Supports updating to a new date (sent as an ISO string `new Date(selectedDate).toISOString()`).
+  - Supports clearing the due date by submitting `{ dueDate: null }` as supported by `task.service.js`.
+  - Outside click (`mousedown`) and `Escape` dismiss the popover without saving.
+  - In-flight saving state (`isSavingDueDate`) preventing concurrent requests.
+  - Inline error alert (`dueDateError`) if the date update request fails.
+
+### 4. Backend Validation Constraints & Payload Specifications
+- **Strict Payload Policy:** The backend's `updateTaskSchema` uses `.strict()`. The frontend never sends forbidden or read-only properties (`boardId`, `columnKey`, `order`, `_id`, `createdAt`, `updatedAt`, `__v`) in PATCH requests.
+- **Title:** `z.string().trim().min(1).max(150)`
+- **Description:** `z.string().trim().max(2000).optional()`
+- **Priority:** `z.enum(['low', 'medium', 'high']).optional()`
+- **Due Date:** Valid ISO date string or `null` (to unset/clear).
+
+### 5. State Synchronization & Error Recovery
+- **Single Source of Truth:** `BoardPage.jsx` maintains `tasks` state. When `handleUpdateTask` resolves:
+  1. `tasks` state is updated immutably via `setTasks(prev => prev.map(t => t._id === updatedTask._id ? updatedTask : t))`.
+  2. `selectedTask` is updated via `setSelectedTask(updatedTask)`, ensuring `TaskDetailsModal` and `TaskCard` immediately reflect new values.
+  3. Column associations (`columnKey`), order, and completion status are preserved without re-sorting or grouping distortion.
+- **Failure Rollback:** If an update fails, an error message is surfaced within the modal without overwriting or clearing the user's uncommitted input, allowing them to retry or cancel.
+
+### 6. Verification Results
+1. **Unit Test Suite:**
+   - Command: `npm.cmd test --prefix frontend`
+   - Result: **46 of 46 tests passed (0 failures, 0 skipped)** across all 11 suites.
+   - Specific Task 7.3B tests added to `frontend/src/api/task.api.test.js`:
+     - `taskApi.updateTask PATCHes priority with accepted enum value ('low' | 'medium' | 'high')` (Passed)
+     - `taskApi.updateTask PATCHes due date with ISO string and clears due date with null` (Passed)
+     - `backend validation contract rejects invalid priorities and disallowed properties` (Passed)
+     - `task-state updates synchronize across board and modal while preserving columnKey and order` (Passed)
+     - `failed update preserves prior state without corrupting board tasks or column counts` (Passed)
+     - `in-flight update prevention blocks duplicate concurrent submissions` (Passed)
+2. **ESLint Verification:**
+   - Command: `npm.cmd run lint --prefix frontend`
+   - Result: **0 problems (0 errors, 0 warnings)**.
+   - All components adhere to React hooks rules, fast refresh guidelines, and strict lint standards.
+3. **Production Build Verification:**
+   - Command: `npm.cmd run build --prefix frontend`
+   - Result: Vite production build succeeded in 7.09s with **0 compilation errors**.
+   - Output bundles:
+     - `dist/index.html` (0.45 kB)
+     - `dist/assets/index-DpqG9xsv.css` (46.17 kB)
+     - `dist/assets/index-H1Rwlmdd.js` (400.49 kB)
+4. **Backend Isolation & Integrity:**
+   - Command: `git status --porcelain backend/`
+   - Result: Completely empty; **zero backend files modified, created, or deleted**.
+   - Backend server status: Offline on port 8000; all client implementations verified against mock tests and strict backend schemas.
+
+---
+
+## Task 7.4: Delete Tasks
+
+### 1. Files Created or Modified
+
+#### Files Created:
+- None (extended existing services, components, and test suites cleanly).
+
+#### Files Modified:
+- `frontend/src/api/task.api.js`: Added `deleteTask(boardId, taskId, config = {})` utilizing the centralized Axios `apiClient.delete('/boards/' + boardId + '/tasks/' + taskId, config)`.
+- `frontend/src/components/tasks/TaskDetailsModal.jsx`: Added destructive "Delete Task" action in a dedicated Actions section within the right sidebar, inline confirmation panel with permanent deletion warnings and identified task title, in-flight deletion lock (`isDeleting`), inline error surfacing (`deleteError`), Escape key containment, and disabling of all editing inputs during deletion.
+- `frontend/src/pages/BoardPage.jsx`: Added `handleDeleteTask(taskId)` callback performing the `taskApi.deleteTask` request, updating the board's immutable `tasks` state, clearing `selectedTask` to `null`, and closing `TaskDetailsModal`. Passed `onDeleteTask={handleDeleteTask}` to `TaskDetailsModal`.
+- `frontend/src/api/task.api.test.js`: Added 7 comprehensive unit tests in the `Task Deletion Functionality (Task 7.4)` suite covering endpoint contracts, error propagation, confirmation opening/cancellation, duplicate submission locking, board state updates and column count recalculation, modal closure on success, and failure recovery.
+- `frontend/WORK_REPORT.md`: Appended technical report for Task 7.4.
+
+#### Backend Isolation:
+- `backend/` was verified completely untouched (`git status --porcelain backend/` returned empty). Zero backend files, routes, schemas, models, controllers, or services were created, modified, or deleted.
+
+---
+
+### 2. API Integration Details
+- **Method & Route:** `DELETE /api/v1/boards/:boardId/tasks/:taskId`
+- **Client Instance:** Reuses existing configured Axios client ([`src/api/client.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/client.js)) with automatic HttpOnly cookie credentials and base URL routing.
+- **Service Method:** `taskApi.deleteTask(boardId, taskId, config = {})` defined in [`src/api/task.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/task.api.js).
+- **Backend Response Contract:**
+  - Status: HTTP 200 OK
+  - Envelope: `{ statusCode: 200, data: { message: "Task deleted successfully" }, message: "Task deleted successfully", success: true }`
+- **Backend Behavior Verified:** The backend controller calls `taskService.deleteTask(boardId, taskId, req.user._id)`, which deletes the task document and automatically re-normalizes numeric order values of remaining tasks within the column.
+
+---
+
+### 3. Confirmation Flow and UI Behavior
+- **Visual Separation:** The "Delete Task" button is placed in an "Actions" section in the right sidebar below the Activity log, visually isolated from the inline title, description, priority, and due-date editors on the left.
+- **Resting State:** A full-width outline button with red text (`text-red-600`), trash icon (`<Trash2 className="w-3.5 h-3.5" />`), and subtle hover background (`hover:bg-red-50 hover:border-red-200`). Task cards on the Kanban board do not have delete buttons.
+- **Confirmation State:**
+  - Clicking "Delete Task" reveals an inline confirmation panel without opening nested modal backdrops (avoiding double backdrop clipping, scroll-lock conflicts, and focus-trap nesting).
+  - Identifies the target task by displaying `"{task.title}"` in bold red.
+  - Clearly warns: *"\"{task.title}\" will be permanently removed from this board. This action cannot be undone."*
+  - Provides a red "Delete Task" confirmation button (`variant="danger"`) and a secondary "Cancel" button.
+- **Dismissal & Keyboard Accessibility:**
+  - Clicking "Cancel" closes the confirmation panel and resets any errors without making an API request.
+  - Pressing `Escape` while confirming cancels confirmation and stops event propagation (`e.stopPropagation()` & `e.nativeEvent.stopImmediatePropagation()`), preventing the modal itself from closing accidentally.
+  - Closing the modal (`X` button or backdrop click) is blocked while deletion is in flight (`if (isDeleting) return;`).
+
+---
+
+### 4. Board State Synchronization
+- **Source of Truth:** [`BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx) manages the authoritative `tasks` state.
+- **Post-Confirmation Success:**
+  1. `await taskApi.deleteTask(boardId, taskId)` resolves successfully.
+  2. `setTasks(prevTasks => prevTasks.filter(t => t._id !== taskId))` removes the task immutably.
+  3. `setIsTaskDetailsModalOpen(false)` closes the modal.
+  4. `setSelectedTask(null)` clears the selected task reference, preventing memory leaks or stale state bleed.
+  5. Kanban column groupings automatically recalculate via `getTasksForColumn(tasks, column.key)`, updating column card lists and column header task counts (e.g. `To Do (1)`).
+- **Preservation of Other Tasks:** Tasks in the same column and other columns retain their exact order and properties without distortion.
+
+---
+
+### 5. Error Handling and Edge Cases
+- **Missing IDs:** `handleDeleteTask` guards against missing `taskId` or `boardId`, throwing an actionable error before any network request is dispatched.
+- **Duplicate Request Lock:** `handleConfirmDelete` guards against concurrent triggers (`if (!task?._id || isDeleting) return;`), and the confirmation button is disabled with `isLoading={isDeleting}` during the request.
+- **Failure Recovery:**
+  - If the DELETE request fails (e.g., HTTP 404, 500, or network offline), the error is caught and parsed with `extractErrorMessage(err)`.
+  - An inline alert displays the error message inside the confirmation panel.
+  - The modal remains open, `selectedTask` is preserved, and the task remains in `BoardPage` `tasks` state.
+  - The user can click "Delete Task" again to retry or click "Cancel" to dismiss.
+- **Control Lockout:** All other interactive controls (inline title input, description textarea, priority popover, due-date picker, completion toggle) are disabled while `isDeleting` is true.
+
+---
+
+### 6. Tests Added and Results
+- **Test Command:** `npm.cmd test --prefix frontend`
+- **Result:** **53 of 53 tests passed (0 failures, 0 skipped)** across all 12 test suites.
+- **New Tests Added to [`frontend/src/api/task.api.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/task.api.test.js):**
+  1. `taskApi.deleteTask sends DELETE to /boards/:boardId/tasks/:taskId with config` — Validates HTTP method, URL path, headers forwarding, and response envelope.
+  2. `taskApi.deleteTask propagates API errors for failure handling and recovery` — Validates rejection and error message extraction.
+  3. `confirmation flow: delete action opens confirmation, cancel closes without API call` — Validates state transitions and zero API calls on cancel.
+  4. `confirmation flow: confirm initiates delete API and prevents duplicate in-flight submissions` — Validates concurrent click locking.
+  5. `successful deletion removes targeted task from board state and updates column counts` — Validates filtering from `tasks` and column count reduction.
+  6. `board state synchronization clears selectedTask and closes details modal on success` — Validates modal close and state cleanup.
+  7. `failed deletion preserves task in board, keeps selectedTask intact, and keeps modal open for retry` — Validates failure resilience.
+
+---
+
+### 7. ESLint Results
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+---
+
+### 8. Production Build Results
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Vite production build succeeded in 7.04s with **0 compilation errors**.
+  - `dist/index.html` (0.45 kB)
+  - `dist/assets/index-BEcSVB_q.css` (47.31 kB)
+  - `dist/assets/index-ef7Ww7a5.js` (403.56 kB)
+
+---
+
+### 9. Responsive Checks & Visual Testing
+- **Breakpoints Inspected (Code-Level):**
+  - **320px, 375px, 390px, 430px (Mobile):** The modal grid collapses from `lg:grid-cols-3` to a single column (`grid-cols-1`). The Actions and confirmation section stacks naturally below the activity log, full-width buttons provide accessible touch targets, and word breaks prevent horizontal overflow.
+  - **768px (Tablet):** Generous padding, flexible layout with no horizontal clipping.
+  - **1024px+ (Desktop):** The two-column grid (`lg:grid-cols-3`) isolates main task details (col-span-2) from sidebar activities and actions (col-span-1), with actions neatly pinned at the bottom via `flex flex-col justify-between`.
+- **Browser Visual Testing Status:** Headless / CLI execution environment; live browser automation was not active. Responsive layout verified via Tailwind CSS utility auditing and code inspection.
+
+---
+
+### 10. Backend Availability & Live Testing Status
+- **Backend Status:** The backend Express server was offline on port 8000 during this task.
+- **Verification Method:** Verified against mock API contracts and unit test suites conforming to backend schemas and services. Live API testing was not performed due to offline backend services.
+
+---
+
+### 11. Known Limitations & Roadmap Alignment
+- **Limitations:** None identified for task deletion.
+- **Roadmap:** Task 7.4 is fully complete. Stopped cleanly per scope instructions without proceeding to Task 7.5.
+
+---
+
+## Task 7.5: Drag-and-Drop Kanban & Task Reordering
+
+### 1. Files Created and Modified
+
+#### Files Created:
+- `frontend/src/utils/taskReordering.js`: Pure functions for contiguous 0-based indexing (`normalizeColumnTasks`), same-column reordering (`reorderSameColumn`), and cross-column moves (`moveTaskCrossColumn`).
+- `frontend/src/utils/taskReordering.test.js`: Comprehensive unit test suite (9 tests) verifying numeric order calculations, same-column upward/downward moves, duplicate/invalid order resilience, and cross-column movements.
+- `frontend/src/components/tasks/SortableTaskCard.jsx`: Modular sortable wrapper connecting `@dnd-kit/sortable`'s `useSortable` hook to `TaskCard`'s dedicated drag handle.
+
+#### Files Modified:
+- `frontend/package.json` & `frontend/package-lock.json`: Added `@dnd-kit/core` (`^6.3.1`), `@dnd-kit/sortable` (`^10.0.0`), and `@dnd-kit/utilities` (`^3.2.2`). Updated `test` script to execute `taskReordering.test.js`.
+- `frontend/src/components/tasks/TaskCard.jsx`: Added dedicated `<GripVertical />` drag handle button with `touch-none`, accessible ARIA labels, `isDragging` placeholder styling, and `isOverlay` drag preview styling.
+- `frontend/src/components/boards/KanbanColumn.jsx`: Integrated `useDroppable` for column droppable zones (with hover highlight on empty and populated columns) and wrapped task lists in `<SortableContext strategy={verticalListSortingStrategy}>`.
+- `frontend/src/pages/BoardPage.jsx`: Configured `DndContext` with pointer and keyboard sensors, collision detection, live cross-column shift in `handleDragOver`, final order persistence and optimistic sync in `handleDragEnd`, rollback on API failure, duplicate request prevention, and floating `<DragOverlay>`.
+- `frontend/src/api/task.api.test.js`: Added 7 tests in `Drag-and-Drop Kanban & Task Reordering (Task 7.5)` verifying move endpoint contracts, payload validation, optimistic state reconciliation, rollback, and duplicate suppression.
+- `frontend/WORK_REPORT.md`: Appended technical report for Task 7.5.
+
+#### Backend Isolation:
+- `backend/` was verified completely untouched (`git status --porcelain backend/` returned empty). Zero backend files were modified, created, or deleted.
+
+---
+
+### 2. Drag-and-Drop Library Selected & Rationale
+- **Selected Library:** `@dnd-kit` (`@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`).
+- **Rationale:**
+  - Modern, modular, and lightweight React library with official support for React 18 & 19.
+  - Native support for multi-container sortable lists (ideal for Kanban boards).
+  - Robust sensor architecture allowing fine-grained pointer constraints (5px movement threshold) and keyboard navigation (`sortableKeyboardCoordinates`).
+  - Separation between draggable items and activators, enabling dedicated drag handles that avoid conflicting with click, double-click, and completion toggle handlers.
+  - Zero interference with native browser scrollbars or document layouts.
+
+---
+
+### 3. Drag Handle and Drop-Target Implementation
+- **Dedicated Drag Handle:**
+  - Rendered on each `TaskCard` via `<GripVertical className="w-3.5 h-3.5" />` on the top row.
+  - Listeners (`listeners`) and activator refs (`setActivatorNodeRef`) are bound strictly to this button.
+  - `onClick={(e) => e.stopPropagation()}` prevents drag handle clicks from opening the Task Details modal.
+  - `touch-none` (`touch-action: none`) prevents mobile touch gestures on the handle from triggering page scrolling.
+  - Normal card clicks, double-clicks, pencil edit clicks, and circular completion toggles remain 100% independent.
+- **Drop Targets:**
+  - Every column body registers as a droppable zone using `useDroppable({ id: 'column-' + columnKey })`.
+  - When dragging over a column, `isOver` highlights the column with an indigo tint and subtle ring.
+  - Empty columns display a dedicated drop target indicator (`"Drop task here"` with `border-indigo-400 bg-indigo-50/70`).
+
+---
+
+### 4. Cross-Column Movement Behavior
+- **Supported Transitions:**
+  - `todo` $\leftrightarrow$ `in-progress`
+  - `in-progress` $\leftrightarrow$ `done`
+  - `done` $\leftrightarrow$ `todo`
+  - Any valid column to any other valid column.
+- **Hover Feedback (`onDragOver`):**
+  - As a card is dragged across column boundaries, it dynamically shifts into the destination column list in local state.
+  - Sibling cards in the destination column smoothly make space for the incoming item.
+- **Persistence (`onDragEnd`):**
+  - When dropped, the target column and 0-based integer order are computed.
+  - An optimistic update immediately applies the new column and sequential orders across all board tasks.
+  - A single `PATCH /api/v1/boards/:boardId/tasks/:taskId/move` request is dispatched with `{ columnKey: targetColumnKey, order: targetOrder }`.
+
+---
+
+### 5. Same-Column Reordering Behavior
+- **Interaction:**
+  - Users can drag cards up or down within the same column.
+  - `@dnd-kit/sortable` smoothly translates sibling cards with CSS transforms during dragging without unnecessary DOM mutations.
+- **Persistence (`onDragEnd`):**
+  - The final index is determined via `arrayMove`.
+  - Contiguous 0-based orders (`0, 1, 2, ...`) are assigned to all tasks in the column.
+  - If dropped in the exact same position (`sourceOrder === targetOrder`), the operation exits as a no-op with zero network requests.
+
+---
+
+### 6. Backend Move Endpoint and Payload
+- **Route & Method:** `PATCH /api/v1/boards/:boardId/tasks/:taskId/move`
+- **Payload Schema:**
+  ```json
+  {
+    "columnKey": "in-progress",
+    "order": 1
+  }
+  ```
+- **Backend Inspection Verification:**
+  - `backend/src/validators/task.validator.js` enforces `moveTaskSchema` with `.strict()`, accepting exclusively `columnKey` (`'todo' | 'in-progress' | 'done'`) and `order` (`z.number().int().min(0)`).
+  - Note: `newOrder` is rejected by the backend validator with HTTP 400 (`Unrecognized field provided. Only columnKey and order are allowed`). The frontend strictly sends `order`.
+  - The backend controller executes `taskService.moveTask`, which places the task at the requested index and executes `normalizeColumnOrders` to ensure continuous 0-based integers across both target and source columns.
+
+---
+
+### 7. Ordering Algorithm and Indexing Convention
+- **Indexing Convention:** Contiguous, sequential 0-based integers (`0, 1, 2, ...`).
+- **Deterministic Order Function (`normalizeColumnTasks`):**
+  - Maps an array of tasks to contiguous indices: `order = index`.
+  - Safe sorting handles missing or non-finite orders by placing them last without crashing.
+  - No string-based sorting or lexicographic comparisons are used.
+
+---
+
+### 8. Optimistic Update and Rollback Strategy
+- **Pre-Drag Snapshot:**
+  - On `handleDragStart`, `dragSnapshotRef.current` captures an immutable snapshot of `tasks` and `selectedTask`, along with `sourceColumnKey` and `sourceOrder`.
+- **Optimistic UI:**
+  - On drop, the new column assignment and sequential order values are immediately applied to `tasks` state before the network request resolves.
+- **Rollback on Error:**
+  - If `taskApi.moveTask` fails (network error, timeout, or server error), `tasks` and `selectedTask` are restored to the snapshot.
+  - An error alert surfaces via `taskActionError` with `extractErrorMessage(err)`.
+- **Concurrency & Duplicate Guard:**
+  - `movingTaskIds` tracks in-flight task IDs, blocking concurrent duplicate requests for the same task.
+
+---
+
+### 9. Task Count and Completion Synchronization
+- **Task Counts:**
+  - Column task counts are derived reactively from `getTasksForColumn(tasks, column.key).length`.
+  - Moving a task out of `todo` (count: 2 $\rightarrow$ 1) into `in-progress` (count: 1 $\rightarrow$ 2) updates immediately.
+- **Completion State:**
+  - Completion is defined strictly as `columnKey === 'done'`.
+  - Dragging a task into `done` immediately renders it with completed styling (strikethrough title, green checkmark icon).
+  - Dragging a task out of `done` into `todo` or `in-progress` immediately restores it to incomplete status (solid title, open circle icon).
+- **Selected Task Synchronization:**
+  - If a task is moved or reordered while its Task Details modal is open, `selectedTask` is updated synchronously, keeping the modal's stage badge and details fresh.
+
+---
+
+### 10. Accessibility and Responsive Checks
+- **Responsive Inspection (Code-Level):**
+  - **320px–430px (Mobile):** Touch targets for drag handles (`min-h-[28px]`, `p-1`) are easily tappable. `touch-none` prevents mobile touch drag from causing unwanted page scroll. Kanban workspace scrolls horizontally via standard browser scroll container.
+  - **768px (Tablet) & 1024px+ (Desktop):** Fluid drag performance with floating `<DragOverlay>` preview.
+- **Native Browser Scrollbars:**
+  - Native browser scrollbars are 100% preserved. Zero custom scrollbar styles or hacks were added.
+- **Keyboard Navigation:**
+  - Drag handles are accessible via Tab. Keyboard users can press Space to activate, Arrow keys to move between columns or up/down within a column, and Space to drop.
+
+---
+
+### 11. Test Results
+- **Test Command:** `npm.cmd test --prefix frontend`
+- **Result:** **69 of 69 tests passed (0 failures, 0 skipped)** across all 14 test suites:
+  - `taskApi service` (2 passed)
+  - `Task display, column mapping, and edge case safety` (4 passed)
+  - `taskApi.createTask and reactive board task updates (Task 7.2)` (3 passed)
+  - `taskApi.getTaskById and Task Details view behavior (Task 7.3A)` (5 passed)
+  - `taskApi.updateTask and modal title/description updating` (3 passed)
+  - `Complete Task Editing Functionality (Task 7.3B)` (6 passed)
+  - `Task Completion Toggle and Move API (Task 7.2A)` (6 passed)
+  - `Task Deletion Functionality (Task 7.4)` (7 passed)
+  - `Task Ordering & Reordering Utilities (Task 7.5)` (9 passed)
+  - `Drag-and-Drop Kanban & Task Reordering (Task 7.5)` (7 passed)
+  - `isValidOrder helper` (3 passed)
+  - `sortBoardColumns` (8 passed)
+  - `getTasksForColumn` (5 passed)
+  - `getUnmatchedTasks` (1 passed)
+
+---
+
+### 12. ESLint Results
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 problems (0 errors, 0 warnings)** across all frontend source files.
+
+---
+
+### 13. Production Build Results
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Vite production build succeeded in 7.35s with **0 compilation errors**.
+  - `dist/index.html` (0.45 kB)
+  - `dist/assets/index-BfXsHaYe.css` (48.63 kB)
+  - `dist/assets/index-CS1OaPx4.js` (456.69 kB)
+
+---
+
+### 14. Browser Visual Testing Status
+- Headless / CLI execution environment; live browser automation was not active. Responsive layout verified via Tailwind CSS auditing and code inspection.
+
+---
+
+### 15. Backend Availability & Live Testing Status
+- The backend Express server was offline on port 8000 during this task.
+- Implementation and contracts verified against mock unit tests conforming to backend schemas and services. Live API testing was not performed due to offline backend services.
+
+---
+
+### 16. Known Limitations & Roadmap Alignment
+- **Limitations:** None identified for drag-and-drop Kanban functionality.
+- **Roadmap:** Task 7.5 is fully complete. Stopped cleanly per scope instructions without proceeding to Task 7.6.
+
+---
+
+## Task 7.5 UI & Interaction Refinements (Card Dragging, Double-Click Modal Persistence & Hover Animations)
+
+### 1. Requirements Implemented
+1. **Card-Level Dragging:** Removed the dedicated drag handle icon (`GripVertical`); users can now initiate drag-and-drop by dragging the task card itself (`SortableTaskCard` attaches dnd attributes/listeners directly to `TaskCard`).
+2. **Double-Click Modal Persistence:** Fixed the issue where rapid double-clicking a card immediately opened and closed the Task Details Modal. In `Modal.jsx`, added a 400ms dismissal guard and origin validation on backdrop clicks (`mountTimeRef` and `backdropMouseDownRef`) so double-clicking safely opens and keeps the modal open.
+3. **Completion Indicator Slide Animation:** For uncompleted tasks (`columnKey !== 'done'`), the circular check mark is hidden by default and smoothly reveals on card hover while the task title slides smoothly to the right (`transition-all duration-200 ease-out`). For completed tasks, the green checkmark remains persistently visible.
+4. **Card Border Highlight on Hover:** Added `hover:border-indigo-500 hover:shadow-xs transition-all` to task cards for clear, responsive hover feedback.
+5. **Interactive Element Event Isolation:** Attached `onPointerDown={(e) => e.stopPropagation()}` and `onMouseDown={(e) => e.stopPropagation()}` to completion toggle and edit pencil buttons to prevent card dragging or accidental modal open/close during button clicks.
+
+### 2. Files Modified
+- [`frontend/src/components/tasks/TaskCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/tasks/TaskCard.jsx) — Card-level dragging, border highlight, slide-and-fade completion toggle animation.
+- [`frontend/src/components/tasks/SortableTaskCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/tasks/SortableTaskCard.jsx) — Forwards `dragProps` to `TaskCard` for whole-card drag activation.
+- [`frontend/src/components/common/Modal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Modal.jsx) — Backdrop click dismissal guard (400ms cooldown + mousedown origin tracking) preventing double-click closures.
+- [`frontend/src/api/task.api.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/task.api.test.js) — Cleaned unused assignment for ESLint compliance.
+
+### 3. Verification
+- **Unit & Integration Tests:** 69 of 69 tests passed (`npm.cmd test --prefix frontend`).
+- **ESLint:** 0 errors, 0 warnings (`npm.cmd run lint --prefix frontend`).
+- **Production Build:** Vite production build passed cleanly in 7.83s (`npm.cmd run build --prefix frontend`).
+- **Backend Integrity:** 0 backend files modified; `backend/` remains strictly untouched.
+
+
+
+

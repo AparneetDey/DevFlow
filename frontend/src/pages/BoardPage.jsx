@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -12,8 +12,22 @@ import {
   CheckSquare,
   Plus,
 } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  sortableKeyboardCoordinates,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import { Button } from '../components/common/Button.jsx';
 import KanbanColumn from '../components/boards/KanbanColumn.jsx';
+import TaskCard from '../components/tasks/TaskCard.jsx';
 import CreateTaskModal from '../components/tasks/CreateTaskModal.jsx';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal.jsx';
 import boardApi from '../api/board.api.js';
@@ -21,6 +35,7 @@ import taskApi from '../api/task.api.js';
 import { sortBoardColumns } from '../utils/columnSorting.js';
 import { getTasksForColumn } from '../utils/taskGrouping.js';
 import { extractErrorMessage } from '../api/error.js';
+import { normalizeColumnTasks } from '../utils/taskReordering.js';
 
 export function BoardPage() {
   const { boardId } = useParams();
@@ -41,6 +56,22 @@ export function BoardPage() {
   // Task action / completion toggle state
   const [togglingTaskIds, setTogglingTaskIds] = useState(new Set());
   const [taskActionError, setTaskActionError] = useState(null);
+
+  // Drag-and-drop state & sensors
+  const [activeTask, setActiveTask] = useState(null);
+  const [movingTaskIds, setMovingTaskIds] = useState(new Set());
+  const dragSnapshotRef = useRef(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Task creation modal state
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
@@ -212,6 +243,16 @@ export function BoardPage() {
     return updatedTask;
   };
 
+  const handleDeleteTask = async (taskId) => {
+    if (!taskId || !boardId) {
+      throw new Error('Board ID and Task ID are required to delete a task');
+    }
+    await taskApi.deleteTask(boardId, taskId);
+    setTasks((prevTasks) => prevTasks.filter((t) => t._id !== taskId));
+    setIsTaskDetailsModalOpen(false);
+    setSelectedTask(null);
+  };
+
   const handleToggleComplete = async (task) => {
     if (!task || !task._id || togglingTaskIds.has(task._id)) return;
     const targetColumnKey = task.columnKey === 'done' ? 'todo' : 'done';
@@ -257,6 +298,227 @@ export function BoardPage() {
         next.delete(task._id);
         return next;
       });
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // Drag-and-Drop Handlers
+  // --------------------------------------------------------------------------
+  const handleDragStart = (event) => {
+    const { active } = event;
+    const task = tasks.find((t) => t._id === active.id);
+    if (!task) return;
+
+    setActiveTask(task);
+    dragSnapshotRef.current = {
+      tasks: [...tasks],
+      selectedTask: selectedTask ? { ...selectedTask } : null,
+      sourceColumnKey: task.columnKey,
+      sourceOrder: typeof task.order === 'number' && Number.isFinite(task.order) ? task.order : 0,
+    };
+    setTaskActionError(null);
+  };
+
+  const handleDragOver = (event) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    if (activeId === overId) return;
+
+    const activeTaskItem = tasks.find((t) => t._id === activeId);
+    if (!activeTaskItem) return;
+
+    // Resolve target columnKey
+    let targetColumnKey = null;
+    if (typeof overId === 'string' && overId.startsWith('column-')) {
+      targetColumnKey = overId.replace('column-', '');
+    } else {
+      const overTaskItem = tasks.find((t) => t._id === overId);
+      if (overTaskItem) {
+        targetColumnKey = overTaskItem.columnKey;
+      }
+    }
+
+    if (!targetColumnKey) return;
+
+    // Continuous state update for cross-column hovering so cards shift smoothly
+    if (activeTaskItem.columnKey !== targetColumnKey) {
+      setTasks((prevTasks) => {
+        const activeIndex = prevTasks.findIndex((t) => t._id === activeId);
+        if (activeIndex === -1) return prevTasks;
+
+        const overIndex = prevTasks.findIndex((t) => t._id === overId);
+        const tasksInDest = prevTasks.filter(
+          (t) => t.columnKey === targetColumnKey && t._id !== activeId
+        );
+
+        let newOrderIndex;
+        if (overIndex === -1) {
+          newOrderIndex = tasksInDest.length;
+        } else {
+          const isBelowOver =
+            over &&
+            active.rect.current.translated &&
+            active.rect.current.translated.top > over.rect.top + over.rect.height;
+
+          newOrderIndex = overIndex >= 0 ? overIndex + (isBelowOver ? 1 : 0) : tasksInDest.length;
+        }
+
+        const updated = [...prevTasks];
+        const [moved] = updated.splice(activeIndex, 1);
+        const updatedMoved = {
+          ...moved,
+          columnKey: targetColumnKey,
+        };
+
+        const insertPos = Math.min(Math.max(0, newOrderIndex), updated.length);
+        updated.splice(insertPos, 0, updatedMoved);
+
+        return updated;
+      });
+    }
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    const activeId = active?.id;
+    const snapshot = dragSnapshotRef.current;
+    setActiveTask(null);
+    dragSnapshotRef.current = null;
+
+    if (!activeId || !snapshot) return;
+
+    // Dropped outside any droppable target: rollback to pre-drag state
+    if (!over) {
+      setTasks(snapshot.tasks);
+      if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
+      return;
+    }
+
+    // Resolve destination columnKey
+    let targetColumnKey = null;
+    if (typeof over.id === 'string' && over.id.startsWith('column-')) {
+      targetColumnKey = over.id.replace('column-', '');
+    } else {
+      const overTaskItem = tasks.find((t) => t._id === over.id);
+      if (overTaskItem) {
+        targetColumnKey = overTaskItem.columnKey;
+      } else {
+        targetColumnKey = snapshot.sourceColumnKey;
+      }
+    }
+
+    const isSameColumn = snapshot.sourceColumnKey === targetColumnKey;
+
+    let finalTasksInDest;
+    if (isSameColumn) {
+      // Reorder within the same column using the pre-drag snapshot tasks for stable order calculation
+      const originalColTasks = snapshot.tasks
+        .filter((t) => t.columnKey === targetColumnKey)
+        .sort((a, b) => {
+          const oA = typeof a.order === 'number' && Number.isFinite(a.order) ? a.order : Infinity;
+          const oB = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : Infinity;
+          return oA - oB;
+        });
+
+      const oldIndex = originalColTasks.findIndex((t) => t._id === activeId);
+      const overIndex = originalColTasks.findIndex((t) => t._id === over.id);
+
+      if (oldIndex !== -1 && overIndex !== -1 && oldIndex !== overIndex) {
+        finalTasksInDest = arrayMove(originalColTasks, oldIndex, overIndex);
+      } else {
+        finalTasksInDest = originalColTasks;
+      }
+    } else {
+      // Cross-column move: tasks were already shifted in tasks state
+      finalTasksInDest = tasks.filter((t) => t.columnKey === targetColumnKey);
+    }
+
+    // Re-index target column tasks with sequential 0-based orders
+    const normalizedDest = normalizeColumnTasks(finalTasksInDest, targetColumnKey);
+    const targetOrder = Math.max(0, normalizedDest.findIndex((t) => t._id === activeId));
+
+    // Check if position and column are unchanged
+    if (isSameColumn && snapshot.sourceOrder === targetOrder) {
+      // No-op: restore pre-drag snapshot clean state
+      setTasks(snapshot.tasks);
+      return;
+    }
+
+    // If cross-column, also normalize remaining source column tasks
+    let normalizedSource = [];
+    if (!isSameColumn) {
+      const remainingInSource = tasks.filter(
+        (t) => t.columnKey === snapshot.sourceColumnKey && t._id !== activeId
+      );
+      normalizedSource = normalizeColumnTasks(remainingInSource, snapshot.sourceColumnKey);
+    }
+
+    const destMap = new Map(normalizedDest.map((t) => [t._id, t]));
+    const srcMap = new Map(normalizedSource.map((t) => [t._id, t]));
+
+    const optimisticTasks = tasks.map((t) => {
+      if (destMap.has(t._id)) return destMap.get(t._id);
+      if (srcMap.has(t._id)) return srcMap.get(t._id);
+      return t;
+    });
+
+    // Apply optimistic update immediately
+    setTasks(optimisticTasks);
+
+    const updatedActiveTask = destMap.get(activeId);
+    if (selectedTask?._id === activeId && updatedActiveTask) {
+      setSelectedTask(updatedActiveTask);
+    }
+
+    // Prevent duplicate move requests for this task
+    if (movingTaskIds.has(activeId)) {
+      return;
+    }
+
+    setMovingTaskIds((prev) => new Set(prev).add(activeId));
+
+    try {
+      const response = await taskApi.moveTask(boardId, activeId, {
+        columnKey: targetColumnKey,
+        order: targetOrder,
+      });
+
+      const serverTask = response.data?.data;
+      if (serverTask && serverTask._id) {
+        setTasks((prev) =>
+          prev.map((t) => (t._id === serverTask._id ? { ...t, ...serverTask } : t))
+        );
+        if (selectedTask?._id === serverTask._id) {
+          setSelectedTask((prev) => ({ ...prev, ...serverTask }));
+        }
+      }
+    } catch (err) {
+      // Revert to snapshot on API failure
+      setTasks(snapshot.tasks);
+      if (snapshot.selectedTask) {
+        setSelectedTask(snapshot.selectedTask);
+      }
+      setTaskActionError(extractErrorMessage(err));
+    } finally {
+      setMovingTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(activeId);
+        return next;
+      });
+    }
+  };
+
+  const handleDragCancel = () => {
+    const snapshot = dragSnapshotRef.current;
+    setActiveTask(null);
+    dragSnapshotRef.current = null;
+    if (snapshot) {
+      setTasks(snapshot.tasks);
+      if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
     }
   };
 
@@ -512,23 +774,40 @@ export function BoardPage() {
                 </p>
               </div>
             ) : (
-              <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0">
-                {columns.map((column, index) => (
-                  <KanbanColumn
-                    key={column.key || column.title || `column-${index}`}
-                    column={column}
-                    tasks={getTasksForColumn(tasks, column.key)}
-                    isLoading={isLoadingTasks}
-                    onAddTask={(colKey) => handleOpenCreateTask(colKey)}
-                    onTaskDoubleClick={handleOpenTaskDetails}
-                    onTaskEditClick={handleOpenTaskDetails}
-                    onTaskClick={handleOpenTaskDetails}
-                    onUpdateTask={handleUpdateTask}
-                    onToggleComplete={handleToggleComplete}
-                    togglingTaskIds={togglingTaskIds}
-                  />
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
+              >
+                <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0">
+                  {columns.map((column, index) => (
+                    <KanbanColumn
+                      key={column.key || column.title || `column-${index}`}
+                      column={column}
+                      tasks={getTasksForColumn(tasks, column.key)}
+                      isLoading={isLoadingTasks}
+                      onAddTask={(colKey) => handleOpenCreateTask(colKey)}
+                      onTaskDoubleClick={handleOpenTaskDetails}
+                      onTaskEditClick={handleOpenTaskDetails}
+                      onTaskClick={handleOpenTaskDetails}
+                      onUpdateTask={handleUpdateTask}
+                      onToggleComplete={handleToggleComplete}
+                      togglingTaskIds={togglingTaskIds}
+                    />
+                  ))}
+                </div>
+
+                <DragOverlay dropAnimation={null}>
+                  {activeTask ? (
+                    <div className="w-72 sm:w-80 pointer-events-none">
+                      <TaskCard task={activeTask} isOverlay />
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
             )}
           </div>
         </div>
@@ -556,6 +835,7 @@ export function BoardPage() {
           isOpen={isTaskDetailsModalOpen}
           onClose={handleCloseTaskDetails}
           onUpdateTask={handleUpdateTask}
+          onDeleteTask={handleDeleteTask}
           onToggleComplete={handleToggleComplete}
           isTogglingComplete={togglingTaskIds.has(selectedTask._id)}
         />

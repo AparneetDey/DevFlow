@@ -1,6 +1,8 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
-import TaskCard from '../tasks/TaskCard.jsx';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import SortableTaskCard from '../tasks/SortableTaskCard.jsx';
 
 /**
  * Reusable presentation component for a Kanban workflow column.
@@ -35,6 +37,14 @@ export function KanbanColumn({
   const columnTitle = column?.title || 'Untitled Column';
   const columnKey = column?.key || columnTitle;
 
+  const { setNodeRef, isOver } = useDroppable({
+    id: `column-${columnKey}`,
+    data: {
+      type: 'column',
+      columnKey,
+    },
+  });
+
   const hasTasksArray = Array.isArray(tasks) && tasks.length > 0;
   const hasChildren = Boolean(children);
 
@@ -42,10 +52,16 @@ export function KanbanColumn({
     ? tasks.length
     : React.Children.count(children);
 
+  const taskIds = hasTasksArray
+    ? tasks.map((t) => t._id || t.id).filter(Boolean)
+    : [];
+
   return (
     <section
       aria-labelledby={`column-header-${columnKey}`}
-      className={`w-72 sm:w-80 shrink-0 bg-slate-100/75 border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 shadow-2xs flex flex-col min-h-[440px] transition-colors ${className}`.trim()}
+      className={`w-72 select-none sm:w-80 shrink-0 bg-slate-100/75 border ${
+        isOver ? 'border-indigo-400 ring-2 ring-indigo-400/40 bg-indigo-50/20' : 'border-slate-200/90'
+      } rounded-2xl p-3 sm:p-3.5 shadow-2xs flex flex-col min-h-[440px] transition-colors ${className}`.trim()}
     >
       {/* Column Header */}
       <div className="flex items-center justify-between px-1.5 py-1 mb-2.5 pb-2.5 border-b border-slate-200/70 min-w-0">
@@ -86,7 +102,12 @@ export function KanbanColumn({
       </div>
 
       {/* Column Body / Task Content Area */}
-      <div className="flex-1 flex flex-col gap-2.5 min-h-[350px]">
+      <div
+        ref={setNodeRef}
+        className={`flex-1 flex flex-col gap-2.5 min-h-[350px] rounded-xl transition-colors ${
+          isOver && hasTasksArray ? 'bg-indigo-50/20 p-1 -m-1' : ''
+        }`}
+      >
         {isLoading ? (
           <div className="space-y-2.5" aria-busy="true">
             <div className="h-20 bg-white/70 rounded-xl border border-slate-200/60 animate-pulse" />
@@ -95,25 +116,32 @@ export function KanbanColumn({
         ) : hasChildren ? (
           children
         ) : hasTasksArray ? (
-          tasks.map((task, index) => (
-            <TaskCard
-              key={task._id || task.id || `task-${columnKey}-${index}`}
-              task={task}
-              onDoubleClick={onTaskDoubleClick || onTaskClick}
-              onEditClick={onTaskEditClick || onTaskDoubleClick || onTaskClick}
-              onClick={onTaskClick}
-              onToggleComplete={onToggleComplete}
-              isToggling={togglingTaskIds?.has?.(task._id)}
-            />
-          ))
+          <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+            {tasks.map((task, index) => (
+              <SortableTaskCard
+                key={task._id || task.id || `task-${columnKey}-${index}`}
+                task={task}
+                columnKey={columnKey}
+                onDoubleClick={onTaskDoubleClick || onTaskClick}
+                onEditClick={onTaskEditClick || onTaskDoubleClick || onTaskClick}
+                onClick={onTaskClick}
+                onToggleComplete={onToggleComplete}
+                isToggling={togglingTaskIds?.has?.(task._id)}
+              />
+            ))}
+          </SortableContext>
         ) : (
           <div
             role="region"
             aria-label={`Empty ${columnTitle} column`}
-            className="flex-1 rounded-xl border border-dashed border-slate-300/80 bg-white/50 p-6 flex flex-col items-center justify-center text-center select-none space-y-2"
+            className={`flex-1 rounded-xl border border-dashed ${
+              isOver
+                ? 'border-indigo-400 bg-indigo-50/70 ring-2 ring-indigo-400/50'
+                : 'border-slate-300/80 bg-white/50'
+            } p-6 flex flex-col items-center justify-center text-center select-none space-y-2 transition-all`}
           >
-            <p className="text-xs font-medium text-slate-400">
-              No tasks yet
+            <p className={`text-xs font-medium ${isOver ? 'text-indigo-600 font-semibold' : 'text-slate-400'}`}>
+              {isOver ? 'Drop task here' : 'No tasks yet'}
             </p>
             {onAddTask && (
               <button

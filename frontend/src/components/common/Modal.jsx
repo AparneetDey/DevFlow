@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 /**
@@ -11,6 +11,16 @@ export function Modal({
   children,
   maxWidth = 'max-w-md',
 }) {
+  const mountTimeRef = useRef(0);
+  const backdropMouseDownRef = useRef(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      mountTimeRef.current = Date.now();
+      backdropMouseDownRef.current = false;
+    }
+  }, [isOpen]);
+
   // Close modal on Escape key press
   useEffect(() => {
     function handleKeyDown(event) {
@@ -32,10 +42,23 @@ export function Modal({
 
   if (!isOpen) return null;
 
+  const handleBackdropMouseDown = (e) => {
+    backdropMouseDownRef.current = e.target === e.currentTarget;
+  };
+
+  const handleBackdropClick = (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (!backdropMouseDownRef.current) return;
+    // Guard against rapid accidental dismissals (e.g. double-clicking a card where the 2nd click lands on the newly mounted backdrop)
+    if (Date.now() - mountTimeRef.current < 400) return;
+    onClose();
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto"
-      onClick={onClose}
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"

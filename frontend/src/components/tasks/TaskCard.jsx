@@ -18,6 +18,9 @@ const PRIORITY_THEMES = {
 /**
  * Reusable presentation component for displaying a task card in a Kanban column.
  * - Circular completion button toggles completion between done and todo.
+ * - For incomplete tasks, the check mark is hidden and slides into view on card hover.
+ * - Card border highlights on hover.
+ * - Entire card is draggable to reorder or move across columns.
  * - Clicking the pencil icon opens the task details modal.
  * - Double clicking (or clicking) the card opens the task details modal.
  * - Supports keyboard interaction (Enter/Space opens task details modal).
@@ -29,6 +32,9 @@ const PRIORITY_THEMES = {
  * @param {Function} [props.onClick] - Callback when card is clicked
  * @param {Function} [props.onToggleComplete] - Callback when completion circle button is clicked
  * @param {boolean} [props.isToggling=false] - Whether completion toggle is currently in flight
+ * @param {Object} [props.dragProps] - DnD activator ref, attributes, and listeners for dragging the card
+ * @param {boolean} [props.isDragging=false] - Whether this card is currently being dragged
+ * @param {boolean} [props.isOverlay=false] - Whether this card is rendered inside the DragOverlay
  * @param {string} [props.className] - Optional custom CSS classes
  */
 export function TaskCard({
@@ -38,6 +44,9 @@ export function TaskCard({
   onClick,
   onToggleComplete,
   isToggling = false,
+  dragProps,
+  isDragging = false,
+  isOverlay = false,
   className = '',
 }) {
   if (!task || typeof task !== 'object') {
@@ -82,19 +91,25 @@ export function TaskCard({
   return (
     <article
       aria-labelledby={`task-title-${taskKey}`}
-      tabIndex={0}
+      tabIndex={isOverlay ? -1 : 0}
+      {...dragProps}
       onClick={() => {
+        if (isDragging || isOverlay) return;
         if (handleOpenDetails) {
           handleOpenDetails(task);
         }
       }}
       onDoubleClick={(e) => {
+        if (isDragging || isOverlay) return;
         if (handleOpenDetails) {
           e.stopPropagation();
           handleOpenDetails(task);
         }
       }}
       onKeyDown={(e) => {
+        if (isDragging || isOverlay) return;
+        dragProps?.onKeyDown?.(e);
+        if (e.defaultPrevented) return;
         if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault();
           if (handleOpenDetails) {
@@ -102,31 +117,50 @@ export function TaskCard({
           }
         }
       }}
-      className={`group relative bg-white rounded-xl border border-slate-200/90 p-3.5 shadow-2xs hover:shadow-xs hover:border-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-all flex flex-col gap-2 min-w-0 cursor-pointer ${className}`.trim()}
+      className={`group relative p-2 select-none bg-white rounded-xl border border-slate-200/90 hover:border-indigo-500 hover:shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-all flex flex-col gap-2 min-w-0 cursor-grab active:cursor-grabbing ${
+        isDragging
+          ? 'opacity-30 border-2 border-dashed border-indigo-400 bg-indigo-50/30 shadow-none'
+          : ''
+      } ${
+        isOverlay
+          ? 'shadow-xl ring-2 ring-indigo-500/60 rotate-1 cursor-grabbing pointer-events-none'
+          : ''
+      } ${className}`.trim()}
       title="Click or double-click to view task details"
     >
       {/* Title, Completion Toggle & Edit Icon Row */}
       <div className="flex items-start gap-2 min-w-0">
-        {/* Accessible Completion Button */}
-        <button
-          type="button"
-          onClick={handleToggleClick}
-          disabled={isToggling}
-          aria-label={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
-          title={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
-          className="mt-0.5 p-0.5 rounded-full text-slate-400 hover:text-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer shrink-0 transition-colors disabled:opacity-50"
+        {/* Accessible Completion Button Wrapper with Hover Slide Animation */}
+        <div
+          className={`shrink-0 flex items-center transition-all duration-200 ease-out ${
+            isCompleted
+              ? 'w-5 opacity-100 mr-0.5'
+              : 'w-0 opacity-0 -translate-x-2 overflow-hidden pointer-events-none group-hover:w-5 group-hover:opacity-100 group-hover:translate-x-0 group-hover:mr-0.5 group-hover:pointer-events-auto group-focus-within:w-5 group-focus-within:opacity-100 group-focus-within:translate-x-0 group-focus-within:pointer-events-auto'
+          }`}
         >
-          {isCompleted ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 fill-emerald-100/70" />
-          ) : (
-            <Circle className="w-4 h-4 hover:stroke-indigo-600" />
-          )}
-        </button>
+          <button
+            type="button"
+            onClick={handleToggleClick}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            disabled={isToggling}
+            aria-label={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
+            title={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
+            className="mt-0.5 p-0.5 rounded-full text-slate-400 hover:text-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer shrink-0 transition-colors disabled:opacity-50"
+          >
+            {isCompleted ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 fill-emerald-100/70" />
+            ) : (
+              <Circle className="w-4 h-4 hover:stroke-indigo-600" />
+            )}
+          </button>
+        </div>
 
         {/* Task Title */}
         <h4
           id={`task-title-${taskKey}`}
-          className={`text-sm font-semibold tracking-tight break-words flex-1 transition-colors ${
+          className={`text-sm font-semibold tracking-tight break-words flex-1 transition-all duration-200 ease-out ${
             isCompleted
               ? 'line-through text-slate-400'
               : 'text-slate-800 group-hover:text-indigo-600'
@@ -139,6 +173,9 @@ export function TaskCard({
         <button
           type="button"
           onClick={handleEditClick}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
           aria-label={`Edit task: ${task.title || 'Untitled Task'}`}
           title="Edit task in details modal"
           className="p-1 -mr-1 -mt-0.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer shrink-0"

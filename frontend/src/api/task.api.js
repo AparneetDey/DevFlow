@@ -65,6 +65,18 @@ export const taskApi = {
    */
   moveTask: (boardId, taskId, moveData, config = {}) =>
     apiClient.patch(`/boards/${boardId}/tasks/${taskId}/move`, moveData, config),
+
+  /**
+   * Deletes a task from a board.
+   * Route: DELETE /api/v1/boards/:boardId/tasks/:taskId
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {string} taskId - MongoDB ObjectId string
+   * @param {Object} [config] - Optional Axios request configuration
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  deleteTask: (boardId, taskId, config = {}) =>
+    apiClient.delete(`/boards/${boardId}/tasks/${taskId}`, config),
 };
 
 export default taskApi;

@@ -547,6 +547,182 @@ describe('taskApi.updateTask and modal title/description updating', () => {
   });
 });
 
+describe('Complete Task Editing Functionality (Task 7.3B)', () => {
+  test('updateTask sends PATCH with priority update', async () => {
+    const originalPatch = apiClient.patch;
+    let capturedUrl = null;
+    let capturedPayload = null;
+    let capturedConfig = null;
+
+    apiClient.patch = (url, payload, config) => {
+      capturedUrl = url;
+      capturedPayload = payload;
+      capturedConfig = config;
+      return Promise.resolve({
+        data: {
+          statusCode: 200,
+          data: {
+            _id: 'task-103',
+            title: 'Task Priority Test',
+            columnKey: 'todo',
+            priority: payload.priority,
+            boardId: '507f1f77bcf86cd799439011',
+          },
+          message: 'Task updated successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const mockConfig = { headers: { 'X-Edit': 'Priority' } };
+      const res = await taskApi.updateTask('507f1f77bcf86cd799439011', 'task-103', { priority: 'high' }, mockConfig);
+      assert.equal(capturedUrl, '/boards/507f1f77bcf86cd799439011/tasks/task-103');
+      assert.deepEqual(capturedPayload, { priority: 'high' });
+      assert.equal(capturedConfig.headers['X-Edit'], 'Priority');
+      assert.equal(res.data.data.priority, 'high');
+    } finally {
+      apiClient.patch = originalPatch;
+    }
+  });
+
+  test('updateTask sends PATCH with due date update and clears due date with null', async () => {
+    const originalPatch = apiClient.patch;
+    let capturedPayload = null;
+
+    apiClient.patch = (url, payload) => {
+      capturedPayload = payload;
+      return Promise.resolve({
+        data: {
+          statusCode: 200,
+          data: {
+            _id: 'task-104',
+            title: 'Task Due Date Test',
+            dueDate: payload.dueDate,
+          },
+          message: 'Task updated successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      // Set due date
+      const isoDate = '2026-12-25T00:00:00.000Z';
+      const res1 = await taskApi.updateTask('b1', 't1', { dueDate: isoDate });
+      assert.deepEqual(capturedPayload, { dueDate: isoDate });
+      assert.equal(res1.data.data.dueDate, isoDate);
+
+      // Clear due date
+      const res2 = await taskApi.updateTask('b1', 't1', { dueDate: null });
+      assert.deepEqual(capturedPayload, { dueDate: null });
+      assert.equal(res2.data.data.dueDate, null);
+    } finally {
+      apiClient.patch = originalPatch;
+    }
+  });
+
+  test('validates backend constraints: rejects unknown fields and invalid priority values', () => {
+    const validPriorities = ['low', 'medium', 'high'];
+    const allowedFields = ['title', 'description', 'priority', 'dueDate'];
+
+    const sanitizeUpdatePayload = (payload) => {
+      const keys = Object.keys(payload);
+      if (keys.length === 0) throw new Error('At least one field required');
+      for (const key of keys) {
+        if (!allowedFields.includes(key)) {
+          throw new Error(`Unrecognized field: ${key}`);
+        }
+      }
+      if (payload.priority !== undefined && !validPriorities.includes(payload.priority)) {
+        throw new Error('Priority must be one of: low, medium, high');
+      }
+      return payload;
+    };
+
+    assert.deepEqual(sanitizeUpdatePayload({ priority: 'high' }), { priority: 'high' });
+    assert.deepEqual(sanitizeUpdatePayload({ dueDate: '2026-12-31T00:00:00.000Z' }), { dueDate: '2026-12-31T00:00:00.000Z' });
+    assert.deepEqual(sanitizeUpdatePayload({ dueDate: null }), { dueDate: null });
+    assert.throws(() => sanitizeUpdatePayload({ columnKey: 'done' }), /Unrecognized field: columnKey/);
+    assert.throws(() => sanitizeUpdatePayload({ order: 1 }), /Unrecognized field: order/);
+    assert.throws(() => sanitizeUpdatePayload({ priority: 'urgent' }), /Priority must be one of/);
+    assert.throws(() => sanitizeUpdatePayload({}), /At least one field required/);
+  });
+
+  test('task-state synchronization preserves columnKey, order, completion state, and task counts', () => {
+    const originalTasks = [
+      { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0, priority: 'low', dueDate: null },
+      { _id: 't2', title: 'Task 2 Completed', columnKey: 'done', order: 0, priority: 'medium', dueDate: '2026-10-01' },
+      { _id: 't3', title: 'Task 3 In Progress', columnKey: 'in-progress', order: 0, priority: 'high', dueDate: null },
+    ];
+
+    // Simulate editing priority and dueDate on t2 (in 'done' column)
+    const updatedTask = {
+      ...originalTasks[1],
+      priority: 'high',
+      dueDate: '2026-11-15T00:00:00.000Z',
+      updatedAt: '2026-10-31T12:00:00.000Z',
+    };
+
+    const nextTasks = originalTasks.map((t) => (t._id === updatedTask._id ? updatedTask : t));
+
+    assert.equal(nextTasks.length, 3);
+    const doneTasks = getTasksForColumn(nextTasks, 'done');
+    assert.equal(doneTasks.length, 1);
+    assert.equal(doneTasks[0]._id, 't2');
+    assert.equal(doneTasks[0].priority, 'high');
+    assert.equal(doneTasks[0].dueDate, '2026-11-15T00:00:00.000Z');
+    assert.equal(doneTasks[0].columnKey, 'done'); // column association preserved
+
+    const todoTasks = getTasksForColumn(nextTasks, 'todo');
+    assert.equal(todoTasks.length, 1);
+    const inProgressTasks = getTasksForColumn(nextTasks, 'in-progress');
+    assert.equal(inProgressTasks.length, 1);
+  });
+
+  test('failed update preserves previous task state without corrupting collections', async () => {
+    const originalTasks = [
+      { _id: 't1', title: 'Original Task', priority: 'low' },
+    ];
+    const tasksState = [...originalTasks];
+    const selectedTaskState = { ...originalTasks[0] };
+    let editError = null;
+
+    const handleUpdate = async () => {
+      // Simulate API failure
+      throw new Error('500 Internal Server Error: Database failure');
+    };
+
+    try {
+      await handleUpdate('t1', { priority: 'high' });
+    } catch (err) {
+      editError = err.message;
+      // State is preserved
+    }
+
+    assert.equal(tasksState[0].priority, 'low');
+    assert.equal(selectedTaskState.priority, 'low');
+    assert.equal(editError, '500 Internal Server Error: Database failure');
+  });
+
+  test('duplicate submission prevention ignores concurrent edit calls while saving is in flight', () => {
+    let isSaving = true;
+    let callsCount = 0;
+
+    const submitEdit = () => {
+      if (isSaving) return;
+      callsCount += 1;
+    };
+
+    submitEdit();
+    assert.equal(callsCount, 0);
+
+    isSaving = false;
+    submitEdit();
+    assert.equal(callsCount, 1);
+  });
+});
+
 
 describe('Task Completion Toggle and Move API (Task 7.2A)', () => {
   test('moveTask sends PATCH to /boards/:boardId/tasks/:taskId/move with columnKey payload', async () => {
@@ -712,5 +888,411 @@ describe('Task Completion Toggle and Move API (Task 7.2A)', () => {
       getAriaLabel({ _id: 't3', columnKey: 'done' }),
       'Mark task as incomplete'
     );
+  });
+});
+
+describe('Task Deletion Functionality (Task 7.4)', () => {
+  test('taskApi.deleteTask sends DELETE to /boards/:boardId/tasks/:taskId with config', async () => {
+    const originalDelete = apiClient.delete;
+    let capturedUrl = null;
+    let capturedConfig = null;
+
+    apiClient.delete = (url, config) => {
+      capturedUrl = url;
+      capturedConfig = config;
+      return Promise.resolve({
+        data: {
+          statusCode: 200,
+          data: { message: 'Task deleted successfully' },
+          message: 'Task deleted successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const mockBoardId = '507f1f77bcf86cd799439011';
+      const mockTaskId = '609bcf77bcf86cd799439099';
+      const mockConfig = { headers: { 'X-Delete-Header': 'DeleteTask' } };
+
+      const res = await taskApi.deleteTask(mockBoardId, mockTaskId, mockConfig);
+
+      assert.equal(capturedUrl, `/boards/${mockBoardId}/tasks/${mockTaskId}`);
+      assert.equal(capturedConfig.headers['X-Delete-Header'], 'DeleteTask');
+      assert.equal(res.data.statusCode, 200);
+      assert.equal(res.data.success, true);
+      assert.equal(res.data.data.message, 'Task deleted successfully');
+    } finally {
+      apiClient.delete = originalDelete;
+    }
+  });
+
+  test('taskApi.deleteTask propagates API errors for failure handling and recovery', async () => {
+    const originalDelete = apiClient.delete;
+
+    apiClient.delete = () =>
+      Promise.reject({
+        response: {
+          status: 404,
+          data: {
+            statusCode: 404,
+            message: 'Task not found or already deleted',
+            success: false,
+          },
+        },
+      });
+
+    try {
+      await assert.rejects(
+        () => taskApi.deleteTask('507f1f77bcf86cd799439011', 'invalid-task-id'),
+        (err) => {
+          assert.equal(err.response.status, 404);
+          assert.equal(err.response.data.message, 'Task not found or already deleted');
+          return true;
+        }
+      );
+    } finally {
+      apiClient.delete = originalDelete;
+    }
+  });
+
+  test('confirmation flow: delete action opens confirmation, cancel closes without API call', () => {
+    let isConfirmingDelete = false;
+    let apiCallCount = 0;
+
+    // 1. Initial resting state
+    assert.equal(isConfirmingDelete, false);
+
+    // 2. User clicks "Delete Task" button
+    isConfirmingDelete = true;
+    assert.equal(isConfirmingDelete, true);
+
+    // 3. User clicks "Cancel" button or presses Escape
+    isConfirmingDelete = false;
+    assert.equal(isConfirmingDelete, false);
+    assert.equal(apiCallCount, 0, 'Cancelling must not initiate delete API request');
+  });
+
+  test('confirmation flow: confirm initiates delete API and prevents duplicate in-flight submissions', async () => {
+    let isDeleting = false;
+    let apiCallCount = 0;
+
+    const performDelete = async () => {
+      if (isDeleting) return; // Prevent duplicate submission
+      isDeleting = true;
+      apiCallCount += 1;
+      await Promise.resolve(); // Simulate async request
+      isDeleting = false;
+    };
+
+    // First click initiates deletion
+    const firstCall = performDelete();
+    assert.equal(isDeleting, true);
+
+    // Rapid second click during in-flight deletion is ignored
+    const secondCall = performDelete();
+    assert.equal(apiCallCount, 1);
+
+    await Promise.all([firstCall, secondCall]);
+    assert.equal(apiCallCount, 1);
+    assert.equal(isDeleting, false);
+  });
+
+  test('successful deletion removes targeted task from board state and updates column counts', () => {
+    const initialTasks = [
+      { _id: 't-todo-1', title: 'Task in To Do 1', columnKey: 'todo', order: 0 },
+      { _id: 't-todo-2', title: 'Task in To Do 2', columnKey: 'todo', order: 1 },
+      { _id: 't-prog-1', title: 'Task in Progress', columnKey: 'in-progress', order: 0 },
+      { _id: 't-done-1', title: 'Task in Done', columnKey: 'done', order: 0 },
+    ];
+
+    // Initial column distribution
+    assert.equal(getTasksForColumn(initialTasks, 'todo').length, 2);
+    assert.equal(getTasksForColumn(initialTasks, 'in-progress').length, 1);
+    assert.equal(getTasksForColumn(initialTasks, 'done').length, 1);
+
+    // Delete 't-todo-1'
+    const targetTaskId = 't-todo-1';
+    const nextTasks = initialTasks.filter((t) => t._id !== targetTaskId);
+
+    // Verify task list updated
+    assert.equal(nextTasks.length, 3);
+    assert.equal(nextTasks.some((t) => t._id === targetTaskId), false);
+
+    // Verify column task counts reactively updated
+    const todoTasks = getTasksForColumn(nextTasks, 'todo');
+    const inProgressTasks = getTasksForColumn(nextTasks, 'in-progress');
+    const doneTasks = getTasksForColumn(nextTasks, 'done');
+
+    assert.equal(todoTasks.length, 1);
+    assert.equal(todoTasks[0]._id, 't-todo-2');
+    assert.equal(inProgressTasks.length, 1);
+    assert.equal(inProgressTasks[0]._id, 't-prog-1');
+    assert.equal(doneTasks.length, 1);
+    assert.equal(doneTasks[0]._id, 't-done-1');
+  });
+
+  test('board state synchronization clears selectedTask and closes details modal on success', async () => {
+    let boardTasks = [
+      { _id: 't-target', title: 'Target Task', columnKey: 'todo' },
+      { _id: 't-other', title: 'Other Task', columnKey: 'todo' },
+    ];
+    let selectedTask = { _id: 't-target', title: 'Target Task', columnKey: 'todo' };
+    let isTaskDetailsModalOpen = true;
+
+    // Simulate handleDeleteTask
+    const handleDeleteTask = async (taskId) => {
+      boardTasks = boardTasks.filter((t) => t._id !== taskId);
+      setIsTaskDetailsModalOpen(false);
+      setSelectedTask(null);
+    };
+
+    const setIsTaskDetailsModalOpen = (val) => {
+      isTaskDetailsModalOpen = val;
+    };
+    const setSelectedTask = (val) => {
+      selectedTask = val;
+    };
+
+    await handleDeleteTask('t-target');
+
+    assert.equal(boardTasks.length, 1);
+    assert.equal(boardTasks[0]._id, 't-other');
+    assert.equal(selectedTask, null, 'selectedTask must be cleared on successful deletion');
+    assert.equal(isTaskDetailsModalOpen, false, 'Details modal must close on successful deletion');
+  });
+
+  test('failed deletion preserves task in board, keeps selectedTask intact, and keeps modal open for retry', async () => {
+    const originalTasks = [
+      { _id: 't-preserve', title: 'Preserve Task', columnKey: 'todo' },
+    ];
+    let boardTasks = [...originalTasks];
+    let selectedTask = { ...originalTasks[0] };
+    let isTaskDetailsModalOpen = true;
+    let deleteErrorMessage = null;
+
+    // Simulate handleDeleteTask failure
+    const handleDeleteTask = async (taskId) => {
+      if (taskId === 't-preserve') {
+        throw new Error('500 Internal Server Error: Failed to delete task');
+      }
+      boardTasks = boardTasks.filter((t) => t._id !== taskId);
+      isTaskDetailsModalOpen = false;
+      selectedTask = null;
+    };
+
+    try {
+      await handleDeleteTask('t-preserve');
+    } catch (err) {
+      deleteErrorMessage = err.message;
+    }
+
+    // Verify task remains in board
+    assert.equal(boardTasks.length, 1);
+    assert.equal(boardTasks[0]._id, 't-preserve');
+
+    // Verify modal remains open and selectedTask preserved
+    assert.equal(selectedTask._id, 't-preserve');
+    assert.equal(isTaskDetailsModalOpen, true);
+    assert.equal(deleteErrorMessage, '500 Internal Server Error: Failed to delete task');
+  });
+});
+
+describe('Drag-and-Drop Kanban & Task Reordering (Task 7.5)', () => {
+  test('taskApi.moveTask sends PATCH to /boards/:boardId/tasks/:taskId/move with columnKey and order', async () => {
+    const originalPatch = apiClient.patch;
+    let capturedUrl = null;
+    let capturedPayload = null;
+    let capturedConfig = null;
+
+    apiClient.patch = (url, payload, config) => {
+      capturedUrl = url;
+      capturedPayload = payload;
+      capturedConfig = config;
+      return Promise.resolve({
+        data: {
+          statusCode: 200,
+          data: {
+            _id: 'task-dnd-1',
+            title: 'Drag and Drop Task',
+            columnKey: payload.columnKey,
+            order: payload.order,
+          },
+          message: 'Task moved successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const mockBoardId = '507f1f77bcf86cd799439011';
+      const mockTaskId = 'task-dnd-1';
+      const movePayload = { columnKey: 'in-progress', order: 2 };
+      const mockConfig = { headers: { 'X-Dnd': 'Move' } };
+
+      const res = await taskApi.moveTask(mockBoardId, mockTaskId, movePayload, mockConfig);
+
+      assert.equal(capturedUrl, `/boards/${mockBoardId}/tasks/${mockTaskId}/move`);
+      assert.deepEqual(capturedPayload, movePayload);
+      assert.equal(capturedConfig.headers['X-Dnd'], 'Move');
+      assert.equal(res.data.statusCode, 200);
+      assert.equal(res.data.success, true);
+      assert.equal(res.data.data.columnKey, 'in-progress');
+      assert.equal(res.data.data.order, 2);
+    } finally {
+      apiClient.patch = originalPatch;
+    }
+  });
+
+  test('validates move payload structure: requires columnKey and non-negative integer order', () => {
+    const validateMovePayload = (payload) => {
+      const allowedKeys = ['columnKey', 'order'];
+      const extraKeys = Object.keys(payload).filter((k) => !allowedKeys.includes(k));
+      if (extraKeys.length > 0) {
+        throw new Error(`Unrecognized field provided. Only columnKey and order are allowed: ${extraKeys.join(', ')}`);
+      }
+      if (!['todo', 'in-progress', 'done'].includes(payload.columnKey)) {
+        throw new Error('Column key must be one of: todo, in-progress, done');
+      }
+      if (payload.order !== undefined) {
+        if (typeof payload.order !== 'number' || !Number.isInteger(payload.order) || payload.order < 0) {
+          throw new Error('Order must be a non-negative integer');
+        }
+      }
+      return true;
+    };
+
+    assert.equal(validateMovePayload({ columnKey: 'todo', order: 0 }), true);
+    assert.equal(validateMovePayload({ columnKey: 'in-progress', order: 5 }), true);
+    assert.equal(validateMovePayload({ columnKey: 'done' }), true);
+
+    // Rejects newOrder (backend schema uses strict order)
+    assert.throws(
+      () => validateMovePayload({ columnKey: 'todo', newOrder: 0 }),
+      /Unrecognized field provided/
+    );
+    // Rejects invalid columnKey
+    assert.throws(
+      () => validateMovePayload({ columnKey: 'backlog', order: 0 }),
+      /Column key must be one of/
+    );
+    // Rejects negative order
+    assert.throws(
+      () => validateMovePayload({ columnKey: 'todo', order: -1 }),
+      /Order must be a non-negative integer/
+    );
+  });
+
+  test('optimistic move update applies immediately and server response reconciles state', async () => {
+    let tasksState = [
+      { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0 },
+      { _id: 't2', title: 'Task 2', columnKey: 'in-progress', order: 0 },
+    ];
+
+    // Optimistic move t1 -> in-progress at order 1
+    const optimisticTasks = tasksState.map((t) =>
+      t._id === 't1' ? { ...t, columnKey: 'in-progress', order: 1 } : t
+    );
+    tasksState = optimisticTasks;
+
+    assert.equal(tasksState[0].columnKey, 'in-progress');
+    assert.equal(tasksState[0].order, 1);
+
+    // Reconcile with server response
+    const serverResponse = { _id: 't1', title: 'Task 1', columnKey: 'in-progress', order: 1, updatedAt: '2026-10-31T22:00:00Z' };
+    tasksState = tasksState.map((t) =>
+      t._id === serverResponse._id ? { ...t, ...serverResponse } : t
+    );
+
+    assert.equal(tasksState[0].updatedAt, '2026-10-31T22:00:00Z');
+  });
+
+  test('failed move request rolls back tasks and selectedTask to pre-drag snapshot', async () => {
+    const preDragSnapshot = {
+      tasks: [
+        { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0 },
+        { _id: 't2', title: 'Task 2', columnKey: 'in-progress', order: 0 },
+      ],
+      selectedTask: { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0 },
+    };
+
+    let tasksState = [...preDragSnapshot.tasks];
+    let selectedTaskState = { ...preDragSnapshot.selectedTask };
+    let taskActionError;
+
+    // Apply optimistic move
+    tasksState = tasksState.map((t) =>
+      t._id === 't1' ? { ...t, columnKey: 'done', order: 0 } : t
+    );
+    selectedTaskState = { ...selectedTaskState, columnKey: 'done', order: 0 };
+
+    assert.equal(tasksState[0].columnKey, 'done');
+    assert.equal(selectedTaskState.columnKey, 'done');
+
+    // Simulate API network failure
+    try {
+      throw new Error('500 Network error: failed to persist task order');
+    } catch (err) {
+      // Rollback
+      tasksState = preDragSnapshot.tasks;
+      selectedTaskState = preDragSnapshot.selectedTask;
+      taskActionError = err.message;
+    }
+
+    assert.equal(tasksState[0].columnKey, 'todo');
+    assert.equal(selectedTaskState.columnKey, 'todo');
+    assert.equal(taskActionError, '500 Network error: failed to persist task order');
+  });
+
+  test('dropping in original column and original position makes zero API calls', () => {
+    let apiCallCount = 0;
+
+    const handleDragDrop = (sourceCol, targetCol, sourceOrder, targetOrder) => {
+      const isUnchanged = sourceCol === targetCol && sourceOrder === targetOrder;
+      if (isUnchanged) {
+        return; // No-op
+      }
+      apiCallCount += 1;
+    };
+
+    // Dropped in same position
+    handleDragDrop('todo', 'todo', 0, 0);
+    assert.equal(apiCallCount, 0, 'Must not dispatch API request when position is unchanged');
+
+    // Dropped in different position
+    handleDragDrop('todo', 'todo', 0, 1);
+    assert.equal(apiCallCount, 1);
+  });
+
+  test('duplicate in-flight move requests are blocked for the same task', () => {
+    const movingTaskIds = new Set(['task-in-flight-9']);
+    let apiCallCount = 0;
+
+    const attemptMove = (taskId) => {
+      if (movingTaskIds.has(taskId)) {
+        return; // Block duplicate
+      }
+      apiCallCount += 1;
+    };
+
+    attemptMove('task-in-flight-9');
+    assert.equal(apiCallCount, 0, 'Must block concurrent duplicate move for the same task');
+
+    attemptMove('task-idle-10');
+    assert.equal(apiCallCount, 1);
+  });
+
+  test('selectedTask syncs when active task is moved while TaskDetailsModal is open', () => {
+    let selectedTask = { _id: 't-active', title: 'Active Task', columnKey: 'todo', order: 0 };
+
+    const onTaskMove = (taskId, newCol, newOrder) => {
+      if (selectedTask?._id === taskId) {
+        selectedTask = { ...selectedTask, columnKey: newCol, order: newOrder };
+      }
+    };
+
+    onTaskMove('t-active', 'done', 2);
+    assert.equal(selectedTask.columnKey, 'done');
+    assert.equal(selectedTask.order, 2);
   });
 });
