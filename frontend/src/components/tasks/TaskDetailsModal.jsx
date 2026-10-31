@@ -384,7 +384,7 @@ export function TaskDetailsModal({
                     disabled={isSavingDesc}
                     autoFocus
                     placeholder="Add a more detailed description..."
-                    className="w-full px-3.5 py-2.5 text-sm bg-white text-slate-900 border-2 border-indigo-500 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-y min-h-[120px] shadow-2xs custom-scrollbar"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white text-slate-900 border-2 border-indigo-500 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-y min-h-[120px] shadow-2xs"
                   />
                   {descError && (
                     <div className="flex items-center gap-1 text-xs text-red-600 font-medium">

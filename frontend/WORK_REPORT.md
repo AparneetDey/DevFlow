@@ -2957,3 +2957,52 @@ All existing capabilities—including board fetching, task grouping, column sort
 - **Production Build:** `npm.cmd run build --prefix frontend` — Vite build compiled in 6.32s with **0 compilation errors**.
 - **Backend Isolation:** `git status --porcelain backend/` — verified completely untouched.
 - **Visual Verification Status:** Visual inspection in a live browser remains pending manual user confirmation in the target browser environment.
+
+
+---
+
+## Scrollbar Customization Revert
+
+### 1. Overview & Objective
+In accordance with user instruction, all custom scrollbar styling, pseudo-element overrides, custom design tokens, and utility classes introduced during previous scrollbar experiments have been completely discarded and reverted. The application has been restored to the browser's default native scrollbar appearance across all operating systems and viewports without introducing any replacement custom scrollbar designs or third-party libraries.
+
+### 2. Files Inspected and Modified
+- `frontend/src/index.css`: Reverted completely to its clean baseline state prior to scrollbar experiments.
+- `frontend/src/pages/BoardPage.jsx`: Removed `custom-scrollbar` class from both the column loading skeleton container and the populated Kanban workflow stages horizontal scroll track.
+- `frontend/src/components/common/Modal.jsx`: Removed `custom-scrollbar` class from both the outer backdrop viewport scrolling container and the inner modal body scrollable container.
+- `frontend/src/components/tasks/TaskDetailsModal.jsx`: Removed `custom-scrollbar` class from the multi-line description textarea.
+- `frontend/src/components/tasks/CreateTaskModal.jsx`: Removed `custom-scrollbar` class from the task description textarea.
+- `frontend/src/components/boards/CreateBoardModal.jsx`: Removed `custom-scrollbar` class from the board description textarea.
+- `frontend/src/components/boards/EditBoardModal.jsx`: Removed `custom-scrollbar` class from the board description textarea.
+
+### 3. Custom Scrollbar Rules & Variables Removed
+- **Design Tokens Removed:** `--scrollbar-thumb`, `--scrollbar-thumb-hover`, `--scrollbar-thumb-active`, and `--scrollbar-track`.
+- **Root Styles Removed:** `html { overflow-y: scroll; overflow-x: hidden; }` removed; restored default HTML overflow handling.
+- **Chromium / WebKit Pseudo-Elements Removed:** All rules for `::-webkit-scrollbar`, `::-webkit-scrollbar-track`, `::-webkit-scrollbar-thumb`, `::-webkit-scrollbar-corner`, and related hover/active states.
+- **Firefox Rules Removed:** All `@supports (-moz-appearance: none)` blocks configuring `scrollbar-width` and `scrollbar-color`.
+- **Media Queries Removed:** All `@media (pointer: coarse)` and `@media (prefers-reduced-motion: reduce)` scrollbar overrides.
+- **Utility Classes Removed:** All declarations and usages of `.custom-scrollbar`.
+
+### 4. Preservation of Legitimate Scrolling Behavior
+All legitimate layout, overflow, and scrolling capabilities were preserved intact:
+- **Kanban Workspace:** Horizontal scrolling via `overflow-x-auto` remains fully functional across mobile, tablet, and desktop viewports.
+- **Modal Dialogs:** Vertical scrolling via `overflow-y-auto` and `flex-1 min-h-0` inside modals remains intact, preventing content squishing and preserving adaptive sizing.
+- **Form Textareas:** Standard browser textarea scrolling and resizing behaviors are preserved across all modals.
+- **Unrelated Features Intact:** All preceding feature work—including the direct inline title input, completion circle alignment, completion toggle, and modal detail views—remains untouched and fully operational.
+
+### 5. Verification Results
+- **Codebase Audit:** `git grep -i "scrollbar" frontend/src` confirmed zero occurrences of `scrollbar`, `custom-scrollbar`, `webkit-scrollbar`, `scrollbar-width`, or `scrollbar-color` across all frontend source files.
+- **Unit Tests:** `npm.cmd test --prefix frontend` — **40 of 40 tests passed (0 failures, 0 skipped)** across all 10 suites:
+  - `taskApi service` (2 tests passed)
+  - `Task display, column mapping, and edge case safety` (4 tests passed)
+  - `taskApi.createTask and reactive board task updates (Task 7.2)` (3 tests passed)
+  - `taskApi.getTaskById and Task Details view behavior (Task 7.3A)` (5 tests passed)
+  - `taskApi.updateTask and modal title/description updating` (3 tests passed)
+  - `Task Completion Toggle and Move API (Task 7.2A)` (6 tests passed)
+  - `isValidOrder helper` (3 tests passed)
+  - `sortBoardColumns` (8 tests passed)
+  - `getTasksForColumn` (5 tests passed)
+  - `getUnmatchedTasks` (1 test passed)
+- **ESLint:** `npm.cmd run lint --prefix frontend` — **0 problems (0 errors, 0 warnings)**.
+- **Production Build:** `npm.cmd run build --prefix frontend` — Vite build compiled cleanly in 5.78s with **0 compilation errors**.
+- **Backend Isolation:** `git status --porcelain backend/` confirmed that zero files in `backend/` were modified or touched.
