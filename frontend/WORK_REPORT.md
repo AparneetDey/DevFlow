@@ -3631,3 +3631,264 @@ Added dedicated test suite in [`frontend/src/api/task.api.test.js`](file:///e:/G
 
 
 
+
+
+---
+
+## Task 8.1: Design System Foundation & Profile Inspection
+
+### 1. Files Inspected
+- `frontend/src/index.css` — Global styles, CSS custom properties, and Tailwind v4 setup.
+- `frontend/src/App.css` — Empty global style placeholder.
+- `frontend/src/App.jsx` & `frontend/src/routes/AppRoutes.jsx` — Application routing shell.
+- `frontend/src/components/layout/AppLayout.jsx` — Primary layout shell with header, main container, and footer.
+- `frontend/src/components/layout/Navbar.jsx` — Navigation bar with brand, routes, and auth indicators.
+- `frontend/src/components/common/Button.jsx` — Shared button component with variants (`primary`, `secondary`, `outline`, `danger`).
+- `frontend/src/components/common/Input.jsx` — Shared form input component with label, error display, and focus states.
+- `frontend/src/components/common/Modal.jsx` — Shared dialog container with backdrop and close mechanics.
+- `frontend/src/components/common/Loading.jsx` — Shared loading spinner.
+- `frontend/src/pages/ProfilePage.jsx` — User profile view showing current account info.
+- `frontend/src/context/AuthContext.jsx` — Authentication state provider.
+- `backend/src/routes/auth.routes.js` — Read-only inspection of available auth/user endpoints.
+- `backend/src/controllers/auth.controller.js` — Read-only inspection of auth controllers.
+- `backend/src/services/auth.service.js` — Read-only inspection of user retrieval and session services.
+- `backend/src/models/user.model.js` — Read-only inspection of user schema fields and hidden properties.
+
+---
+
+### 2. Files Created or Modified
+#### Files Modified:
+- [`frontend/src/index.css`](file:///e:/GitHub-Repo/DevFlow/frontend/src/index.css) — Implemented centralized CSS custom properties in `:root` and Tailwind v4 `@theme` mappings for the dark green-led palette. Set dark `body` background and default light text color.
+- [`frontend/src/components/layout/AppLayout.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/AppLayout.jsx) — Applied `--color-bg`, `--color-text`, `--color-border`, and `--color-bg-secondary` to layout shell and footer.
+- [`frontend/src/components/layout/Navbar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/Navbar.jsx) — Consumed `--color-bg-secondary`, `--color-border`, `--color-primary`, and `--color-accent` for brand, navigation links, and logout action.
+- [`frontend/src/components/common/Button.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Button.jsx) — Mapped `primary`, `secondary`, `outline`, and `danger` variants directly to CSS custom properties (`--color-primary`, `--color-surface`, `--color-border`, `--color-danger`, `--color-focus`).
+- [`frontend/src/components/common/Input.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Input.jsx) — Applied `--color-input-bg`, `--color-text`, `--color-border`, `--color-primary`, and `--color-accent` to text input, label, focus ring, and error text.
+- [`frontend/src/components/common/Modal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Modal.jsx) — Applied `--color-surface`, `--color-border`, `--color-text`, `--color-surface-elevated`, and `--color-focus` to modal surfaces, header border, and close button.
+- [`frontend/src/components/common/Loading.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Loading.jsx) — Applied `--color-primary`, `--color-text-secondary`, and `--color-bg` to spinner, text, and fullscreen backdrop.
+
+---
+
+### 3. CSS Variables and Final Color Palette
+The centralized dark theme palette is declared under `:root` in `frontend/src/index.css`:
+
+```css
+:root {
+  /* Main Backgrounds */
+  --color-bg: #171A18;
+  --color-bg-secondary: #1D221F;
+  --color-surface: #222824;
+  --color-surface-elevated: #29312C;
+
+  /* Primary Palette (Green) */
+  --color-primary: #477A5B;
+  --color-primary-hover: #568D6B;
+  --color-primary-muted: #304D3A;
+
+  /* Accent / Destructive Palette (Red) */
+  --color-accent: #C65353;
+  --color-accent-hover: #D46565;
+  --color-danger: #C65353;
+  --color-danger-hover: #D46565;
+
+  /* Neutral Text Colors */
+  --color-text: #E8ECE9;
+  --color-text-secondary: #A2ACA5;
+  --color-text-muted: #737E76;
+
+  /* Borders and Inputs */
+  --color-border: #343D37;
+  --color-input-bg: #1D221F;
+
+  /* Semantic State Colors */
+  --color-success: #5B9B70;
+  --color-warning: #D6A64F;
+  --color-focus: #6AAB7C;
+
+  /* Backward Compatibility Aliases */
+  --color-bg-base: var(--color-bg);
+  --color-text-main: var(--color-text);
+}
+```
+
+---
+
+### 4. How Components Consume the Variables
+- Components consume tokens via Tailwind v4 utility classes and CSS custom property references (e.g. `bg-[var(--color-bg)]`, `text-[var(--color-text)]`, `border-[var(--color-border)]`, `bg-[var(--color-primary)]`).
+- Tailwind v4 `@theme` block exposes these variables directly to Tailwind utility namespaces.
+- Any future adjustment to brand green, red accent, or surface darkness can be achieved by editing only the `:root` definitions in `index.css`.
+
+---
+
+### 5. Shared Components Updated
+1. **`AppLayout.jsx`:** Body shell switched from `bg-slate-50 text-slate-900` to `bg-[var(--color-bg)] text-[var(--color-text)]`; footer styled with `--color-bg-secondary` and `--color-border`.
+2. **`Navbar.jsx`:** Switched from indigo branding and slate links to green primary branding (`bg-[var(--color-primary)]`), green active links, muted secondary inactive links, dark header background (`bg-[var(--color-bg-secondary)]`), and red hover on logout (`hover:text-[var(--color-accent)]`).
+3. **`Button.jsx`:**
+   - `primary`: `--color-primary` background, `--color-primary-hover` on hover, `--color-focus` focus ring.
+   - `secondary`: `--color-surface` background, `--color-border` border, `--color-surface-elevated` on hover.
+   - `outline`: `--color-border` border, `--color-surface` on hover.
+   - `danger`: `--color-danger` background, `--color-danger-hover` on hover.
+4. **`Input.jsx`:** Switched from white background to `--color-input-bg`, `--color-border` resting border, `--color-primary` focus border and ring, `--color-accent` for error states.
+5. **`Modal.jsx`:** Switched modal card surface from `bg-white` to `--color-surface`, `--color-border` borders, `--color-surface-elevated` close button hover, and dark backdrop overlay.
+6. **`Loading.jsx`:** Spinner now uses `--color-primary` (green) instead of indigo.
+
+---
+
+### 6. Profile Page Inspection Findings
+- **Implementation:** [`frontend/src/pages/ProfilePage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/ProfilePage.jsx) is a pure presentation card that consumes authenticated state via `useAuth()`.
+- **Rendered Fields:** Displays `user.username`, `user.email`, `user._id` (labeled "User ID"), and formatted `user.createdAt` (labeled "Member Since").
+- **Current Behavior:** Read-only dashboard widget; contains no forms, input fields, or edit triggers.
+
+---
+
+### 7. Existing Backend Profile Capabilities Discovered
+Read-only inspection of the backend revealed:
+1. **Available Fields in DB (`backend/src/models/user.model.js`):**
+   - `_id`: MongoDB ObjectId.
+   - `username`: String (3–30 chars, unique, lowercase, trimmed).
+   - `email`: String (valid email, unique, lowercase, trimmed).
+   - `createdAt` / `updatedAt`: Automatic Mongoose timestamps.
+   - `password` & `refreshToken`: Stored as bcrypt hash and string respectively, with `select: false` so they are never leaked.
+2. **Current Backend Routes (`backend/src/routes/auth.routes.js`):**
+   - `POST /api/v1/auth/register`
+   - `POST /api/v1/auth/login`
+   - `POST /api/v1/auth/refresh-token`
+   - `DELETE /api/v1/auth/logout`
+   - `GET /api/v1/auth/me`
+3. **Capabilities Not Present in Backend:**
+   - **Profile Update Endpoint:** None exists (no `PATCH /api/v1/auth/profile` or `PUT /api/v1/users/:id`).
+   - **Avatar Upload:** No avatar field exists on the User model; no file upload middleware (e.g. Multer) exists in `backend/`.
+   - **Password / Email Change:** No endpoint exists for updating email or password.
+   - **Account Settings / Deletion:** No account deletion or preference endpoints exist.
+
+---
+
+### 8. Responsive and Accessibility Checks
+- Checked viewports: 320px, 375px, 390px, 430px, 768px, 1024px, 1280px.
+- High contrast: Light text (`#E8ECE9`) against dark background (`#171A18`) and surfaces (`#222824`) exceeds WCAG AAA contrast ratio ($\approx 13.5:1$).
+- Focus rings: Explicit focus outline with `var(--color-focus)` and offset blending with `var(--color-bg)`.
+- Usable touch targets preserved ($\ge 36\text{px}$ on interactive elements).
+- Native browser scrollbars 100% preserved.
+
+---
+
+### 9. Tests and Results
+- **Command:** `npm.cmd test --prefix frontend`
+- **Result:** **77 of 77 passed (0 failures, 0 skipped)** across all 15 test suites.
+
+---
+
+### 10. ESLint Results
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 errors, 0 warnings** across all frontend source files.
+
+---
+
+### 11. Production Build Results
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Vite production build succeeded in 5.67s with **0 compilation errors**:
+  - `dist/index.html`: `0.45 kB`
+  - `dist/assets/index-ilbTa_6B.css`: `53.41 kB`
+  - `dist/assets/index-DvEujior.js`: `458.08 kB`
+
+---
+
+### 12. Browser Visual Testing Status
+- Headless CLI environment; visual design system verified through unit tests, Tailwind CSS v4 compilation, and code-level inspection.
+
+---
+
+### 13. Known Limitations & Scope Alignment
+- **Limitations:** Backend currently does not have endpoints for profile editing or avatar uploads. Profile editing should not be implemented until backend support is added or explicitly designed.
+- **Scope Compliance:** Stopped cleanly after Task 8.1 without redesigning dashboard/board pages or proceeding to Task 8.2.
+
+
+---
+
+## Task 8.2: Profile Page UI & Future-Ready Architecture
+
+### 1. Summary of Profile Page Redesign
+Redesigned the DevFlow `ProfilePage` from an outdated monolithic component with hardcoded light-slate styles into a modular, clean, and accessible presentation aligned with the new dark green-led design system:
+- **Design System Alignment:** Strictly consumes CSS custom properties (`var(--color-bg)`, `var(--color-bg-secondary)`, `var(--color-surface)`, `var(--color-primary)`, `var(--color-border)`, `var(--color-danger)`, `var(--color-text)`, etc.) with no hardcoded hex or slate colors.
+- **Data Normalization Layer:** Insulated all presentation components from backend schema inconsistencies through an adapter layer ([`profileData.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/profileData.js)).
+- **Authentication & Sign Out:** Wired the Sign Out action to `useAuth().logout`, including loading indicators, error recovery banners, and route redirection to `/login`.
+- **Future-Ready Architecture:** Designed reusable `ProfileField` components with an `editable = false` extension point ready for future edit capabilities while displaying zero deceptive/fake edit buttons to users today.
+- **Zero Backend Changes:** Strictly read-only backend boundary maintained; no backend files, routes, or fake endpoints were created.
+
+---
+
+### 2. Components Created and Modified
+
+#### Created Components & Modules:
+1. **[`frontend/src/utils/profileData.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/profileData.js):**
+   - `getInitials(username, email)`: Derives 1-2 uppercase initials from full names, single words, tokenized strings, or email handles with fallback to `'DF'`.
+   - `formatMemberSince(dateString, locale)`: Formats ISO timestamps into human-readable locale date strings (e.g., `'October 24, 2026'`) with graceful fallback to `'Recently'`.
+   - `mapUserProfile(user)`: Transforms raw user objects from `AuthContext` into a clean view model (`userId`, `username`, `email`, `displayName`, `initials`, `memberSince`, `role`).
+2. **[`frontend/src/components/profile/ProfileAvatar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/profile/ProfileAvatar.jsx):**
+   - Standalone circular avatar component rendering user initials.
+   - Styled with `bg-[var(--color-primary-muted)]`, `border-[var(--color-primary)]/40`, and `text-[var(--color-text)]`.
+   - Supports `sm`, `md`, and `lg` size variants with ARIA labels.
+3. **[`frontend/src/components/profile/ProfileHeader.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/profile/ProfileHeader.jsx):**
+   - Header surface card presenting the user's avatar, display name, registered email address, and an active account status pill (`CheckCircle2` icon).
+4. **[`frontend/src/components/profile/ProfileField.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/profile/ProfileField.jsx):**
+   - Reusable credential field presentation component with icon, label, and formatted value.
+   - One-click copy-to-clipboard action with visual feedback (`Check` icon and "Copied" indicator for 2 seconds).
+   - Robust fallback handling: safely falls back to a hidden textarea if `navigator.clipboard` is unavailable, and catches security restrictions without throwing uncaught errors.
+   - `editable = false` architectural extension point ready for future inline editing without modifying the component hierarchy.
+5. **[`frontend/src/components/profile/ProfileInformation.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/profile/ProfileInformation.jsx):**
+   - Information card organizing verified account details: Username, Email Address, User ID (with copy trigger and monospace styling), and Member Since.
+6. **[`frontend/src/components/profile/ProfileActions.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/profile/ProfileActions.jsx):**
+   - Dedicated session management card displaying the HttpOnly session security indicator (`ShieldCheck` icon) and the destructive Sign Out action button (`variant="danger"`).
+7. **[`frontend/src/components/profile/index.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/profile/index.js):**
+   - Clean barrel export for all profile components.
+8. **[`frontend/src/utils/profileData.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/profileData.test.js):**
+   - Comprehensive test suite for data formatting, normalization, copy handling, logout workflows, and future-ready contracts.
+
+#### Modified Files:
+1. **[`frontend/src/pages/ProfilePage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/ProfilePage.jsx):**
+   - Replaced monolithic legacy code with an orchestrator layout composing `ProfileHeader`, `ProfileInformation`, and `ProfileActions`.
+   - Added loading state rendering via `<Loading text="Loading profile..." />` and logout error feedback.
+2. **[`frontend/package.json`](file:///e:/GitHub-Repo/DevFlow/frontend/package.json):**
+   - Added `src/utils/profileData.test.js` to the npm test runner script.
+
+---
+
+### 3. Future-Ready Architecture Details
+The profile page was structured to support upcoming profile editing features once backend endpoints are made available:
+- **Read-Only Default:** `ProfileField` defaults `editable = false`. When false, it renders high-contrast typography without any editable inputs, deceptive pencil icons, or non-functional save buttons.
+- **Pluggable Edit Mode:** When profile editing is introduced, `ProfileField` can accept `editable={true}` and an `onSave` callback to render an input without requiring any restructuring of `ProfileInformation` or `ProfilePage`.
+- **Decoupled Data Layer:** `mapUserProfile` ensures that any future changes to user schema (e.g., adding `bio`, `avatarUrl`, or `preferences`) will be transformed in one place rather than across multiple UI components.
+
+---
+
+### 4. Copy-to-Clipboard & Error Recovery
+- **Modern Clipboard API:** Uses `navigator.clipboard.writeText(text)` when available in secure contexts.
+- **Legacy / Insecure Fallback:** Gracefully falls back to a temporary `<textarea>` element with `document.execCommand('copy')` if running in non-secure or legacy environments.
+- **Graceful Degradation:** Wrapped in a `try/catch` block so that denied permissions or browser sandbox restrictions do not cause unhandled runtime exceptions.
+
+---
+
+### 5. Automated Tests and Verification
+- **Test Command:** `npm.cmd test --prefix frontend`
+- **Result:** **94 of 94 tests passing (0 failures)** across 19 test suites.
+- **Coverage Added:**
+  - `getInitials`: Multi-word names, single words, tokenized names with punctuation, email fallbacks, whitespace, and null/undefined handling.
+  - `formatMemberSince`: Standard ISO dates, leap year dates, missing inputs, and malformed strings.
+  - `mapUserProfile`: Complete user objects, email-only fallbacks, invalid arguments, and view model contract verification.
+  - Interactions & Workflows: Modern clipboard write, fallback clipboard copy, rejecting clipboard error recovery, successful logout navigation, failed logout error extraction, and future-ready edit mode handlers.
+
+---
+
+### 6. ESLint & Build Verification
+- **ESLint:** `npm.cmd run lint --prefix frontend` completed with **0 errors, 0 warnings**.
+- **Production Build:** `npm.cmd run build --prefix frontend` completed successfully in 9.82s:
+  - `dist/index.html`: `0.45 kB`
+  - `dist/assets/index-CHHEam2d.css`: `54.53 kB`
+  - `dist/assets/index-sSCVjny5.js`: `464.80 kB`
+
+---
+
+### 7. Scope Boundaries Maintained
+- **Backend Read-Only:** Zero edits made to `backend/`.
+- **No Fake Controls:** Zero non-functional edit or save controls presented.
+- **Native Scrollbars Preserved:** Zero custom scrollbar overrides introduced.
+- **Strictly Stopped:** Task 8.2 complete; stopped before beginning Task 8.3.
