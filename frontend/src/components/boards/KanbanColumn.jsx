@@ -139,7 +139,7 @@ export function KanbanColumn({
   return (
     <section
       aria-labelledby={`column-header-${columnKey}`}
-      className={`w-[235px] sm:w-[276px] shrink-0 bg-[var(--color-surface)] border ${
+      className={`w-[255px] sm:w-[276px] shrink-0 bg-[var(--color-surface)] border ${
         isOver
           ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/40 bg-[var(--color-primary-muted)]/15'
           : 'border-[var(--color-border)]'
