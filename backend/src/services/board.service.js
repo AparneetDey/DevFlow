@@ -43,7 +43,26 @@ class BoardService {
     }
 
     /**
+     * Ensures that a board has its columns persisted to MongoDB.
+     * If a legacy board in MongoDB lacks columns, has an empty array, or has unmigrated column fields,
+     * it is idempotently saved with normalized default columns.
+     *
+     * @param {Object} board - Mongoose Board document
+     * @returns {Promise<Object>} Persisted Board document
+     */
+    async ensureBoardColumnsPersisted(board) {
+        if (!board) return board;
+
+        if (board.isModified("columns")) {
+            await board.save();
+        }
+
+        return board;
+    }
+
+    /**
      * Retrieves all boards owned by the authenticated user, sorted by most recently updated.
+     * Idempotently persists columns for any legacy boards encountered.
      *
      * @param {string|mongoose.Types.ObjectId} userId - Authenticated user ID
      * @returns {Promise<Array>} List of boards
@@ -54,12 +73,16 @@ class BoardService {
         }
 
         const boards = await Board.find({ owner: userId }).sort({ updatedAt: -1 });
+        for (const board of boards) {
+            await this.ensureBoardColumnsPersisted(board);
+        }
         return boards;
     }
 
     /**
      * Retrieves a single board by ID owned by the authenticated user.
      * Returns 404 if the board does not exist or is not owned by the user.
+     * Idempotently persists columns for legacy boards.
      *
      * @param {string} boardId - Board ObjectId string
      * @param {string|mongoose.Types.ObjectId} userId - Authenticated user ID
@@ -73,6 +96,7 @@ class BoardService {
             throw new ApiError(404, "Board not found");
         }
 
+        await this.ensureBoardColumnsPersisted(board);
         return board;
     }
 
@@ -107,6 +131,163 @@ class BoardService {
         }
 
         return updatedBoard;
+    }
+
+    /**
+     * Generates a unique, stable, slug-friendly column key within a board.
+     *
+     * @param {string} name - Column name
+     * @param {Array<Object>} existingColumns - Board's existing columns
+     * @returns {string} Unique column key
+     */
+    generateColumnKey(name, existingColumns = []) {
+        let baseKey = name
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+
+        if (!baseKey) {
+            baseKey = "col";
+        }
+
+        const existingKeys = new Set(existingColumns.map((c) => c.key));
+        if (!existingKeys.has(baseKey)) {
+            return baseKey;
+        }
+
+        let counter = 1;
+        while (existingKeys.has(`${baseKey}-${counter}`)) {
+            counter++;
+        }
+        return `${baseKey}-${counter}`;
+    }
+
+    /**
+     * Adds a new column to a board, enforcing a maximum limit of 5 columns.
+     * Generates a stable unique key and assigns the next available sequential order.
+     * Uses atomic array length checking and optimistic concurrency retry to prevent race conditions.
+     *
+     * @param {string} boardId - Board ObjectId string
+     * @param {Object} data - { name }
+     * @param {string|mongoose.Types.ObjectId} userId - Authenticated user ID
+     * @param {number} [maxRetries=3] - Maximum retry attempts on concurrent collision
+     * @returns {Promise<Object>} Updated board document
+     */
+    async addColumn(boardId, { name }, userId, maxRetries = 3) {
+        this.validateObjectId(boardId);
+
+        if (!userId) {
+            throw new ApiError(401, "User is not authenticated");
+        }
+
+        const trimmedName = typeof name === "string" ? name.trim() : "";
+        if (!trimmedName) {
+            throw new ApiError(400, "Column name cannot be empty");
+        }
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            const board = await Board.findOne({ _id: boardId, owner: userId });
+            if (!board) {
+                throw new ApiError(404, "Board not found");
+            }
+
+            // Ensure columns are persisted if legacy board
+            await this.ensureBoardColumnsPersisted(board);
+
+            const currentColumns = board.columns || [];
+            if (currentColumns.length >= 5) {
+                throw new ApiError(400, "Board cannot have more than 5 columns");
+            }
+
+            const key = this.generateColumnKey(trimmedName, currentColumns);
+            const maxOrder = currentColumns.reduce(
+                (max, col) => (typeof col.order === "number" && col.order > max ? col.order : max),
+                -1
+            );
+            const nextOrder = maxOrder + 1;
+
+            const newColumn = {
+                name: trimmedName,
+                title: trimmedName,
+                key,
+                order: nextOrder
+            };
+
+            // Atomic update matching exact current length AND 5-column cap guard
+            const updatedBoard = await Board.findOneAndUpdate(
+                {
+                    _id: boardId,
+                    owner: userId,
+                    columns: { $size: currentColumns.length },
+                    "columns.4": { $exists: false }
+                },
+                {
+                    $push: { columns: newColumn }
+                },
+                { returnDocument: "after", runValidators: true }
+            );
+
+            if (updatedBoard) {
+                return updatedBoard;
+            }
+
+            // Check if failure was due to board deletion or reaching 5 columns
+            const currentCheck = await Board.findOne({ _id: boardId, owner: userId });
+            if (!currentCheck) {
+                throw new ApiError(404, "Board not found");
+            }
+            if (currentCheck.columns && currentCheck.columns.length >= 5) {
+                throw new ApiError(400, "Board cannot have more than 5 columns");
+            }
+            // Another concurrent request changed the columns array size; retry
+        }
+
+        throw new ApiError(409, "Failed to add column due to concurrent modifications. Please retry.");
+    }
+
+    /**
+     * Renames an existing column on a board without changing its key, order, or associated tasks.
+     *
+     * @param {string} boardId - Board ObjectId string
+     * @param {string} columnKey - Unique column key identifier
+     * @param {Object} data - { name }
+     * @param {string|mongoose.Types.ObjectId} userId - Authenticated user ID
+     * @returns {Promise<Object>} Updated board document
+     */
+    async renameColumn(boardId, columnKey, { name }, userId) {
+        this.validateObjectId(boardId);
+
+        if (!userId) {
+            throw new ApiError(401, "User is not authenticated");
+        }
+
+        const trimmedName = typeof name === "string" ? name.trim() : "";
+        if (!trimmedName) {
+            throw new ApiError(400, "Column name cannot be empty");
+        }
+
+        const board = await Board.findOne({ _id: boardId, owner: userId });
+        if (!board) {
+            throw new ApiError(404, "Board not found");
+        }
+
+        await this.ensureBoardColumnsPersisted(board);
+
+        if (!board.columns || !Array.isArray(board.columns)) {
+            board.columns = DEFAULT_COLUMNS.map((col) => ({ ...col }));
+        }
+
+        const targetColumn = board.columns.find((c) => c.key === columnKey);
+        if (!targetColumn) {
+            throw new ApiError(404, "Column not found");
+        }
+
+        targetColumn.name = trimmedName;
+        targetColumn.title = trimmedName;
+
+        await board.save();
+        return board;
     }
 
     /**

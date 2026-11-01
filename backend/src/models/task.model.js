@@ -27,10 +27,7 @@ const taskSchema = new Schema(
         columnKey: {
             type: String,
             required: [true, "Column key is required"],
-            enum: {
-                values: TASK_COLUMNS,
-                message: "Column key must be one of: todo, in-progress, done"
-            },
+            trim: true,
             default: "todo"
         },
         order: {
@@ -50,6 +47,10 @@ const taskSchema = new Schema(
         dueDate: {
             type: Date,
             default: null
+        },
+        isCompleted: {
+            type: Boolean,
+            default: false
         }
     },
     {

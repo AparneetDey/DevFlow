@@ -4,14 +4,19 @@ import {
     getUserBoards,
     getBoard,
     updateBoard,
-    deleteBoard
+    deleteBoard,
+    addColumn,
+    renameColumn
 } from "../controllers/board.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { validate, validateParams } from "../middlewares/validate.middleware.js";
 import {
     createBoardSchema,
     updateBoardSchema,
-    boardIdParamSchema
+    boardIdParamSchema,
+    addColumnSchema,
+    renameColumnSchema,
+    columnKeyParamSchema
 } from "../validators/board.validator.js";
 import taskRouter from "./task.routes.js";
 
@@ -28,6 +33,23 @@ router
     .route("/")
     .post(validate(createBoardSchema), createBoard)
     .get(getUserBoards);
+
+// Board column management routes
+router
+    .route("/:boardId/columns")
+    .post(
+        validateParams(boardIdParamSchema),
+        validate(addColumnSchema),
+        addColumn
+    );
+
+router
+    .route("/:boardId/columns/:columnKey")
+    .patch(
+        validateParams(columnKeyParamSchema),
+        validate(renameColumnSchema),
+        renameColumn
+    );
 
 // Individual board item routes
 router

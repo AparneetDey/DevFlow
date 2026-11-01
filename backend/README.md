@@ -27,6 +27,8 @@ DevFlow provides a structured, production-grade RESTful API for user authenticat
    - [9.3 Get Board by ID (`GET /api/v1/boards/:boardId`)](#93-get-board-by-id)
    - [9.4 Update Board (`PATCH /api/v1/boards/:boardId`)](#94-update-board)
    - [9.5 Delete Board (`DELETE /api/v1/boards/:boardId`)](#95-delete-board)
+   - [9.6 Add Column (`POST /api/v1/boards/:boardId/columns`)](#96-add-column)
+   - [9.7 Rename Column (`PATCH /api/v1/boards/:boardId/columns/:columnKey`)](#97-rename-column)
 10. [Task and Card Management API Group](#10-task-and-card-management-api-group)
     - [10.1 Create Task (`POST /api/v1/boards/:boardId/tasks`)](#101-create-task)
     - [10.2 List Tasks for a Board (`GET /api/v1/boards/:boardId/tasks`)](#102-list-tasks-for-a-board)
@@ -247,6 +249,8 @@ The table below catalogs all **16 endpoints** implemented in DevFlow:
 | `GET` | `/api/v1/boards/:boardId` | `verifyJWT` | Retrieve details of a specific board by ID |
 | `PATCH` | `/api/v1/boards/:boardId` | `verifyJWT` | Update board title and/or description |
 | `DELETE` | `/api/v1/boards/:boardId` | `verifyJWT` | Delete a board and cascade delete all its tasks |
+| `POST` | `/api/v1/boards/:boardId/columns` | `verifyJWT` | Add a new column to a board (up to max 5 columns) |
+| `PATCH` | `/api/v1/boards/:boardId/columns/:columnKey` | `verifyJWT` | Rename an existing board column without changing key/order |
 | **Task Management** | | | |
 | `POST` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | Create a new task under a board |
 | `GET` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | List tasks on a board (supports optional `?columnKey=` filter) |
@@ -1066,6 +1070,182 @@ Triggered when the board does not exist or is not owned by the authenticated use
 
 ---
 
+### 9.6 Add Column
+
+#### A. Endpoint Information
+- **API Name:** Add Column
+- **HTTP Method:** `POST`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/columns`
+- **Authentication Required:** Yes (`verifyJWT`)
+- **Purpose and Functionality:** Adds a new workflow column to an existing board, up to a maximum of 5 columns.
+- **Business Logic & Side Effects:** Verifies board ownership; ensures the board currently has fewer than 5 columns; generates a unique, stable slug key from the column name; sets order to the next available position (`maxOrder + 1`); saves the updated board atomically; returns the updated board.
+
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid 24-character hexadecimal MongoDB ObjectId | Target Board ID |
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `name` | String | Yes | None | Trimmed, 1 to 50 characters | Name of the new column |
+
+#### C. Request Payload Example
+```json
+{
+  "name": "In Review"
+}
+```
+
+#### D. Success Response
+- **HTTP Status Code:** `201 Created`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the updated board document with the newly appended column.
+
+```json
+{
+  "statusCode": 201,
+  "data": {
+    "_id": "671bb200e4b0234567890456",
+    "title": "Mobile App Launch",
+    "description": "Tasks and sprint backlog for iOS and Android release",
+    "owner": "671aa100e4b0234567890123",
+    "columns": [
+      { "name": "To Do", "title": "To Do", "key": "todo", "order": 0 },
+      { "name": "In Progress", "title": "In Progress", "key": "in-progress", "order": 1 },
+      { "name": "Done", "title": "Done", "key": "done", "order": 2 },
+      { "name": "In Review", "title": "In Review", "key": "in-review", "order": 3 }
+    ],
+    "createdAt": "2026-10-25T10:15:00.000Z",
+    "updatedAt": "2026-11-01T10:30:00.000Z"
+  },
+  "message": "Column added successfully",
+  "success": true
+}
+```
+
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when the column name is empty/invalid, or when the board already has 5 columns.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Board cannot have more than 5 columns",
+  "errors": []
+}
+```
+
+##### Error: 404 Not Found
+Triggered when the board does not exist or is not owned by the authenticated user.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Board not found",
+  "errors": []
+}
+```
+
+---
+
+### 9.7 Rename Column
+
+#### A. Endpoint Information
+- **API Name:** Rename Column
+- **HTTP Method:** `PATCH`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/columns/:columnKey`
+- **Authentication Required:** Yes (`verifyJWT`)
+- **Purpose and Functionality:** Renames an existing workflow column on a board without changing its stable key, order position, or existing task associations.
+- **Business Logic & Side Effects:** Verifies board ownership and column existence; updates `name` (and backward-compatible `title`); preserves column `key` and `order`; does not modify tasks belonging to the column; returns the updated board.
+
+#### B. Request Information
+- **Required HTTP Headers:**
+  | Header | Required | Format / Value | Description |
+  |:---|:---:|:---|:---|
+  | `Content-Type` | Yes | `application/json` | Specifies JSON body payload |
+  | `Authorization` | No* | `Bearer <accessToken>` | Required if cookie is omitted |
+- **Authentication Headers / Cookies:** Accepts `Authorization: Bearer <accessToken>` OR `Cookie: accessToken=<token>`.
+- **Path Parameters:**
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `boardId` | String | Yes | None | Valid 24-character hexadecimal MongoDB ObjectId | Target Board ID |
+  | `columnKey` | String | Yes | None | Non-empty string | Target Column Key (e.g. `todo`) |
+- **Query Parameters:** None.
+- **Request Body Requirements:** Required.
+  | Field | Type | Required | Default | Validation / Constraints | Description |
+  |:---|:---:|:---:|:---:|:---|:---|
+  | `name` | String | Yes | None | Trimmed, 1 to 50 characters | New name for the column |
+
+#### C. Request Payload Example
+```json
+{
+  "name": "Backlog"
+}
+```
+
+#### D. Success Response
+- **HTTP Status Code:** `200 OK`
+- **Response Headers / Cookies Set:** None.
+- **Response Content Description:** Returns the updated board document with the renamed column.
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "_id": "671bb200e4b0234567890456",
+    "title": "Mobile App Launch",
+    "description": "Tasks and sprint backlog for iOS and Android release",
+    "owner": "671aa100e4b0234567890123",
+    "columns": [
+      { "name": "Backlog", "title": "Backlog", "key": "todo", "order": 0 },
+      { "name": "In Progress", "title": "In Progress", "key": "in-progress", "order": 1 },
+      { "name": "Done", "title": "Done", "key": "done", "order": 2 }
+    ],
+    "createdAt": "2026-10-25T10:15:00.000Z",
+    "updatedAt": "2026-11-01T10:35:00.000Z"
+  },
+  "message": "Column renamed successfully",
+  "success": true
+}
+```
+
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when the name is empty or contains only whitespace.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Validation Error",
+  "errors": [
+    "Column name cannot be empty"
+  ]
+}
+```
+
+##### Error: 404 Not Found
+Triggered when the board or the column key does not exist.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Column not found",
+  "errors": []
+}
+```
+
+---
+
 ## 10. Task and Card Management API Group
 
 All task routes are nested hierarchically under their parent board:
@@ -1103,6 +1283,7 @@ Every request verifies that `:boardId` exists and belongs to the authenticated u
   | `columnKey` | String (Enum) | No | `"todo"` | `"todo"`, `"in-progress"`, `"done"` | Initial column placement |
   | `priority` | String (Enum) | No | `"medium"` | `"low"`, `"medium"`, `"high"` | Priority level |
   | `dueDate` | String / Null | No | `null` | Valid ISO date string or `null` | Optional deadline |
+  | `isCompleted` | Boolean | No | `false` | Boolean value | Independent task completion status |
 
 #### C. Request Payload Example
 ```json
@@ -1111,7 +1292,8 @@ Every request verifies that `:boardId` exists and belongs to the authenticated u
   "description": "Create Figma mockups for email and password login screens",
   "columnKey": "todo",
   "priority": "high",
-  "dueDate": "2026-11-01T12:00:00.000Z"
+  "dueDate": "2026-11-01T12:00:00.000Z",
+  "isCompleted": false
 }
 ```
 
@@ -1132,6 +1314,7 @@ Every request verifies that `:boardId` exists and belongs to the authenticated u
     "order": 0,
     "priority": "high",
     "dueDate": "2026-11-01T12:00:00.000Z",
+    "isCompleted": false,
     "createdAt": "2026-10-25T10:45:00.000Z",
     "updatedAt": "2026-10-25T10:45:00.000Z"
   },
@@ -1369,13 +1552,15 @@ Triggered when the task does not exist or does not belong to the requested board
   | `description` | String | No | None | Trimmed, max 2000 characters | Updated task description |
   | `priority` | String (Enum) | No | None | `"low"`, `"medium"`, `"high"` | Updated priority level |
   | `dueDate` | String / Null | No | None | Valid ISO date string or `null` | Updated deadline |
+  | `isCompleted` | Boolean | No | None | Boolean value | Independent task completion status |
 
 #### C. Request Payload Example
 ```json
 {
   "title": "Design and review login wireframes",
   "priority": "medium",
-  "dueDate": "2026-11-05T18:00:00.000Z"
+  "dueDate": "2026-11-05T18:00:00.000Z",
+  "isCompleted": true
 }
 ```
 
@@ -1396,6 +1581,7 @@ Triggered when the task does not exist or does not belong to the requested board
     "order": 0,
     "priority": "medium",
     "dueDate": "2026-11-05T18:00:00.000Z",
+    "isCompleted": true,
     "createdAt": "2026-10-25T10:45:00.000Z",
     "updatedAt": "2026-10-25T11:00:00.000Z"
   },

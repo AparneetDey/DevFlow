@@ -71,3 +71,52 @@ export const boardIdParamSchema = z.object({
             message: "Invalid board ID format"
         })
 });
+
+/**
+ * Validation schema for adding a column to a board.
+ * Accepts only name (required).
+ */
+export const addColumnSchema = z
+    .object({
+        name: z
+            .string({
+                required_error: "Column name is required",
+                invalid_type_error: "Column name must be a string"
+            })
+            .trim()
+            .min(1, "Column name cannot be empty")
+            .max(50, "Column name cannot exceed 50 characters")
+    })
+    .strict({ message: "Unrecognized field provided. Only name is allowed" });
+
+/**
+ * Validation schema for renaming an existing column on a board.
+ * Accepts only name (required).
+ */
+export const renameColumnSchema = z
+    .object({
+        name: z
+            .string({
+                required_error: "Column name is required",
+                invalid_type_error: "Column name must be a string"
+            })
+            .trim()
+            .min(1, "Column name cannot be empty")
+            .max(50, "Column name cannot exceed 50 characters")
+    })
+    .strict({ message: "Unrecognized field provided. Only name is allowed" });
+
+/**
+ * Validation schema for route parameters with :boardId and :columnKey.
+ */
+export const columnKeyParamSchema = z.object({
+    boardId: z
+        .string({ required_error: "Board ID is required" })
+        .refine((val) => mongoose.Types.ObjectId.isValid(val), {
+            message: "Invalid board ID format"
+        }),
+    columnKey: z
+        .string({ required_error: "Column key is required" })
+        .trim()
+        .min(1, "Column key cannot be empty")
+});

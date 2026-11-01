@@ -20,7 +20,7 @@ const dueDateSchema = z
 
 /**
  * Validation schema for task creation.
- * Accepts title, description, columnKey, priority, and dueDate.
+ * Accepts title, description, columnKey, priority, dueDate, and isCompleted.
  * Disallows boardId, order, and unrecognized fields.
  */
 export const createTaskSchema = z
@@ -41,22 +41,29 @@ export const createTaskSchema = z
             .max(2000, "Description cannot exceed 2000 characters")
             .optional(),
         columnKey: z
-            .enum(TASK_COLUMNS, {
-                errorMap: () => ({ message: "Column key must be one of: todo, in-progress, done" })
+            .string({
+                invalid_type_error: "Column key must be a string"
             })
+            .trim()
+            .min(1, "Column key cannot be empty")
             .optional(),
         priority: z
             .enum(TASK_PRIORITIES, {
                 errorMap: () => ({ message: "Priority must be one of: low, medium, high" })
             })
             .optional(),
-        dueDate: dueDateSchema
+        dueDate: dueDateSchema,
+        isCompleted: z
+            .boolean({
+                invalid_type_error: "isCompleted must be a boolean"
+            })
+            .optional()
     })
-    .strict({ message: "Unrecognized field provided. Only title, description, columnKey, priority, and dueDate are allowed" });
+    .strict({ message: "Unrecognized field provided. Only title, description, columnKey, priority, dueDate, and isCompleted are allowed" });
 
 /**
  * Validation schema for task update.
- * Allows updating title, description, priority, and dueDate.
+ * Allows updating title, description, priority, dueDate, and isCompleted.
  * Disallows boardId, columnKey, order, and unrecognized fields.
  * Requires at least one field to be provided.
  */
@@ -82,17 +89,23 @@ export const updateTaskSchema = z
                 errorMap: () => ({ message: "Priority must be one of: low, medium, high" })
             })
             .optional(),
-        dueDate: dueDateSchema
+        dueDate: dueDateSchema,
+        isCompleted: z
+            .boolean({
+                invalid_type_error: "isCompleted must be a boolean"
+            })
+            .optional()
     })
-    .strict({ message: "Unrecognized field provided. Only title, description, priority, and dueDate can be updated" })
+    .strict({ message: "Unrecognized field provided. Only title, description, priority, dueDate, and isCompleted can be updated" })
     .refine(
         (data) =>
             data.title !== undefined ||
             data.description !== undefined ||
             data.priority !== undefined ||
-            data.dueDate !== undefined,
+            data.dueDate !== undefined ||
+            data.isCompleted !== undefined,
         {
-            message: "At least one valid field (title, description, priority, or dueDate) must be provided for update"
+            message: "At least one valid field (title, description, priority, dueDate, or isCompleted) must be provided for update"
         }
     );
 
@@ -102,10 +115,13 @@ export const updateTaskSchema = z
  */
 export const moveTaskSchema = z
     .object({
-        columnKey: z.enum(TASK_COLUMNS, {
-            required_error: "Column key is required",
-            errorMap: () => ({ message: "Column key must be one of: todo, in-progress, done" })
-        }),
+        columnKey: z
+            .string({
+                required_error: "Column key is required",
+                invalid_type_error: "Column key must be a string"
+            })
+            .trim()
+            .min(1, "Column key cannot be empty"),
         order: z
             .number({
                 invalid_type_error: "Order must be a number"

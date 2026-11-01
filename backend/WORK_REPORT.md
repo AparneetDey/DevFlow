@@ -1935,3 +1935,263 @@ Key architectural details:
 
 ### 7. Known Limitations
 - Network latency: Full automated test runs against remote MongoDB Atlas cluster take ~25–30 seconds.
+
+
+---
+
+## Task 9: Dynamic Board Columns & Independent Task Completion
+
+### 1. Initial State & Requirements Overview
+Prior to Task 9:
+- Boards were bound to an immutable set of 3 default columns (`todo`, `in-progress`, `done`).
+- The `Task` schema enforced a strict Mongoose enum on `columnKey: ["todo", "in-progress", "done"]`, preventing any custom column identifiers.
+- Task completion was inferred solely from column membership (`columnKey === "done"`). Moving a task out of "done" would mark it incomplete, and moving any task to "done" would treat it as completed without an independent flag.
+- There were no APIs for creating or renaming columns.
+
+Task 9 Objectives:
+1. Support dynamic board columns (minimum 3 default columns, maximum 5 columns per board).
+2. Implement Add Column API (`POST /api/v1/boards/:boardId/columns`).
+3. Implement Rename Column API (`PATCH /api/v1/boards/:boardId/columns/:columnKey`).
+4. Implement independent task completion flag (`isCompleted: Boolean, default: false`) decoupled from column placement.
+5. Update Task movement (`PATCH /api/v1/boards/:boardId/tasks/:taskId/move`) to validate against dynamic board columns and preserve `isCompleted`.
+6. Maintain 100% backward compatibility for existing boards, tasks, and frontend components.
+
+---
+
+### 2. Files Inspected & Modified
+- **`backend/src/models/board.model.js`**
+  - Updated `columnSchema` to support both `name` and backward-compatible `title`, unique `key`, and numeric `order`.
+  - Added pre-validate and post-init hooks to normalize missing `name` or `title` fields.
+  - Standardized `DEFAULT_COLUMNS` to `{ name: "To Do", title: "To Do", key: "todo", order: 0 }`, `{ name: "In Progress", title: "In Progress", key: "in-progress", order: 1 }`, `{ name: "Done", title: "Done", key: "done", order: 2 }`.
+- **`backend/src/models/task.model.js`**
+  - Removed static Mongoose enum constraint from `columnKey`, allowing dynamic column keys per board.
+  - Added `isCompleted: { type: Boolean, default: false }`.
+  - Preserved `TASK_COLUMNS` and compound indexes.
+- **`backend/src/validators/board.validator.js`**
+  - Added `addColumnSchema` validating `{ name }` (trimmed string, 1 to 50 characters, `.strict()`).
+  - Added `renameColumnSchema` validating `{ name }` (trimmed string, 1 to 50 characters, `.strict()`).
+  - Added `columnKeyParamSchema` validating `:boardId` (valid ObjectId) and `:columnKey` (non-empty string).
+- **`backend/src/validators/task.validator.js`**
+  - In `createTaskSchema`: changed `columnKey` to optional non-empty string; added optional `isCompleted: z.boolean()`.
+  - In `updateTaskSchema`: added optional `isCompleted: z.boolean()`; updated `.refine()` to allow `isCompleted` updates.
+  - In `moveTaskSchema`: updated `columnKey` to require a non-empty string.
+- **`backend/src/services/board.service.js`**
+  - Added `generateColumnKey(name, existingColumns)` generating URL/slug-friendly stable keys (e.g., `in-review`, `in-review-1`).
+  - Added `addColumn(boardId, { name }, userId)` with atomic concurrency guard `"columns.4": { $exists: false }` to strictly cap columns at 5.
+  - Added `renameColumn(boardId, columnKey, { name }, userId)` updating column `name` and `title` without mutating `key`, `order`, or tasks.
+- **`backend/src/controllers/board.controller.js`**
+  - Added `addColumn` controller returning `ApiResponse(201, updatedBoard, "Column added successfully")`.
+  - Added `renameColumn` controller returning `ApiResponse(200, updatedBoard, "Column renamed successfully")`.
+- **`backend/src/routes/board.routes.js`**
+  - Mounted `POST /:boardId/columns` with `validateParams(boardIdParamSchema)`, `validate(addColumnSchema)`, and `addColumn`.
+  - Mounted `PATCH /:boardId/columns/:columnKey` with `validateParams(columnKeyParamSchema)`, `validate(renameColumnSchema)`, and `renameColumn`.
+- **`backend/src/services/task.service.js`**
+  - Added `getValidColumnKeys(board)` dynamically extracting valid keys from `board.columns`.
+  - Updated `createTask` to validate target column key against board's columns and initialize `isCompleted`.
+  - Updated `getBoardTasks` to validate `columnKey` query filter against board's columns.
+  - Updated `updateTask` to support updating `isCompleted` independently.
+  - Updated `moveTask` to validate `targetColumnKey` against board's columns, maintain sequential ordering, and preserve `isCompleted` without modification.
+- **`backend/tests/board.test.js`**
+  - Added test suite for `POST /api/v1/boards/:boardId/columns` (sequential order, max 5 limit, reject 6th, empty name, 404 unauthorized).
+  - Added test suite for `PATCH /api/v1/boards/:boardId/columns/:columnKey` (renaming, key/order preservation, empty name, nonexistent key, 404 unauthorized).
+- **`backend/tests/task.test.js`**
+  - Added tests for `isCompleted: false` default on task creation.
+  - Added tests for toggling `isCompleted: true` and `isCompleted: false` without altering column or order.
+  - Added tests for preserving `isCompleted: true` across column moves.
+  - Added tests ensuring moving to "done" column does not automatically mark a task completed.
+  - Added tests for moving tasks into dynamically added columns.
+- **`backend/README.md`**
+  - Added documentation for endpoints 9.6 (`POST /api/v1/boards/:boardId/columns`) and 9.7 (`PATCH /api/v1/boards/:boardId/columns/:columnKey`).
+  - Updated `Task` creation and update schemas to document `isCompleted`.
+
+---
+
+### 3. Schema & API Design
+
+#### A. Board Columns Schema
+```javascript
+columns: [
+  {
+    name: "To Do",
+    title: "To Do",
+    key: "todo",
+    order: 0
+  },
+  {
+    name: "In Progress",
+    title: "In Progress",
+    key: "in-progress",
+    order: 1
+  },
+  {
+    name: "Done",
+    title: "Done",
+    key: "done",
+    order: 2
+  }
+]
+```
+
+#### B. New Endpoints
+1. **`POST /api/v1/boards/:boardId/columns`**
+   - **Auth:** `verifyJWT`
+   - **Body:** `{ "name": "In Review" }`
+   - **Response (201 Created):** Returns the full updated Board document with the appended column:
+     ```json
+     {
+       "statusCode": 201,
+       "data": {
+         "_id": "671bb200e4b0234567890456",
+         "title": "Project Alpha",
+         "columns": [
+           { "name": "To Do", "title": "To Do", "key": "todo", "order": 0 },
+           { "name": "In Progress", "title": "In Progress", "key": "in-progress", "order": 1 },
+           { "name": "Done", "title": "Done", "key": "done", "order": 2 },
+           { "name": "In Review", "title": "In Review", "key": "in-review", "order": 3 }
+         ]
+       },
+       "message": "Column added successfully",
+       "success": true
+     }
+     ```
+   - **Error (400 Bad Request):** If board already has 5 columns: `"Board cannot have more than 5 columns"`.
+
+2. **`PATCH /api/v1/boards/:boardId/columns/:columnKey`**
+   - **Auth:** `verifyJWT`
+   - **Body:** `{ "name": "Backlog" }`
+   - **Response (200 OK):** Returns the full updated Board document with the column renamed. Key and order remain unchanged.
+   - **Error (404 Not Found):** If column does not exist on the board: `"Column not found"`.
+
+#### C. Independent Task Completion Field
+- **Task Schema Field:** `isCompleted: { type: Boolean, default: false }`.
+- **Creation:** Optional `isCompleted` field in `POST /api/v1/boards/:boardId/tasks`, defaults to `false`.
+- **Updating:** `PATCH /api/v1/boards/:boardId/tasks/:taskId` accepts `{ "isCompleted": true }` or `{ "isCompleted": false }`.
+- **Movement:** `PATCH /api/v1/boards/:boardId/tasks/:taskId/move` updates only `columnKey` and `order`; `isCompleted` is completely untouched. Moving into or out of "done" does not alter `isCompleted`.
+
+---
+
+### 4. Migration & Backward Compatibility Strategy
+- **Dual Naming on Columns:** To avoid breaking frontend components (`KanbanColumn.jsx` and `columnSorting.js` check `typeof col.title === "string"`), both `name` and `title` are stored and kept synchronized.
+- **Default Columns Guarantee:** Any board document queried that lacks a `columns` array or has an empty array automatically receives the 3 default columns (`To Do`, `In Progress`, `Done`) via Mongoose defaults and `post("init")` hook.
+- **Task Completion Historical Data:** In accordance with the project specification, existing tasks without an explicit `isCompleted` field default to `isCompleted: false`. Completed status is not inferred solely from `columnKey === "done"` to avoid silently changing user data.
+- **Dynamic Task Movement:** Any task moving to a valid column key present on the board is accepted, while moves to deleted or non-existent columns are rejected with HTTP 400.
+
+---
+
+### 5. Automated Test Suite Results
+Executed `npm test` against the live MongoDB Atlas test database (`devflow_test`):
+- **Test Runner:** Vitest v5.0.5 + Supertest v7.3.1
+- **Total Test Files:** 3 passed (3 total)
+  - [`backend/tests/board.test.js`](file:///e:/GitHub-Repo/DevFlow/backend/tests/board.test.js): 25 passed (added 11 column tests: add, max 5, reject 6th, rename, key/order preservation, unauthorized)
+  - [`backend/tests/task.test.js`](file:///e:/GitHub-Repo/DevFlow/backend/tests/task.test.js): 25 passed (added 5 completion & dynamic column tests)
+  - [`backend/tests/auth.test.js`](file:///e:/GitHub-Repo/DevFlow/backend/tests/auth.test.js): 21 passed
+- **Total Tests:** **71 passed (71 total, 0 failed, 0 skipped)**
+- **Duration:** ~38.5 seconds
+
+---
+
+### 6. Remaining Work & Frontend Contract Changes for Task 10
+When implementing the frontend in Task 10, the following API contracts are ready:
+1. **Adding Columns:** `POST /api/v1/boards/:boardId/columns` with payload `{ "name": "Column Name" }`.
+2. **Renaming Columns:** `PATCH /api/v1/boards/:boardId/columns/:columnKey` with payload `{ "name": "New Name" }`.
+3. **Column Keys:** Stable slug format (e.g. `in-review`). UI should use `column.key` for task grouping and drag-and-drop droppable container IDs.
+4. **Task Completion:** `PATCH /api/v1/boards/:boardId/tasks/:taskId` with payload `{ "isCompleted": true | false }`. The completion checkbox/button should call this endpoint directly without moving the task across columns.
+
+---
+
+## Task 9A: Backend Verification: Migration Safety, Column Concurrency & Final Checks
+
+### 1. Objective & Scope
+Perform a focused verification and hardening pass over the Task 9 backend implementation prior to frontend Task 10:
+1. **Migration Safety Verification:**
+   - Verify whether legacy boards (missing `columns` or `columns: []`) are properly persisted with the default 3 columns into MongoDB upon retrieval or modification.
+   - Ensure existing boards with custom columns remain completely untouched.
+   - Avoid unintentional mutation or data loss.
+2. **Column Concurrency & Cap Enforcement:**
+   - Verify concurrent `addColumn()` requests against race conditions (duplicate orders, duplicate keys, exceeding 5 columns).
+   - Implement an atomic driver-level length guard and retry mechanism.
+3. **Column Key (Slug) Generation Verification:**
+   - Verify slug generation handles empty names, whitespace, special characters, and collisions with incrementing suffixes (`-1`, `-2`).
+4. **Independent Task Completion Verification:**
+   - Verify `isCompleted` defaults to `false`, toggles cleanly without affecting column or order, and is completely decoupled from `"done"` column status.
+5. **Automated Test Suite Expansion & Execution:**
+   - Expand `backend/tests/board.test.js` and `backend/tests/task.test.js` with comprehensive integration tests covering legacy migration, concurrent column operations, and boundary caps.
+   - Execute the full test suite against live MongoDB Atlas (`devflow_test`).
+
+---
+
+### 2. Verification Findings & Hardening Applied
+
+#### A. Legacy Board Migration Safety
+- **Observation:** In the initial Task 9 implementation, Mongoose schema defaults and the `post("init")` hook populated default columns in-memory when a document missing `columns` or with `columns: []` was loaded. However, purely read-based operations (`getUserBoards`, `getBoardById`) did not persist these columns back to MongoDB Atlas unless an explicit write occurred.
+- **Hardening Applied:**
+  - Implemented `ensureBoardColumnsPersisted(board)` in `backend/src/services/board.service.js`.
+  - Checks `if (board.isModified("columns")) await board.save();` so that any legacy document initialized with default columns is idempotently persisted to MongoDB Atlas on read.
+  - Integrated `ensureBoardColumnsPersisted` into:
+    - `boardService.getUserBoards(userId)`
+    - `boardService.getBoardById(boardId, userId)`
+    - `boardService.addColumn(boardId, { name }, userId)`
+    - `boardService.renameColumn(boardId, columnKey, { name }, userId)`
+    - `taskService.verifyBoardOwnership(boardId, userId)` (ensures task CRUD/movement on a legacy board also guarantees column persistence).
+  - Documents with already-existing custom columns have `isModified("columns") === false`, avoiding redundant write overhead and preserving custom column configurations.
+
+#### B. Column Concurrency & 5-Column Cap
+- **Observation:** Under concurrent execution, two simultaneous `addColumn()` requests reading the board document at the same initial state (e.g. 3 columns) both calculated `order: 3` and generated identical slug keys, with only the `"columns.4": { $exists: false }` filter guarding the 5-column upper bound.
+- **Hardening Applied:**
+  - Enhanced `boardService.addColumn` with an atomic optimistic-locking condition:
+    ```javascript
+    const updatedBoard = await Board.findOneAndUpdate(
+        {
+            _id: boardId,
+            owner: userId,
+            columns: { $size: currentColumns.length },
+            "columns.4": { $exists: false }
+        },
+        {
+            $push: { columns: newColumn }
+        },
+        { returnDocument: "after", runValidators: true }
+    );
+    ```
+  - Added an automatic retry loop (up to 3 attempts): If another concurrent request updates the array first, the array length changes, causing `columns: { $size: currentColumns.length }` to safely evaluate to `null`. The loop re-fetches the latest document state, verifies if the 5-column cap is reached (returning 400 if so), re-computes the next sequential order and non-colliding slug (e.g., `col-1`), and successfully persists the column.
+
+#### C. Column Key (Slug) Generation
+- Verified `generateColumnKey(name, existingColumns)` across diverse inputs:
+  - `"In Review"` → `"in-review"`
+  - `"  QA & Testing!  "` → `"qa-testing"`
+  - `"***"` (special characters only) → `"col"`
+  - Consecutive additions with identical names → `"qa"`, `"qa-1"`, `"qa-2"`.
+
+#### D. Independent Task Completion
+- Verified that `isCompleted`:
+  - Defaults to `false` for new tasks.
+  - Can be updated via `PATCH /api/v1/boards/:boardId/tasks/:taskId` with `{ "isCompleted": true }` or `{ "isCompleted": false }` without changing column or order.
+  - Is strictly preserved when moving a task between columns via `PATCH /api/v1/boards/:boardId/tasks/:taskId/move`.
+  - Is not automatically set to `true` when moving to `"done"`, nor cleared when moving out of `"done"`.
+
+---
+
+### 3. Automated Test Suite Results
+Executed the Vitest test suite against live MongoDB Atlas test database (`devflow_test`):
+- **Test Runner:** Vitest v5.0.5 + Supertest v7.3.1
+- **Command:** `npm test`
+- **Total Test Files:** 3 passed (3 total)
+  - `backend/tests/board.test.js`: **31 passed** (added 3 legacy migration tests + 3 concurrent addition tests)
+  - `backend/tests/task.test.js`: **26 passed** (added 1 legacy board task persistence test)
+  - `backend/tests/auth.test.js`: **21 passed**
+- **Total Tests Passed:** **78 passed (78 total, 0 failed, 0 skipped)**
+- **Duration:** 51.79 seconds
+
+#### New Test Cases Added:
+1. `should migrate and persist default columns for legacy boards missing columns field` (verified raw document in MongoDB collection now contains 3 default columns).
+2. `should migrate and persist default columns for legacy boards with empty columns array` (verified raw document now contains 3 default columns).
+3. `should not modify or overwrite boards that already have custom columns` (verified custom columns are preserved).
+4. `should handle concurrent column additions with distinct names without order collision` (verified sequential orders 0, 1, 2, 3, 4 without duplicates).
+5. `should handle concurrent column additions with identical names without key collision` (verified unique slug suffixes e.g. `review` and `review-1`).
+6. `should enforce 5-column cap under concurrent additions at column limit boundary` (verified 1 succeeded with 201, 1 rejected with 400, final count exactly 5).
+7. `should trigger column persistence when creating a task on a legacy board missing columns` (verified task creation initiates board column persistence).
+
+---
+
+### 4. Readiness for Frontend Task 10
+The backend is confirmed stable, race-condition safe, fully backward compatible, and ready for Frontend Task 10.

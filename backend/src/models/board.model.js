@@ -5,9 +5,15 @@ import mongoose, { Schema } from "mongoose";
  */
 const columnSchema = new Schema(
     {
+        name: {
+            type: String,
+            required: [true, "Column name is required"],
+            trim: true,
+            minlength: [1, "Column name cannot be empty"],
+            maxlength: [50, "Column name cannot exceed 50 characters"]
+        },
         title: {
             type: String,
-            required: [true, "Column title is required"],
             trim: true
         },
         key: {
@@ -23,13 +29,22 @@ const columnSchema = new Schema(
     { _id: false }
 );
 
+columnSchema.pre("validate", function () {
+    if (!this.name && this.title) {
+        this.name = this.title;
+    }
+    if (!this.title && this.name) {
+        this.title = this.name;
+    }
+});
+
 /**
  * Default immutable column definitions for newly created boards.
  */
 export const DEFAULT_COLUMNS = Object.freeze([
-    { title: "Todo", key: "todo", order: 0 },
-    { title: "In Progress", key: "in-progress", order: 1 },
-    { title: "Done", key: "done", order: 2 }
+    { name: "To Do", title: "To Do", key: "todo", order: 0 },
+    { name: "In Progress", title: "In Progress", key: "in-progress", order: 1 },
+    { name: "Done", title: "Done", key: "done", order: 2 }
 ]);
 
 const boardSchema = new Schema(
@@ -62,5 +77,16 @@ const boardSchema = new Schema(
         timestamps: true
     }
 );
+
+boardSchema.post("init", function () {
+    if (!this.columns || this.columns.length === 0) {
+        this.columns = DEFAULT_COLUMNS.map((col) => ({ ...col }));
+    } else {
+        for (const col of this.columns) {
+            if (!col.name && col.title) col.name = col.title;
+            if (!col.title && col.name) col.title = col.name;
+        }
+    }
+});
 
 export const Board = mongoose.model("Board", boardSchema);
