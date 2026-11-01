@@ -53,9 +53,10 @@ export function RegisterPage() {
       errors.email = 'Please provide a valid email address';
     }
 
-    if (!formData.password) {
+    const password = formData.password;
+    if (!password) {
       errors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
+    } else if (password.length < 6) {
       errors.password = 'Password must be at least 6 characters long';
     }
 
@@ -76,7 +77,7 @@ export function RegisterPage() {
 
     try {
       await register({
-        username: formData.username.trim().toLowerCase(),
+        username: formData.username.trim(),
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
       });
@@ -92,20 +93,23 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto my-6 sm:my-12 bg-white rounded-xl border border-slate-200 shadow-sm p-5 sm:p-8 space-y-6">
+    <div className="max-w-md mx-auto my-6 sm:my-12 bg-[var(--color-surface)] text-[var(--color-text)] rounded-xl border border-[var(--color-border)] shadow-xs p-5 sm:p-8 space-y-6">
       {/* Header */}
       <div className="text-center space-y-1">
-        <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 border border-indigo-100 shadow-xs">
+        <div className="w-12 h-12 rounded-xl bg-[var(--color-primary-muted)] text-[var(--color-primary-hover)] flex items-center justify-center mx-auto mb-3 border border-[var(--color-primary)]/40 shadow-xs">
           <UserPlus className="w-6 h-6" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create an account</h1>
-        <p className="text-xs text-slate-500">Get started with your DevFlow project workspaces</p>
+        <h1 className="text-2xl font-bold text-[var(--color-text)] tracking-tight">Create an account</h1>
+        <p className="text-xs text-[var(--color-text-secondary)]">Get started with your DevFlow project workspaces</p>
       </div>
 
       {/* Global Server Error Alert */}
       {serverError && (
-        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
-          <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 p-3 rounded-lg bg-[var(--color-danger)]/15 border border-[var(--color-danger)]/40 text-xs text-[var(--color-text)]"
+        >
+          <AlertCircle className="w-4 h-4 text-[var(--color-danger)] mt-0.5 shrink-0" />
           <span>{serverError}</span>
         </div>
       )}
@@ -166,11 +170,11 @@ export function RegisterPage() {
       </form>
 
       {/* Footer link to Login */}
-      <div className="text-center pt-2 text-xs text-slate-500 border-t border-slate-100">
+      <div className="text-center pt-2 text-xs text-[var(--color-text-secondary)] border-t border-[var(--color-border)]">
         Already have an account?{' '}
         <Link
           to="/login"
-          className="text-indigo-600 hover:text-indigo-700 font-semibold underline underline-offset-2"
+          className="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] font-semibold underline underline-offset-2"
         >
           Sign in
         </Link>

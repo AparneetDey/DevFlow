@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test src/utils/columnSorting.test.js src/utils/taskGrouping.test.js src/utils/taskReordering.test.js src/api/task.api.test.js",
+    "test": "node --test src/utils/columnSorting.test.js src/utils/taskGrouping.test.js src/utils/taskReordering.test.js src/utils/profileData.test.js src/api/task.api.test.js src/api/auth.session.test.js src/api/board.api.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

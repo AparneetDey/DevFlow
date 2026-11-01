@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import {
   ArrowLeft,
-  Kanban,
   Clock,
   Layers,
   AlertCircle,
@@ -229,7 +228,63 @@ export function BoardPage() {
     setSelectedTask(null);
   };
 
+  const handleMoveTaskColumn = async (taskId, targetColumnKey) => {
+    if (!taskId || !boardId || !targetColumnKey) return;
+
+    const targetColTasks = getTasksForColumn(tasks, targetColumnKey);
+    const targetOrder = targetColTasks.length;
+
+    const prevTasks = tasks;
+    const prevSelectedTask = selectedTask;
+    const optimisticTask = selectedTask?._id === taskId
+      ? { ...selectedTask, columnKey: targetColumnKey, order: targetOrder }
+      : { columnKey: targetColumnKey, order: targetOrder };
+
+    setTasks((prev) =>
+      prev.map((t) => (t._id === taskId ? { ...t, columnKey: targetColumnKey, order: targetOrder } : t))
+    );
+    if (selectedTask?._id === taskId) {
+      setSelectedTask(optimisticTask);
+    }
+
+    try {
+      const response = await taskApi.moveTask(boardId, taskId, {
+        columnKey: targetColumnKey,
+        order: targetOrder,
+      });
+      const serverTask = response.data?.data;
+      if (serverTask && serverTask._id) {
+        setTasks((prev) =>
+          prev.map((t) => (t._id === serverTask._id ? { ...t, ...serverTask } : t))
+        );
+        if (selectedTask?._id === serverTask._id) {
+          setSelectedTask((prev) => ({ ...prev, ...serverTask }));
+        }
+      }
+      return serverTask;
+    } catch (err) {
+      setTasks(prevTasks);
+      if (prevSelectedTask) {
+        setSelectedTask(prevSelectedTask);
+      }
+      setTaskActionError(extractErrorMessage(err));
+      throw err;
+    }
+  };
+
   const handleUpdateTask = async (taskId, updateData) => {
+    // If updateData contains columnKey, route column move to taskApi.moveTask
+    if (updateData?.columnKey) {
+      const { columnKey, ...restUpdates } = updateData;
+      let updatedTask = null;
+      if (Object.keys(restUpdates).length > 0) {
+        const res = await taskApi.updateTask(boardId, taskId, restUpdates);
+        updatedTask = res.data?.data;
+      }
+      const moveRes = await handleMoveTaskColumn(taskId, columnKey);
+      return moveRes || updatedTask;
+    }
+
     const response = await taskApi.updateTask(boardId, taskId, updateData);
     const updatedTask = response.data?.data;
     if (updatedTask && updatedTask._id) {
@@ -562,36 +617,36 @@ export function BoardPage() {
       {isLoading ? (
         <div className="space-y-6 sm:space-y-8" aria-busy="true">
           {/* Back link skeleton */}
-          <div className="h-4 w-32 bg-slate-200 rounded animate-pulse" />
+          <div className="h-4 w-32 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
 
           {/* Header Card Skeleton */}
-          <div className="bg-white rounded-2xl p-6 sm:p-7 border border-slate-200 shadow-2xs space-y-4 animate-pulse">
-            <div className="h-4 w-28 bg-slate-200 rounded" />
-            <div className="h-8 w-72 max-w-full bg-slate-200 rounded-md" />
-            <div className="h-4 w-full max-w-md bg-slate-100 rounded" />
+          <div className="bg-[var(--color-surface)] rounded-2xl p-6 sm:p-7 border border-[var(--color-border)] shadow-xs space-y-4 animate-pulse">
+            <div className="h-4 w-28 bg-[var(--color-surface-elevated)] rounded" />
+            <div className="h-8 w-72 max-w-full bg-[var(--color-surface-elevated)] rounded-md" />
+            <div className="h-4 w-full max-w-md bg-[var(--color-surface-elevated)]/60 rounded" />
             <div className="flex gap-2.5 pt-1.5">
-              <div className="h-6 w-24 bg-slate-100 rounded-lg" />
-              <div className="h-6 w-32 bg-slate-100 rounded-lg" />
+              <div className="h-6 w-24 bg-[var(--color-surface-elevated)] rounded-lg" />
+              <div className="h-6 w-32 bg-[var(--color-surface-elevated)] rounded-lg" />
             </div>
           </div>
 
           {/* Kanban Columns Skeleton */}
           <div className="space-y-3.5">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-slate-200 rounded animate-pulse" />
-              <div className="h-4 w-28 bg-slate-200 rounded animate-pulse" />
+              <div className="w-4 h-4 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
+              <div className="h-4 w-28 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
             </div>
             <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 min-w-0">
               {[1, 2, 3].map((colIndex) => (
                 <div
                   key={colIndex}
-                  className="w-72 sm:w-80 shrink-0 bg-slate-100/70 border border-slate-200/80 rounded-2xl p-3 sm:p-3.5 min-h-[440px] animate-pulse flex flex-col"
+                  className="w-72 sm:w-80 shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-3 sm:p-3.5 min-h-[440px] animate-pulse flex flex-col"
                 >
-                  <div className="flex items-center gap-2 px-1.5 py-1 mb-2.5 pb-2.5 border-b border-slate-200/60">
-                    <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                    <div className="h-4 w-24 bg-slate-200 rounded" />
+                  <div className="flex items-center gap-2 px-1.5 py-1 mb-2.5 pb-2.5 border-b border-[var(--color-border)]">
+                    <div className="w-2 h-2 rounded-full bg-[var(--color-border)] shrink-0" />
+                    <div className="h-4 w-24 bg-[var(--color-surface-elevated)] rounded" />
                   </div>
-                  <div className="flex-1 rounded-xl border border-dashed border-slate-200/80 bg-white/40 p-6 flex flex-col items-center justify-center" />
+                  <div className="flex-1 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-6 flex flex-col items-center justify-center" />
                 </div>
               ))}
             </div>
@@ -602,14 +657,14 @@ export function BoardPage() {
         <div
           role="region"
           aria-label="Board not found"
-          className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-6 sm:p-12 text-center max-w-lg mx-auto my-6 sm:my-12 space-y-5"
+          className="bg-[var(--color-surface)] rounded-2xl border-2 border-dashed border-[var(--color-border)] p-6 sm:p-12 text-center max-w-lg mx-auto my-6 sm:my-12 space-y-5 text-[var(--color-text)]"
         >
-          <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-100 shadow-2xs">
+          <div className="w-14 h-14 rounded-2xl bg-[var(--color-warning)]/15 text-[var(--color-warning)] flex items-center justify-center mx-auto border border-[var(--color-warning)]/40 shadow-xs">
             <FolderX className="w-7 h-7" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-lg font-bold text-slate-900">Board Not Found</h2>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+            <h2 className="text-lg font-bold text-[var(--color-text)]">Board Not Found</h2>
+            <p className="text-xs text-[var(--color-text-secondary)] max-w-sm mx-auto leading-relaxed">
               The requested board workspace does not exist, or you do not have permission to view it.
             </p>
           </div>
@@ -624,21 +679,21 @@ export function BoardPage() {
         /* 3. Error State */
         <div
           role="alert"
-          className="bg-red-50 border border-red-200 rounded-2xl p-6 sm:p-10 text-center max-w-lg mx-auto my-6 sm:my-12 space-y-5 shadow-2xs"
+          className="bg-[var(--color-danger)]/15 border border-[var(--color-danger)]/40 rounded-2xl p-6 sm:p-10 text-center max-w-lg mx-auto my-6 sm:my-12 space-y-5 shadow-xs text-[var(--color-text)]"
         >
-          <div className="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-2xs">
+          <div className="w-12 h-12 rounded-xl bg-[var(--color-danger)]/20 text-[var(--color-danger)] flex items-center justify-center mx-auto border border-[var(--color-danger)]/40 shadow-xs">
             <AlertCircle className="w-6 h-6" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-base font-bold text-red-900">Failed to load board</h2>
-            <p className="text-xs text-red-700 max-w-sm mx-auto leading-relaxed">{error}</p>
+            <h2 className="text-base font-bold text-[var(--color-text)]">Failed to load board</h2>
+            <p className="text-xs text-[var(--color-text-secondary)] max-w-sm mx-auto leading-relaxed">{error}</p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 pt-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleRetry}
-              className="inline-flex items-center justify-center gap-1.5 border-red-200 text-red-700 hover:bg-red-100/60 cursor-pointer w-full sm:w-auto"
+              className="inline-flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Retry</span>
@@ -653,104 +708,95 @@ export function BoardPage() {
         </div>
       ) : board ? (
         /* 4. Populated Board Detail */
-        <div className="space-y-6 sm:space-y-8">
-          {/* Back Navigation Link */}
-          <div>
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded p-1"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Dashboard</span>
-            </Link>
-          </div>
+        <div className="space-y-4 sm:space-y-5">
+          {/* Sleek Board Toolbar */}
+          <div className="bg-[var(--color-surface)] rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 border border-[var(--color-border)] shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3 min-w-0">
+            {/* Left: Back Link & Title & Metadata */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-md px-2 py-1 shrink-0 -ml-1 self-start sm:self-auto"
+                title="Back to Dashboard"
+                aria-label="Back to Dashboard"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Boards</span>
+              </Link>
 
-          {/* Board Header Card */}
-          <div className="bg-white rounded-2xl p-6 sm:p-7 border border-slate-200 shadow-2xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-              <div className="space-y-2 max-w-3xl">
-                <div className="flex items-center gap-1.5 text-indigo-600">
-                  <Kanban className="w-4 h-4" />
-                  <span className="text-xs font-semibold uppercase tracking-wider">Board Workspace</span>
+              <div className="h-4 w-px bg-[var(--color-border)] hidden sm:block shrink-0" />
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-lg sm:text-xl font-bold text-[var(--color-text)] tracking-tight truncate max-w-md sm:max-w-xl" title={board.title}>
+                    {board.title}
+                  </h1>
+
+                  {/* Metadata Pills */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] rounded-md font-medium border border-[var(--color-border)]">
+                      <Layers className="w-3 h-3 text-[var(--color-text-muted)]" />
+                      <span>{columns.length}</span>
+                    </span>
+
+                    {!isLoadingTasks && !taskError && (
+                      <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] rounded-md font-medium border border-[var(--color-border)]">
+                        <CheckSquare className="w-3 h-3 text-[var(--color-text-muted)]" />
+                        <span>{tasks.length}</span>
+                      </span>
+                    )}
+
+                    {formattedDate && (
+                      <span className="hidden lg:inline-flex items-center gap-1 text-[11px] text-[var(--color-text-muted)] bg-[var(--color-surface-elevated)] px-2 py-0.5 rounded-md border border-[var(--color-border)] font-medium">
+                        <Clock className="w-3 h-3 text-[var(--color-text-muted)]" />
+                        <span>{formattedDate}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight break-words">
-                  {board.title}
-                </h1>
-                {board.description ? (
-                  <p className="text-sm text-slate-600 leading-relaxed break-words whitespace-pre-line max-w-3xl">
+
+                {board.description && (
+                  <p className="text-xs text-[var(--color-text-secondary)] truncate max-w-lg mt-0.5">
                     {board.description}
                   </p>
-                ) : (
-                  <p className="text-xs text-slate-400 italic">
-                    No description provided for this board.
-                  </p>
                 )}
-
-                {/* Board Metadata Pills */}
-                <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                  <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium border border-slate-200/80">
-                    <Layers className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{columns.length} {columns.length === 1 ? 'Column' : 'Columns'}</span>
-                  </span>
-
-                  {!isLoadingTasks && !taskError && (
-                    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium border border-slate-200/80">
-                      <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
-                      <span>{tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'}</span>
-                    </span>
-                  )}
-
-                  {formattedDate && (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60 font-medium">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Updated {formattedDate}</span>
-                    </span>
-                  )}
-                </div>
               </div>
+            </div>
 
-              {/* Action Buttons: Create Task */}
-              <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto">
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => handleOpenCreateTask('todo')}
-                  className="flex items-center justify-center gap-2 w-full md:w-auto cursor-pointer shadow-2xs"
-                  aria-label="Create new task"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Task</span>
-                </Button>
-              </div>
+            {/* Right: Quick Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => handleOpenCreateTask('todo')}
+                className="flex items-center justify-center gap-1.5 cursor-pointer text-xs"
+                aria-label="Create new task"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Task</span>
+              </Button>
             </div>
           </div>
 
           {/* Kanban Columns Section */}
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-indigo-600" />
-                <span>Workflow Stages</span>
-              </h2>
-            </div>
+          <div className="space-y-3">
 
             {/* Task Action Error Banner (completion toggle or update rollback) */}
             {taskActionError && (
               <div
                 role="alert"
-                className="p-3.5 sm:p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between text-rose-900 shadow-2xs text-xs"
+                className="p-3.5 sm:p-4 bg-[var(--color-danger)]/15 border border-[var(--color-danger)]/40 rounded-xl flex items-center justify-between text-[var(--color-text)] shadow-xs text-xs"
               >
                 <div className="flex items-center gap-2.5">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <AlertCircle className="w-4 h-4 text-[var(--color-danger)] shrink-0" />
                   <div>
                     <span className="font-semibold">Task action failed: </span>
-                    <span className="text-rose-800">{taskActionError}</span>
+                    <span className="text-[var(--color-text-secondary)]">{taskActionError}</span>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setTaskActionError(null)}
-                  className="text-xs font-semibold text-rose-700 hover:text-rose-900 underline ml-2 shrink-0 cursor-pointer"
+                  className="text-xs font-semibold text-[var(--color-danger)] hover:underline ml-2 shrink-0 cursor-pointer"
                 >
                   Dismiss
                 </button>
@@ -761,20 +807,20 @@ export function BoardPage() {
             {taskError && (
               <div
                 role="alert"
-                className="p-3.5 sm:p-4 bg-amber-50/90 border border-amber-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-amber-900 shadow-2xs"
+                className="p-3.5 sm:p-4 bg-[var(--color-warning)]/15 border border-[var(--color-warning)]/40 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[var(--color-text)] shadow-xs"
               >
                 <div className="flex items-center gap-2.5 text-xs">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <AlertCircle className="w-4 h-4 text-[var(--color-warning)] shrink-0" />
                   <div>
                     <span className="font-semibold">Unable to load tasks: </span>
-                    <span className="text-amber-800">{taskError}</span>
+                    <span className="text-[var(--color-text-secondary)]">{taskError}</span>
                   </div>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleTaskRetry}
-                  className="inline-flex items-center gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0 self-start sm:self-auto cursor-pointer"
+                  className="inline-flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
                   aria-label="Retry loading tasks"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -787,9 +833,9 @@ export function BoardPage() {
               <div
                 role="region"
                 aria-label="No workflow columns"
-                className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center max-w-md mx-auto my-6"
+                className="bg-[var(--color-surface)] rounded-2xl border-2 border-dashed border-[var(--color-border)] p-8 text-center max-w-md mx-auto my-6"
               >
-                <p className="text-sm font-medium text-slate-500">
+                <p className="text-sm font-medium text-[var(--color-text-secondary)]">
                   No columns configured for this board.
                 </p>
               </div>
@@ -802,7 +848,7 @@ export function BoardPage() {
                 onDragEnd={handleDragEnd}
                 onDragCancel={handleDragCancel}
               >
-                <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0">
+                <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y">
                   {columns.map((column, index) => (
                     <KanbanColumn
                       key={column.key || column.title || `column-${index}`}
@@ -855,6 +901,7 @@ export function BoardPage() {
           isOpen={isTaskDetailsModalOpen}
           onClose={handleCloseTaskDetails}
           onUpdateTask={handleUpdateTask}
+          onMoveTask={handleMoveTaskColumn}
           onDeleteTask={handleDeleteTask}
           onToggleComplete={handleToggleComplete}
           isTogglingComplete={togglingTaskIds.has(selectedTask._id)}

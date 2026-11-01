@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, AlertCircle } from 'lucide-react';
+import { LogIn, AlertCircle, Clock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { extractErrorMessage } from '../api/error';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, sessionExpired, clearSessionExpired } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -18,6 +18,10 @@ export function LoginPage() {
   const [formErrors, setFormErrors] = useState({});
   const [serverError, setServerError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSessionNoticeDismissed, setIsSessionNoticeDismissed] = useState(false);
+
+  const showSessionExpired =
+    !isSessionNoticeDismissed && Boolean(location.state?.sessionExpired || sessionExpired);
 
   // Where to redirect after login (preserves intended destination)
   const from = location.state?.from?.pathname || '/dashboard';
@@ -25,12 +29,17 @@ export function LoginPage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear field-specific error as user types
     if (formErrors[name]) {
       setFormErrors((prev) => ({ ...prev, [name]: '' }));
     }
     if (serverError) {
       setServerError('');
+    }
+    if (showSessionExpired) {
+      setIsSessionNoticeDismissed(true);
+      if (typeof clearSessionExpired === 'function') {
+        clearSessionExpired();
+      }
     }
   };
 
@@ -53,6 +62,13 @@ export function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
+
+    if (showSessionExpired) {
+      setIsSessionNoticeDismissed(true);
+      if (typeof clearSessionExpired === 'function') {
+        clearSessionExpired();
+      }
+    }
 
     if (!validate()) {
       return;
@@ -78,20 +94,38 @@ export function LoginPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto my-6 sm:my-12 bg-white rounded-xl border border-slate-200 shadow-sm p-5 sm:p-8 space-y-6">
+    <div className="max-w-md mx-auto my-6 sm:my-12 bg-[var(--color-surface)] text-[var(--color-text)] rounded-xl border border-[var(--color-border)] shadow-xs p-5 sm:p-8 space-y-6">
       {/* Header */}
       <div className="text-center space-y-1">
-        <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 border border-indigo-100 shadow-xs">
+        <div className="w-12 h-12 rounded-xl bg-[var(--color-primary-muted)] text-[var(--color-primary-hover)] flex items-center justify-center mx-auto mb-3 border border-[var(--color-primary)]/40 shadow-xs">
           <LogIn className="w-6 h-6" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome back</h1>
-        <p className="text-xs text-slate-500">Sign in to your DevFlow account to continue</p>
+        <h1 className="text-2xl font-bold text-[var(--color-text)] tracking-tight">Welcome back</h1>
+        <p className="text-xs text-[var(--color-text-secondary)]">Sign in to your DevFlow account to continue</p>
       </div>
+
+      {/* Unobtrusive Session Expiration Notice */}
+      {showSessionExpired && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start gap-2.5 p-3 rounded-lg bg-[var(--color-surface-elevated)] border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] shadow-xs"
+        >
+          <Clock className="w-4 h-4 text-[var(--color-primary)] mt-0.5 shrink-0" />
+          <div className="space-y-0.5 flex-1 min-w-0">
+            <p className="font-semibold text-[var(--color-text)]">Session Expired</p>
+            <p className="leading-relaxed">Your session has expired. Please sign in again to continue.</p>
+          </div>
+        </div>
+      )}
 
       {/* Global Server Error Alert */}
       {serverError && (
-        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
-          <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 p-3 rounded-lg bg-[var(--color-danger)]/15 border border-[var(--color-danger)]/40 text-xs text-[var(--color-text)]"
+        >
+          <AlertCircle className="w-4 h-4 text-[var(--color-danger)] mt-0.5 shrink-0" />
           <span>{serverError}</span>
         </div>
       )}
@@ -138,11 +172,11 @@ export function LoginPage() {
       </form>
 
       {/* Footer link to Register */}
-      <div className="text-center pt-2 text-xs text-slate-500 border-t border-slate-100">
+      <div className="text-center pt-2 text-xs text-[var(--color-text-secondary)] border-t border-[var(--color-border)]">
         Don&apos;t have an account yet?{' '}
         <Link
           to="/register"
-          className="text-indigo-600 hover:text-indigo-700 font-semibold underline underline-offset-2"
+          className="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] font-semibold underline underline-offset-2"
         >
           Create an account
         </Link>

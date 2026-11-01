@@ -15,6 +15,7 @@ const SUPPORTED_PRIORITIES = [
 /**
  * Modal dialog for creating a new task inside a Kanban board.
  * Validates fields according to backend Zod constraints and submits to POST /api/v1/boards/:boardId/tasks.
+ * Styled via centralized DevFlow CSS custom properties.
  *
  * @param {Object} props
  * @param {string} props.boardId - Parent board MongoDB ObjectId
@@ -73,14 +74,19 @@ export function CreateTaskModal({
       newErrors.description = 'Task description cannot exceed 2000 characters';
     }
 
+    if (dueDate) {
+      const parsed = new Date(dueDate);
+      if (isNaN(parsed.getTime())) {
+        newErrors.dueDate = 'Please provide a valid date format';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!boardId || isSubmitting) return;
-
     setApiError(null);
 
     if (!validate()) {
@@ -90,14 +96,19 @@ export function CreateTaskModal({
     setIsSubmitting(true);
 
     try {
-      // Backend createTaskSchema is strict: accepts only title, description, columnKey, priority, dueDate
       const payload = {
         title: title.trim(),
-        description: description.trim(),
         columnKey,
         priority,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
       };
+
+      if (description.trim()) {
+        payload.description = description.trim();
+      }
+
+      if (dueDate) {
+        payload.dueDate = new Date(dueDate).toISOString();
+      }
 
       const response = await taskApi.createTask(boardId, payload);
       const createdTask = response.data?.data;
@@ -113,13 +124,14 @@ export function CreateTaskModal({
     }
   };
 
-  const availableColumns = Array.isArray(columns) && columns.length > 0
-    ? columns
-    : [
-        { key: 'todo', title: 'Todo' },
-        { key: 'in-progress', title: 'In Progress' },
-        { key: 'done', title: 'Done' },
-      ];
+  const availableColumns =
+    columns.length > 0
+      ? columns
+      : [
+          { key: 'todo', title: 'To Do' },
+          { key: 'in-progress', title: 'In Progress' },
+          { key: 'done', title: 'Done' },
+        ];
 
   return (
     <Modal
@@ -132,9 +144,9 @@ export function CreateTaskModal({
         {apiError && (
           <div
             role="alert"
-            className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2.5"
+            className="p-3 bg-[var(--color-danger)]/15 border border-[var(--color-danger)]/40 rounded-lg text-xs text-[var(--color-text)] flex items-start gap-2.5"
           >
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <AlertCircle className="w-4 h-4 text-[var(--color-danger)] shrink-0 mt-0.5" />
             <div className="flex-1 font-medium leading-relaxed">{apiError}</div>
           </div>
         )}
@@ -159,7 +171,7 @@ export function CreateTaskModal({
             maxLength={150}
             autoFocus
           />
-          <p className="mt-1 text-[11px] text-slate-400 text-right">
+          <p className="mt-1 text-[11px] text-[var(--color-text-muted)] text-right">
             {title.length}/150
           </p>
         </div>
@@ -168,9 +180,9 @@ export function CreateTaskModal({
         <div>
           <label
             htmlFor="task-description"
-            className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5"
+            className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5"
           >
-            Description <span className="text-slate-400 font-normal lowercase">(optional)</span>
+            Description <span className="text-[var(--color-text-muted)] font-normal lowercase">(optional)</span>
           </label>
           <textarea
             id="task-description"
@@ -186,19 +198,19 @@ export function CreateTaskModal({
             }}
             disabled={isSubmitting}
             maxLength={2000}
-            className={`w-full px-3.5 py-2 text-sm bg-white text-slate-900 border rounded-lg transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed resize-none ${
+            className={`w-full px-3.5 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)] border rounded-lg transition-colors placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${
               errors.description
-                ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
-                : 'border-slate-300 hover:border-slate-400 focus:border-indigo-600 focus:ring-indigo-100'
+                ? 'border-[var(--color-danger)] focus:border-[var(--color-danger)] focus:ring-[var(--color-danger)]'
+                : 'border-[var(--color-border)] hover:border-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-[var(--color-focus)]'
             }`}
           />
           <div className="flex items-center justify-between mt-1">
             {errors.description ? (
-              <p className="text-xs text-red-600 font-medium">{errors.description}</p>
+              <p className="text-xs text-[var(--color-danger)] font-medium">{errors.description}</p>
             ) : (
               <span />
             )}
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-[var(--color-text-muted)]">
               {description.length}/2000
             </p>
           </div>
@@ -210,7 +222,7 @@ export function CreateTaskModal({
           <div>
             <label
               htmlFor="task-column"
-              className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5"
+              className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5"
             >
               Stage Column
             </label>
@@ -220,7 +232,7 @@ export function CreateTaskModal({
               value={columnKey}
               onChange={(e) => setColumnKey(e.target.value)}
               disabled={isSubmitting}
-              className="w-full px-3.5 py-2 text-sm bg-white text-slate-900 border border-slate-300 rounded-lg transition-colors hover:border-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+              className="w-full px-3.5 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)] border border-[var(--color-border)] rounded-lg transition-colors hover:border-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-focus)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {availableColumns.map((col) => (
                 <option key={col.key || col.title} value={col.key}>
@@ -234,7 +246,7 @@ export function CreateTaskModal({
           <div>
             <label
               htmlFor="task-priority"
-              className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5"
+              className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5"
             >
               Priority
             </label>
@@ -244,7 +256,7 @@ export function CreateTaskModal({
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
               disabled={isSubmitting}
-              className="w-full px-3.5 py-2 text-sm bg-white text-slate-900 border border-slate-300 rounded-lg transition-colors hover:border-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+              className="w-full px-3.5 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)] border border-[var(--color-border)] rounded-lg transition-colors hover:border-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-focus)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {SUPPORTED_PRIORITIES.map((p) => (
                 <option key={p.value} value={p.value}>
@@ -259,9 +271,9 @@ export function CreateTaskModal({
         <div>
           <label
             htmlFor="task-due-date"
-            className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5"
+            className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5"
           >
-            Due Date <span className="text-slate-400 font-normal lowercase">(optional)</span>
+            Due Date <span className="text-[var(--color-text-muted)] font-normal lowercase">(optional)</span>
           </label>
           <input
             type="date"
@@ -270,12 +282,12 @@ export function CreateTaskModal({
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={isSubmitting}
-            className="w-full px-3.5 py-2 text-sm bg-white text-slate-900 border border-slate-300 rounded-lg transition-colors hover:border-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+            className="w-full px-3.5 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)] border border-[var(--color-border)] rounded-lg transition-colors hover:border-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-focus)] disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-[var(--color-border)]">
           <Button
             type="button"
             variant="secondary"

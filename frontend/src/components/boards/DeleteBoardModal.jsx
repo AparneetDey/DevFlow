@@ -8,6 +8,7 @@ import { AlertTriangle, AlertCircle } from 'lucide-react';
 /**
  * Confirmation dialog for permanently deleting a board workspace.
  * Submits to DELETE /api/v1/boards/:boardId upon user confirmation.
+ * Styled via centralized DevFlow CSS custom properties.
  *
  * @param {Object} props
  * @param {Object} props.board - Target board to delete
@@ -57,28 +58,29 @@ export function DeleteBoardModal({ board, isOpen, onClose, onBoardDeleted }) {
         {apiError && (
           <div
             role="alert"
-            className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2.5"
+            className="p-3 bg-[var(--color-danger)]/15 border border-[var(--color-danger)]/40 rounded-lg text-xs text-[var(--color-text)] flex items-start gap-2.5"
           >
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <AlertCircle className="w-4 h-4 text-[var(--color-danger)] shrink-0 mt-0.5" />
             <div className="flex-1 font-medium leading-relaxed">{apiError}</div>
           </div>
         )}
 
         <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 border border-red-200">
+          <div className="w-10 h-10 rounded-xl bg-[var(--color-danger)]/20 text-[var(--color-danger)] flex items-center justify-center shrink-0 border border-[var(--color-danger)]/40">
             <AlertTriangle className="w-5 h-5" />
           </div>
-          <div className="space-y-1 min-w-0 flex-1">
-            <p className="text-sm font-semibold text-slate-900 break-words">
-              Are you sure you want to delete <span className="text-red-600 font-bold">"{board.title}"</span>?
-            </p>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              This action cannot be undone. All tasks, columns, and activity associated with this board workspace will be permanently removed.
+
+          <div className="space-y-1.5 flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-[var(--color-text)] leading-snug">
+              Delete &quot;{board.title}&quot;?
+            </h3>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              This action cannot be undone. All tasks, columns, and workflow data inside this workspace will be permanently removed.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 pt-3 border-t border-[var(--color-border)]">
           <Button
             type="button"
             variant="secondary"

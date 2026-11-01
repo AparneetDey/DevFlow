@@ -1,68 +1,82 @@
-import { User, Shield, Mail, Calendar, Key } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { Loading } from '../components/common/Loading.jsx';
+import { ProfileHeader } from '../components/profile/ProfileHeader.jsx';
+import { ProfileInformation } from '../components/profile/ProfileInformation.jsx';
+import { ProfileActions } from '../components/profile/ProfileActions.jsx';
+import { LogoutConfirmationModal } from '../components/auth/LogoutConfirmationModal.jsx';
+import { mapUserProfile } from '../utils/profileData.js';
 
+/**
+ * Top-level Profile Page coordinating authenticated user inspection,
+ * modular presentation sections, and confirmed session sign-out workflows.
+ */
 export function ProfilePage() {
-  const { user } = useAuth();
+  const { user, isLoading, logout } = useAuth();
+  const navigate = useNavigate();
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(null);
 
-  const formattedJoinDate = user?.createdAt
-    ? new Date(user.createdAt).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : 'Recently';
+  const handleOpenLogoutConfirm = useCallback(() => {
+    setLogoutError(null);
+    setIsConfirmOpen(true);
+  }, []);
+
+  const handleCloseLogoutConfirm = useCallback(() => {
+    if (isLoggingOut) return;
+    setIsConfirmOpen(false);
+    setLogoutError(null);
+  }, [isLoggingOut]);
+
+  const handleConfirmLogout = useCallback(async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    setLogoutError(null);
+    try {
+      await logout();
+      setIsConfirmOpen(false);
+      navigate('/login', { replace: true });
+    } catch (err) {
+      setLogoutError(
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to sign out. Please check your connection and try again.'
+      );
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }, [logout, navigate, isLoggingOut]);
+
+  if (isLoading) {
+    return (
+      <div className="py-16 flex items-center justify-center">
+        <Loading text="Loading profile..." />
+      </div>
+    );
+  }
+
+  const profile = mapUserProfile(user);
 
   return (
-    <div className="max-w-xl mx-auto bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-8 space-y-6">
-      {/* Profile Header */}
-      <div className="flex items-center gap-3 sm:gap-4 border-b border-slate-100 pb-6 min-w-0">
-        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-xs shrink-0">
-          <User className="w-7 h-7 sm:w-8 sm:h-8" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight break-words">
-            {user?.username || 'User Profile'}
-          </h1>
-          <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 truncate" title={user?.email}>
-            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <span className="truncate">{user?.email || 'No email registered'}</span>
-          </p>
-        </div>
-      </div>
+    <div className="max-w-2xl mx-auto space-y-6">
+      <ProfileHeader profile={profile} />
+      <ProfileInformation profile={profile} />
+      <ProfileActions
+        onLogout={handleOpenLogoutConfirm}
+        isLoggingOut={isLoggingOut}
+        error={logoutError}
+      />
 
-      {/* Account Details */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <Key className="w-3.5 h-3.5 text-indigo-600" />
-            User ID
-          </div>
-          <p className="text-xs font-mono text-slate-800 truncate" title={user?._id}>
-            {user?._id || 'N/A'}
-          </p>
-        </div>
-
-        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-            Member Since
-          </div>
-          <p className="text-xs font-semibold text-slate-800">
-            {formattedJoinDate}
-          </p>
-        </div>
-      </div>
-
-      {/* Session Security Banner */}
-      <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-4 flex items-start gap-3">
-        <Shield className="w-5 h-5 text-indigo-600 mt-0.5 shrink-0" />
-        <div className="text-xs text-indigo-950 space-y-0.5">
-          <p className="font-semibold">HttpOnly Session Active</p>
-          <p className="text-indigo-800">
-            Your authentication session is securely maintained using encrypted, HttpOnly browser cookies with automated refresh token rotation.
-          </p>
-        </div>
-      </div>
+      {/* Explicit Logout Confirmation Dialog */}
+      <LogoutConfirmationModal
+        isOpen={isConfirmOpen}
+        onClose={handleCloseLogoutConfirm}
+        onConfirm={handleConfirmLogout}
+        isLoading={isLoggingOut}
+        error={logoutError}
+      />
     </div>
   );
 }

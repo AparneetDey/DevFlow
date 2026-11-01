@@ -10,6 +10,7 @@ import { AlertCircle } from 'lucide-react';
  * Dialog component for updating an existing board workspace.
  * Validates fields according to backend constraints and submits to PATCH /api/v1/boards/:boardId.
  * Initialized with board data; keyed by board._id to reset state on board switch.
+ * Styled via centralized DevFlow CSS custom properties.
  *
  * @param {Object} props
  * @param {Object} props.board - Target board to edit
@@ -63,7 +64,6 @@ export function EditBoardModal({ board, isOpen, onClose, onBoardUpdated }) {
     setIsSubmitting(true);
 
     try {
-      // Backend updateBoardSchema is strict: accepts only title and description
       const payload = {
         title: title.trim(),
         description: description.trim(),
@@ -86,16 +86,16 @@ export function EditBoardModal({ board, isOpen, onClose, onBoardUpdated }) {
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Edit Board Workspace"
+      title="Edit Board"
       maxWidth="max-w-md"
     >
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {apiError && (
           <div
             role="alert"
-            className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2.5"
+            className="p-3 bg-[var(--color-danger)]/15 border border-[var(--color-danger)]/40 rounded-lg text-xs text-[var(--color-text)] flex items-start gap-2.5"
           >
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <AlertCircle className="w-4 h-4 text-[var(--color-danger)] shrink-0 mt-0.5" />
             <div className="flex-1 font-medium leading-relaxed">{apiError}</div>
           </div>
         )}
@@ -119,7 +119,7 @@ export function EditBoardModal({ board, isOpen, onClose, onBoardUpdated }) {
             maxLength={100}
             autoFocus
           />
-          <p className="mt-1 text-[11px] text-slate-400 text-right">
+          <p className="mt-1 text-[11px] text-[var(--color-text-muted)] text-right">
             {title.length}/100
           </p>
         </div>
@@ -127,9 +127,9 @@ export function EditBoardModal({ board, isOpen, onClose, onBoardUpdated }) {
         <div>
           <label
             htmlFor="edit-board-description"
-            className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5"
+            className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5"
           >
-            Description <span className="text-slate-400 font-normal lowercase">(optional)</span>
+            Description <span className="text-[var(--color-text-muted)] font-normal lowercase">(optional)</span>
           </label>
           <textarea
             id="edit-board-description"
@@ -145,25 +145,25 @@ export function EditBoardModal({ board, isOpen, onClose, onBoardUpdated }) {
             }}
             disabled={isSubmitting}
             maxLength={500}
-            className={`w-full px-3.5 py-2 text-sm bg-white text-slate-900 border rounded-lg transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed resize-none ${
+            className={`w-full px-3.5 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)] border rounded-lg transition-colors placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 disabled:opacity-50 disabled:cursor-not-allowed resize-none ${
               errors.description
-                ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
-                : 'border-slate-300 hover:border-slate-400 focus:border-indigo-600 focus:ring-indigo-100'
+                ? 'border-[var(--color-danger)] focus:border-[var(--color-danger)] focus:ring-[var(--color-danger)]'
+                : 'border-[var(--color-border)] hover:border-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:ring-[var(--color-focus)]'
             }`}
           />
           <div className="flex items-center justify-between mt-1">
             {errors.description ? (
-              <p className="text-xs text-red-600 font-medium">{errors.description}</p>
+              <p className="text-xs text-[var(--color-danger)] font-medium">{errors.description}</p>
             ) : (
               <span />
             )}
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-[var(--color-text-muted)]">
               {description.length}/500
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-[var(--color-border)]">
           <Button
             type="button"
             variant="secondary"

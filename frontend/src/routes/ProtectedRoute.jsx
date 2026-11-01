@@ -5,10 +5,10 @@ import { Loading } from '../components/common/Loading';
 /**
  * Route guard restricting access to authenticated users.
  * Shows loading spinner during initial session check, and redirects unauthenticated
- * visitors to /login preserving the intended destination.
+ * visitors to /login preserving the intended destination and session expiration context.
  */
 export function ProtectedRoute() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, sessionExpired } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -16,7 +16,16 @@ export function ProtectedRoute() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return (
+      <Navigate
+        to="/login"
+        state={{
+          from: location,
+          sessionExpired: Boolean(sessionExpired),
+        }}
+        replace
+      />
+    );
   }
 
   return <Outlet />;
