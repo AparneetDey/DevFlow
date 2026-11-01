@@ -1,15 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AuthContext } from './authContextDef.js';
 import authApi from '../api/auth.api.js';
 import { setOnSessionExpired } from '../api/client.js';
 
 /**
  * Authentication Context Provider managing global user session state,
- * session restoration on startup, login, registration, and logout operations.
+ * session restoration on startup, login, registration, logout operations,
+ * and automated session expiration feedback.
  */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const userRef = useRef(null);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Reusable session verification
   const checkAuth = useCallback(async () => {
@@ -23,12 +30,20 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const clearSessionExpired = useCallback(() => {
+    setSessionExpired(false);
+  }, []);
+
   // Initial session restoration on application mount
   useEffect(() => {
     let isMounted = true;
 
     setOnSessionExpired(() => {
       if (isMounted) {
+        // Only surface expiration if an active authenticated user session was invalidated
+        if (userRef.current) {
+          setSessionExpired(true);
+        }
         setUser(null);
       }
     });
@@ -63,6 +78,7 @@ export function AuthProvider({ children }) {
     const response = await authApi.login(credentials);
     const authenticatedUser = response.data?.data?.user;
     setUser(authenticatedUser || null);
+    setSessionExpired(false);
     return authenticatedUser;
   }, []);
 
@@ -71,6 +87,7 @@ export function AuthProvider({ children }) {
     const response = await authApi.register(userData);
     const registeredUser = response.data?.data?.user;
     setUser(registeredUser || null);
+    setSessionExpired(false);
     return registeredUser;
   }, []);
 
@@ -79,7 +96,9 @@ export function AuthProvider({ children }) {
     try {
       await authApi.logout();
     } finally {
+      userRef.current = null;
       setUser(null);
+      setSessionExpired(false);
     }
   }, []);
 
@@ -87,6 +106,8 @@ export function AuthProvider({ children }) {
     user,
     isLoading,
     isAuthenticated: !!user,
+    sessionExpired,
+    clearSessionExpired,
     login,
     register,
     logout,

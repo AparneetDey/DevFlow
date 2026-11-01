@@ -5,23 +5,38 @@ import { Loading } from '../components/common/Loading.jsx';
 import { ProfileHeader } from '../components/profile/ProfileHeader.jsx';
 import { ProfileInformation } from '../components/profile/ProfileInformation.jsx';
 import { ProfileActions } from '../components/profile/ProfileActions.jsx';
+import { LogoutConfirmationModal } from '../components/auth/LogoutConfirmationModal.jsx';
 import { mapUserProfile } from '../utils/profileData.js';
 
 /**
  * Top-level Profile Page coordinating authenticated user inspection,
- * modular presentation sections, and session sign-out workflows.
+ * modular presentation sections, and confirmed session sign-out workflows.
  */
 export function ProfilePage() {
   const { user, isLoading, logout } = useAuth();
   const navigate = useNavigate();
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState(null);
 
-  const handleLogout = useCallback(async () => {
+  const handleOpenLogoutConfirm = useCallback(() => {
+    setLogoutError(null);
+    setIsConfirmOpen(true);
+  }, []);
+
+  const handleCloseLogoutConfirm = useCallback(() => {
+    if (isLoggingOut) return;
+    setIsConfirmOpen(false);
+    setLogoutError(null);
+  }, [isLoggingOut]);
+
+  const handleConfirmLogout = useCallback(async () => {
+    if (isLoggingOut) return;
     setIsLoggingOut(true);
     setLogoutError(null);
     try {
       await logout();
+      setIsConfirmOpen(false);
       navigate('/login', { replace: true });
     } catch (err) {
       setLogoutError(
@@ -32,7 +47,7 @@ export function ProfilePage() {
     } finally {
       setIsLoggingOut(false);
     }
-  }, [logout, navigate]);
+  }, [logout, navigate, isLoggingOut]);
 
   if (isLoading) {
     return (
@@ -49,8 +64,17 @@ export function ProfilePage() {
       <ProfileHeader profile={profile} />
       <ProfileInformation profile={profile} />
       <ProfileActions
-        onLogout={handleLogout}
+        onLogout={handleOpenLogoutConfirm}
         isLoggingOut={isLoggingOut}
+        error={logoutError}
+      />
+
+      {/* Explicit Logout Confirmation Dialog */}
+      <LogoutConfirmationModal
+        isOpen={isConfirmOpen}
+        onClose={handleCloseLogoutConfirm}
+        onConfirm={handleConfirmLogout}
+        isLoading={isLoggingOut}
         error={logoutError}
       />
     </div>

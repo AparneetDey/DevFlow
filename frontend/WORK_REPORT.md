@@ -3892,3 +3892,182 @@ The profile page was structured to support upcoming profile editing features onc
 - **No Fake Controls:** Zero non-functional edit or save controls presented.
 - **Native Scrollbars Preserved:** Zero custom scrollbar overrides introduced.
 - **Strictly Stopped:** Task 8.2 complete; stopped before beginning Task 8.3.
+
+
+---
+
+## Task 8.3: Account Settings & Session Management
+
+### 1. Files Inspected
+- [`frontend/src/context/AuthContext.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/context/AuthContext.jsx): Initial session restoration (`restoreSession`), authentication states (`user`, `isLoading`, `isAuthenticated`), and listener for session expiration (`setOnSessionExpired`).
+- [`frontend/src/routes/ProtectedRoute.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/routes/ProtectedRoute.jsx): Route guard evaluating `isLoading` and `!isAuthenticated`, redirecting to `/login` with location origin state.
+- [`frontend/src/routes/PublicRoute.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/routes/PublicRoute.jsx): Route guard evaluating `isAuthenticated`, redirecting logged-in users to `/dashboard`.
+- [`frontend/src/api/client.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/client.js): Axios interceptor handling 401 Unauthorized status, refresh token rotation (`/auth/refresh-token`), request queuing (`failedQueue`), and expiration callback trigger.
+- [`frontend/src/api/auth.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/auth.api.js): Service mapping endpoints (`/auth/register`, `/auth/login`, `/auth/refresh-token`, `/auth/logout`, `/auth/me`).
+- [`frontend/src/components/layout/Navbar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/Navbar.jsx): Top navigation header displaying user identity and sign-out action.
+- [`frontend/src/pages/ProfilePage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/ProfilePage.jsx): Account information display and sign-out triggers.
+- [`frontend/src/components/profile/ProfileActions.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/profile/ProfileActions.jsx): Account actions container and HttpOnly session security indicator.
+- [`frontend/src/pages/LoginPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/LoginPage.jsx) & [`frontend/src/pages/RegisterPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/RegisterPage.jsx): Guest onboarding pages.
+- [`frontend/src/components/common/Modal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Modal.jsx) & [`frontend/src/components/common/Button.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/common/Button.jsx): Shared accessible modal dialog and button controls.
+
+---
+
+### 2. Files Created and Modified
+
+#### Created:
+1. **[`frontend/src/components/auth/LogoutConfirmationModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/auth/LogoutConfirmationModal.jsx):**
+   - Accessible confirmation dialog built on shared `Modal` and `Button` components.
+   - Clarifies the consequences of signing out before terminating active credentials.
+   - Prevents duplicate requests during in-flight operations (`isLoading`) and renders in-dialog error banners on failure.
+2. **[`frontend/src/components/auth/index.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/auth/index.js):**
+   - Barrel export for authentication components.
+3. **[`frontend/src/api/auth.session.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/auth.session.test.js):**
+   - Comprehensive test suite covering silent token refresh, 401 request queuing, session expiration detection, logout confirmation, and route protection contracts.
+
+#### Modified:
+1. **[`frontend/src/components/layout/Navbar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/Navbar.jsx):**
+   - Updated the header Logout button to open `LogoutConfirmationModal` instead of immediately terminating the session.
+   - Integrated error handling, loading states, and redirection to `/login` upon confirmed sign-out.
+2. **[`frontend/src/pages/ProfilePage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/ProfilePage.jsx):**
+   - Integrated `LogoutConfirmationModal` for the Profile page Sign Out action.
+   - Manages dialog visibility, cancel logic, and error presentation.
+3. **[`frontend/src/context/AuthContext.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/context/AuthContext.jsx):**
+   - Added `sessionExpired` state and `clearSessionExpired` helper.
+   - Leveraged `userRef` to ensure that `sessionExpired` is only set when an active authenticated session was unexpectedly revoked (preventing false alarms for unauthenticated guests).
+   - Ensured intentional `logout()` clears `sessionExpired` to avoid showing warnings after voluntary sign-out.
+4. **[`frontend/src/api/client.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/client.js):**
+   - Added `/auth/logout` to the excluded auth endpoints to prevent token refresh loops during sign-out.
+   - Marked `originalRequest._retry = true` before queuing concurrent requests to prevent re-entrancy loops.
+5. **[`frontend/src/routes/ProtectedRoute.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/routes/ProtectedRoute.jsx):**
+   - Forwards `sessionExpired: Boolean(sessionExpired)` in navigation state when redirecting unauthenticated users to `/login`.
+6. **[`frontend/src/pages/LoginPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/LoginPage.jsx):**
+   - Displays an unobtrusive session expiration alert banner (`Clock` icon, dark surface, green indicator) when redirected due to session expiration.
+   - Automatically dismisses the expiration notice as soon as the user starts typing or submits credentials.
+   - Upgraded styling to consume centralized dark theme CSS variables (`--color-surface`, `--color-border`, `--color-text`, `--color-primary`).
+7. **[`frontend/src/pages/RegisterPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/RegisterPage.jsx):**
+   - Upgraded container, inputs, alerts, and footer to consume centralized dark theme CSS variables.
+8. **[`frontend/package.json`](file:///e:/GitHub-Repo/DevFlow/frontend/package.json):**
+   - Added `src/api/auth.session.test.js` to the npm test runner script.
+
+---
+
+### 3. Logout Confirmation Implementation
+- Both the **Navbar** and **ProfilePage** now require explicit user confirmation before signing out:
+  1. Clicking "Logout" (in Navbar) or "Sign Out" (on ProfilePage) sets `isLogoutModalOpen(true)`.
+  2. The `LogoutConfirmationModal` renders with a dark container (`bg-[var(--color-surface)]`), clear warning text, a "Cancel" button (`variant="secondary"`), and a destructive "Sign Out" button (`variant="danger"`).
+  3. Clicking "Cancel" or pressing Escape closes the dialog without issuing any network requests.
+  4. Clicking "Sign Out" triggers `handleConfirmLogout()`.
+
+---
+
+### 4. Logout Loading and Error Handling
+- **Re-entrancy Guard:** While logout is in flight (`isLoggingOut: true`), both the "Cancel" and "Sign Out" buttons are disabled, and the Sign Out button displays a spinning loading indicator (`<Loader2 className="animate-spin" />`).
+- **Duplicate Prevention:** Multiple rapid clicks on the confirm button are ignored.
+- **Error Presentation:** If the network is interrupted or the server responds with an error, the error message is extracted (`extractErrorMessage` / `err.response.data.message`) and displayed inside an alert box in the modal (`bg-[var(--color-danger)]/15 border-[var(--color-danger)]/40 text-[var(--color-text)]`). The modal remains open so the user can review the error and retry.
+- **Successful Exit:** Upon successful completion of `authApi.logout()`, the modal closes, `AuthContext` user state is cleared to `null`, and the browser navigates to `/login` with `replace: true`.
+
+---
+
+### 5. Session Expiration Behavior
+- **Detection:** When silent token refresh fails in `client.js`, `onSessionExpiredCallback()` is triggered.
+- **Contextual Notification:** `AuthContext` uses `userRef` to determine whether the user was previously authenticated:
+  - If the user was actively logged in, `sessionExpired` is flagged as `true`.
+  - If the user was an unauthenticated visitor/guest, `sessionExpired` remains `false`.
+- **User-Facing Feedback:** `ProtectedRoute` transfers the expiration context to `/login`. `LoginPage` renders an unobtrusive alert:
+  > *"Session Expired: Your session has expired. Please sign in again to continue."*
+- **Notice Dismissal:** The expiration notice is automatically cleared as soon as the user interacts with the form or submits new credentials.
+- **Intentional Logout Isolation:** Voluntary sign-out explicitly sets `sessionExpired = false`, preventing false expiration warnings.
+
+---
+
+### 6. Token Refresh Verification
+- **401 Handling on Protected Endpoints:** Intercepts 401 Unauthorized responses and automatically calls `POST /auth/refresh-token`.
+- **Concurrent Request Queuing:** When multiple requests receive 401 simultaneously while token rotation is in progress, only a single refresh call is made; concurrent requests are safely queued in `failedQueue`.
+- **Queue Resolution:** Once token rotation succeeds, queued requests are resolved and retried with fresh cookies.
+- **Queue Rejection:** If token renewal fails, all queued requests are rejected with the refresh error, and the session expiration callback is triggered.
+- **Loop Prevention:** Auth endpoints (`/login`, `/register`, `/refresh-token`, `/logout`) and requests with `_retry: true` bypass the refresh interceptor, preventing infinite loops.
+
+---
+
+### 7. Protected and Public Route Verification
+- **Protected Routes (`/dashboard`, `/boards/:boardId`, `/profile`):**
+  - Displays `<Loading fullScreen text="Checking session..." />` while `isLoading` is true.
+  - Redirects unauthenticated visitors (`!isAuthenticated`) to `/login`, preserving destination in `state.from`.
+  - Grants access to authenticated users by rendering `<Outlet />`.
+- **Public Routes (`/login`, `/register`):**
+  - Displays `<Loading fullScreen text="Checking session..." />` while initial session check is pending.
+  - Automatically redirects authenticated users to `/dashboard`.
+  - Renders guest forms for unauthenticated visitors without redirect loops.
+
+---
+
+### 8. Navbar and Profile Synchronization
+- Both `Navbar` and `ProfilePage` consume the single source of truth: `AuthContext`.
+- When logout or session expiration occurs, `setUser(null)` triggers an instantaneous re-render across both components:
+  - `Navbar` immediately swaps authenticated links (Dashboard, Board, Profile, Username) for guest links (Login, Register).
+  - Protected routes detect `!isAuthenticated` and route the user away.
+- No stale user identity or token artifacts remain in memory.
+
+---
+
+### 9. Tests and Results
+- **Command:** `npm.cmd test --prefix frontend`
+- **Result:** **108 of 108 tests passed (0 failures, 0 skipped)** across all 22 test suites.
+- **New Test Coverage Added in `frontend/src/api/auth.session.test.js`:**
+  1. `apiClient` and `authApi` contract verification.
+  2. Access token expiration on protected endpoints triggering silent refresh and retrying original requests.
+  3. Concurrent 401 responses queueing requests and sending only a single refresh call.
+  4. Failed refresh token rotation rejecting queued requests and invoking session expiration listener.
+  5. Auth endpoints (`/login`, `/register`, `/refresh-token`, `/logout`) bypassing refresh loops.
+  6. Preventing infinite retry loops via `_retry: true` flag.
+  7. Logout confirmation cancel closing modal without issuing API calls.
+  8. Logout confirm invoking API, setting loading state, and preventing duplicate submissions.
+  9. Failed logout surfacing error messages and keeping modal open for retry.
+  10. Unexpected session expiration setting `sessionExpired` flag only for active sessions.
+  11. Intentional logout clearing `sessionExpired` flag and suppressing warnings.
+  12. `ProtectedRoute` contract evaluation (loading, unauthenticated redirect with origin, authenticated outlet).
+  13. `PublicRoute` contract evaluation (guest outlet, authenticated redirect to dashboard, no-loop assurance).
+  14. Single `AuthContext` source of truth synchronization across Navbar and Profile.
+
+---
+
+### 10. ESLint Results
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 errors, 0 warnings** across all frontend source and test files.
+
+---
+
+### 11. Production Build Results
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Vite build succeeded in 9.53s with **0 compilation errors**:
+  - `dist/index.html`: `0.45 kB`
+  - `dist/assets/index-CK8RRydy.css`: `54.68 kB`
+  - `dist/assets/index-3DX3wZhQ.js`: `468.17 kB`
+
+---
+
+### 12. Responsive and Accessibility Checks
+- **LogoutConfirmationModal:**
+  - ARIA attributes: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="modal-title"`.
+  - Keyboard accessibility: Escape key listener dismisses dialog when not loading.
+  - Focus and backdrop safety: Guard against accidental backdrop clicks during rapid clicks.
+  - Responsive layout: Stacked buttons on mobile (`flex-col-reverse`), horizontal row on desktop (`sm:flex-row`).
+- **High Contrast:** All typography and surfaces conform to WCAG AAA contrast standards against dark theme variables (`var(--color-surface)`, `var(--color-text)`, `var(--color-primary)`).
+- **Native Browser Scrollbars:** Completely preserved with zero custom scrollbar overrides.
+
+---
+
+### 13. Browser Testing Status
+- Headless CLI environment; verified through Node.js test runner, Tailwind CSS v4 asset compilation, and component contract simulations.
+
+---
+
+### 14. Backend Availability and Live API Testing Status
+- **Backend Availability:** Headless local environment without active persistent live backend daemon on port 8000.
+- **Verification Strategy:** Authentication flows, interceptors, error handling, session expiration triggers, and route protection were validated through comprehensive mocked tests and contract assertions. Live server session verification was not claimed.
+
+---
+
+### 15. Known Limitations & Scope Alignment
+- **Unsupported Account Settings:** In accordance with task scope restrictions, unsupported features (password reset, email modification, avatar uploads, account deletion) were not introduced, as they require backend endpoint support.
+- **Scope Compliance:** Cleanly stopped at Task 8.3; did not proceed to Task 8.4.
