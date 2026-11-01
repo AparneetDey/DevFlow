@@ -33,6 +33,7 @@ import KanbanColumn from '../components/boards/KanbanColumn.jsx';
 import AddColumnModal from '../components/boards/AddColumnModal.jsx';
 import DeleteColumnModal from '../components/boards/DeleteColumnModal.jsx';
 import TaskCard from '../components/tasks/TaskCard.jsx';
+import TaskSkeleton from '../components/tasks/TaskSkeleton.jsx';
 import CreateTaskModal from '../components/tasks/CreateTaskModal.jsx';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal.jsx';
 import boardApi from '../api/board.api.js';
@@ -773,41 +774,70 @@ export function BoardPage() {
   const columns = sortBoardColumns(board?.columns);
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      {/* 1. Loading State: Header & Column Skeletons */}
+    <div className="space-y-3 sm:space-y-4">
+      {/* 1. Loading State: Header Toolbar & Column Skeletons */}
       {isLoading ? (
-        <div className="space-y-6 sm:space-y-8" aria-busy="true">
-          {/* Back link skeleton */}
-          <div className="h-4 w-32 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
+        <div className="space-y-3 sm:space-y-4" aria-busy="true">
+          {/* Sleek Board Toolbar Skeleton */}
+          <div className="bg-[var(--color-surface)] rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 border border-[var(--color-border)] shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3 min-w-0 animate-pulse">
+            {/* Left: Back Link & Title & Metadata */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
+              <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 -ml-1">
+                <div className="w-4 h-4 bg-[var(--color-surface-elevated)] rounded shrink-0" />
+                <div className="h-3.5 w-12 bg-[var(--color-surface-elevated)] rounded hidden sm:block" />
+              </div>
 
-          {/* Header Card Skeleton */}
-          <div className="bg-[var(--color-surface)] rounded-2xl p-6 sm:p-7 border border-[var(--color-border)] shadow-xs space-y-4 animate-pulse">
-            <div className="h-4 w-28 bg-[var(--color-surface-elevated)] rounded" />
-            <div className="h-8 w-72 max-w-full bg-[var(--color-surface-elevated)] rounded-md" />
-            <div className="h-4 w-full max-w-md bg-[var(--color-surface-elevated)]/60 rounded" />
-            <div className="flex gap-2.5 pt-1.5">
-              <div className="h-6 w-24 bg-[var(--color-surface-elevated)] rounded-lg" />
-              <div className="h-6 w-32 bg-[var(--color-surface-elevated)] rounded-lg" />
+              <div className="h-4 w-px bg-[var(--color-border)] hidden sm:block shrink-0" />
+
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="h-5 sm:h-6 w-44 sm:w-60 bg-[var(--color-surface-elevated)] rounded-md" />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="h-5 w-10 bg-[var(--color-surface-elevated)] rounded-md border border-[var(--color-border)]" />
+                    <div className="h-5 w-10 bg-[var(--color-surface-elevated)] rounded-md border border-[var(--color-border)]" />
+                    <div className="h-5 w-20 bg-[var(--color-surface-elevated)] rounded-md border border-[var(--color-border)] hidden lg:block" />
+                  </div>
+                </div>
+                <div className="h-3.5 w-56 sm:w-72 bg-[var(--color-surface-elevated)]/60 rounded mt-0.5" />
+              </div>
             </div>
+
+            {/* Right: Add Column Button Placeholder */}
+            <div className="h-8 w-24 bg-[var(--color-surface-elevated)] rounded-lg shrink-0 self-end md:self-auto border border-[var(--color-border)]" />
           </div>
 
           {/* Kanban Columns Skeleton */}
-          <div className="space-y-3.5">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
-              <div className="h-4 w-28 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
-            </div>
+          <div className="space-y-3">
             <div className="flex items-start gap-3 sm:gap-3.5 overflow-x-auto pb-4 pt-1 min-w-0 board-canvas-scrollbar">
-              {[1, 2, 3, 4, 5].map((colIndex) => (
+              {[
+                { titleWidth: 'w-20', taskCount: 3 },
+                { titleWidth: 'w-28', taskCount: 2 },
+                { titleWidth: 'w-16', taskCount: 2 },
+              ].map((col, colIndex) => (
                 <div
                   key={colIndex}
-                  className="w-[235px] sm:w-[240px] shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-2.5 sm:p-3 h-48 animate-pulse flex flex-col"
+                  className="w-[255px] sm:w-[278px] shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-2.5 sm:p-3 shadow-xs flex flex-col max-h-[calc(100vh-13.5rem)] animate-pulse"
                 >
-                  <div className="flex items-center gap-2 px-1 py-0.5 mb-2 pb-2 border-b border-[var(--color-border)]">
-                    <div className="w-2 h-2 rounded-full bg-[var(--color-border)] shrink-0" />
-                    <div className="h-4 w-20 bg-[var(--color-surface-elevated)] rounded" />
+                  {/* Column Header Skeleton */}
+                  <div className="shrink-0 flex items-center justify-between px-1 py-0.5 mb-2 pb-2 border-b border-[var(--color-border)] min-w-0 gap-1.5">
+                    <div className="flex items-center min-w-0 flex-1">
+                      <div className={`h-4 ${col.titleWidth} bg-[var(--color-surface-elevated)] rounded`} />
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="w-5 h-4 bg-[var(--color-surface-elevated)] rounded-full border border-[var(--color-border)]" />
+                      <div className="w-5 h-5 bg-[var(--color-surface-elevated)] rounded-md" />
+                    </div>
                   </div>
-                  <div className="flex-1 rounded-lg border border-dashed border-[var(--color-border)]/60 bg-[var(--color-bg-secondary)]/40 p-3 flex flex-col items-center justify-center" />
+
+                  {/* Task Card Placeholders */}
+                  <div className="space-y-2 flex-1 overflow-hidden min-h-[160px]">
+                    <TaskSkeleton count={col.taskCount} />
+                  </div>
+
+                  {/* Add a task button placeholder */}
+                  <div className="shrink-0 pt-1.5 mt-1">
+                    <div className="h-7 w-full bg-[var(--color-surface-elevated)]/40 rounded-lg" />
+                  </div>
                 </div>
               ))}
             </div>

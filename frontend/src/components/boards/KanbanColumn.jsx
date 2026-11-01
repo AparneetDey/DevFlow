@@ -4,6 +4,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import SortableTaskCard from '../tasks/SortableTaskCard.jsx';
+import TaskSkeleton from '../tasks/TaskSkeleton.jsx';
 
 /**
  * Reusable presentation component for a Kanban workflow column.
@@ -310,10 +311,7 @@ export function KanbanColumn({
         }`}
       >
         {isLoading ? (
-          <div className="space-y-2" aria-busy="true">
-            <div className="h-16 bg-[var(--color-surface-elevated)] rounded-lg border border-[var(--color-border)] animate-pulse" />
-            <div className="h-16 bg-[var(--color-surface-elevated)] rounded-lg border border-[var(--color-border)] animate-pulse" />
-          </div>
+          <TaskSkeleton count={2} />
         ) : hasChildren ? (
           children
         ) : hasTasksArray ? (

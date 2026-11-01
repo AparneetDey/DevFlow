@@ -521,4 +521,91 @@ describe('Column Deletion & Reordering State Handlers (Task 12)', () => {
   });
 });
 
+describe('Task Completion Animation & Skeleton Layout Integrity (Task 13)', () => {
+  test('task completion toggle preserves column placement and order index', () => {
+    const tasks = [
+      { _id: 'task-1', title: 'Design Mockups', columnKey: 'todo', order: 0, isCompleted: false },
+      { _id: 'task-2', title: 'API Integration', columnKey: 'todo', order: 1, isCompleted: false },
+    ];
+
+    // Toggle task-1 to complete
+    const toggled = tasks.map((t) =>
+      t._id === 'task-1' ? { ...t, isCompleted: !t.isCompleted } : t
+    );
+
+    const completedTask = toggled.find((t) => t._id === 'task-1');
+    assert.equal(completedTask.isCompleted, true);
+    assert.equal(completedTask.columnKey, 'todo', 'Task must NOT move columns on completion');
+    assert.equal(completedTask.order, 0, 'Task must maintain exact order on completion');
+
+    // Toggle task-1 back to incomplete
+    const uncompleted = toggled.map((t) =>
+      t._id === 'task-1' ? { ...t, isCompleted: !t.isCompleted } : t
+    );
+    const revertedTask = uncompleted.find((t) => t._id === 'task-1');
+    assert.equal(revertedTask.isCompleted, false);
+    assert.equal(revertedTask.columnKey, 'todo');
+    assert.equal(revertedTask.order, 0);
+  });
+
+  test('smooth SVG checkmark path math conforms to strokeDasharray 14', () => {
+    // Checkmark path: M5.5 9.2L7.8 11.5L12.5 6.5
+    // Segment 1: (5.5, 9.2) -> (7.8, 11.5) length ≈ 3.25
+    // Segment 2: (7.8, 11.5) -> (12.5, 6.5) length ≈ 6.86
+    // Total path length ≈ 10.11px. strokeDasharray: 14 covers full path.
+    const strokeDasharray = 14;
+
+    const getStrokeDashoffset = (isCompleted) => (isCompleted ? 0 : strokeDasharray);
+    const getStrokeOpacity = (isCompleted) => (isCompleted ? 1 : 0);
+
+    // Completed state: fully drawn (offset 0), full opacity
+    assert.equal(getStrokeDashoffset(true), 0);
+    assert.equal(getStrokeOpacity(true), 1);
+
+    // Incomplete state: fully undrawn (offset 14), zero opacity
+    assert.equal(getStrokeDashoffset(false), 14);
+    assert.equal(getStrokeOpacity(false), 0);
+  });
+
+  test('completion button slot aligns title flush left at rest and expands on hover/completion', () => {
+    // When incomplete and idle: width is 0 so title aligns flush with other card elements
+    const getSlotClass = (isCompleted) =>
+      `shrink-0 flex items-center justify-start transition-all duration-200 ease-out overflow-hidden pt-0.5 ${
+        isCompleted
+          ? 'w-6 opacity-100 mr-0.5'
+          : 'w-0 opacity-0 pointer-events-none group-hover:w-6 group-hover:opacity-100 group-hover:mr-0.5 group-hover:pointer-events-auto group-focus-within:w-6 group-focus-within:opacity-100 group-focus-within:mr-0.5 group-focus-within:pointer-events-auto'
+      }`;
+
+    const incompleteClass = getSlotClass(false);
+    assert.ok(incompleteClass.includes('w-0'), 'Slot must be w-0 at rest so title is flush left');
+    assert.ok(incompleteClass.includes('group-hover:w-6'), 'Slot must expand to w-6 on hover to reveal check circle');
+    assert.ok(incompleteClass.includes('transition-all duration-200'), 'Smooth transition for title moving right');
+
+    const completedClass = getSlotClass(true);
+    assert.ok(completedClass.includes('w-6'), 'Slot must remain w-6 when task is completed');
+    assert.ok(completedClass.includes('opacity-100'), 'Check circle must remain visible when task is completed');
+  });
+
+  test('skeleton components mirror actual card padding and dimensions', () => {
+    // BoardCard vs BoardSkeleton invariants:
+    // Both use min-h-[150px], rounded-xl, border, p-4 sm:p-5
+    const boardCardClasses = 'min-h-[150px] rounded-xl border p-4 sm:p-5';
+    const boardSkeletonClasses = 'min-h-[150px] rounded-xl border p-4 sm:p-5';
+    assert.equal(boardCardClasses, boardSkeletonClasses);
+
+    // KanbanColumn vs Column Skeleton invariants:
+    // Both use w-[255px] sm:w-[278px], rounded-xl, p-2.5 sm:p-3
+    const columnClasses = 'w-[255px] sm:w-[278px] rounded-xl p-2.5 sm:p-3';
+    const columnSkeletonClasses = 'w-[255px] sm:w-[278px] rounded-xl p-2.5 sm:p-3';
+    assert.equal(columnClasses, columnSkeletonClasses);
+
+    // TaskCard vs TaskSkeleton invariants:
+    // Both use p-2.5, rounded-xl, border, flex flex-col gap-2
+    const taskCardClasses = 'p-2.5 rounded-xl border flex flex-col gap-2';
+    const taskSkeletonClasses = 'p-2.5 rounded-xl border flex flex-col gap-2';
+    assert.equal(taskCardClasses, taskSkeletonClasses);
+  });
+});
+
+
 

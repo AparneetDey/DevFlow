@@ -173,3 +173,15 @@ body {
   background-color: var(--color-primary-muted);
 }
 
+.task-checkmark-path {
+  transition: stroke-dashoffset 220ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-checkmark-path {
+    transition: none !important;
+  }
+}
+
+
