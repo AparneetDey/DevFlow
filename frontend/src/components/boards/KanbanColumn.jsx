@@ -7,6 +7,7 @@ import SortableTaskCard from '../tasks/SortableTaskCard.jsx';
 /**
  * Reusable presentation component for a Kanban workflow column.
  * Displays column header with task counter, quick task creation action, and task container with empty fallback.
+ * Styled via centralized DevFlow CSS custom properties.
  *
  * @param {Object} props
  * @param {Object} props.column - Column metadata { title, key, order }
@@ -59,20 +60,22 @@ export function KanbanColumn({
   return (
     <section
       aria-labelledby={`column-header-${columnKey}`}
-      className={`w-72 select-none sm:w-80 shrink-0 bg-slate-100/75 border ${
-        isOver ? 'border-indigo-400 ring-2 ring-indigo-400/40 bg-indigo-50/20' : 'border-slate-200/90'
-      } rounded-2xl p-3 sm:p-3.5 shadow-2xs flex flex-col min-h-[440px] transition-colors ${className}`.trim()}
+      className={`w-72 select-none sm:w-80 shrink-0 bg-[var(--color-surface)] border ${
+        isOver
+          ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/40 bg-[var(--color-primary-muted)]/15'
+          : 'border-[var(--color-border)]'
+      } rounded-2xl p-3 sm:p-3.5 shadow-xs flex flex-col min-h-[440px] transition-colors ${className}`.trim()}
     >
       {/* Column Header */}
-      <div className="flex items-center justify-between px-1.5 py-1 mb-2.5 pb-2.5 border-b border-slate-200/70 min-w-0">
+      <div className="flex items-center justify-between px-1.5 py-1 mb-2.5 pb-2.5 border-b border-[var(--color-border)] min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <span
-            className="w-2 h-2 rounded-full bg-slate-400/80 shrink-0"
+            className="w-2 h-2 rounded-full bg-[var(--color-primary)] shrink-0"
             aria-hidden="true"
           />
           <h3
             id={`column-header-${columnKey}`}
-            className="text-sm font-semibold text-slate-800 tracking-tight truncate"
+            className="text-sm font-semibold text-[var(--color-text)] tracking-tight truncate"
             title={columnTitle}
           >
             {columnTitle}
@@ -82,7 +85,7 @@ export function KanbanColumn({
         {/* Task Count Badge & Add Task Button */}
         <div className="flex items-center gap-1.5 shrink-0">
           <span
-            className="text-xs px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-600 font-semibold text-[11px]"
+            className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] border border-[var(--color-border)] font-semibold text-[11px]"
             aria-label={`${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${columnTitle}`}
           >
             {taskCount}
@@ -93,7 +96,7 @@ export function KanbanColumn({
               onClick={() => onAddTask(column?.key || 'todo')}
               aria-label={`Add task to ${columnTitle} column`}
               title={`Add task to ${columnTitle}`}
-              className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-200/70 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
+              className="p-1 rounded-md text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -105,13 +108,13 @@ export function KanbanColumn({
       <div
         ref={setNodeRef}
         className={`flex-1 flex flex-col gap-2.5 min-h-[350px] rounded-xl transition-colors ${
-          isOver && hasTasksArray ? 'bg-indigo-50/20 p-1 -m-1' : ''
+          isOver && hasTasksArray ? 'bg-[var(--color-primary-muted)]/10 p-1 -m-1' : ''
         }`}
       >
         {isLoading ? (
           <div className="space-y-2.5" aria-busy="true">
-            <div className="h-20 bg-white/70 rounded-xl border border-slate-200/60 animate-pulse" />
-            <div className="h-20 bg-white/70 rounded-xl border border-slate-200/60 animate-pulse" />
+            <div className="h-20 bg-[var(--color-surface-elevated)] rounded-xl border border-[var(--color-border)] animate-pulse" />
+            <div className="h-20 bg-[var(--color-surface-elevated)] rounded-xl border border-[var(--color-border)] animate-pulse" />
           </div>
         ) : hasChildren ? (
           children
@@ -136,18 +139,18 @@ export function KanbanColumn({
             aria-label={`Empty ${columnTitle} column`}
             className={`flex-1 rounded-xl border border-dashed ${
               isOver
-                ? 'border-indigo-400 bg-indigo-50/70 ring-2 ring-indigo-400/50'
-                : 'border-slate-300/80 bg-white/50'
+                ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]/20 ring-2 ring-[var(--color-primary)]/40'
+                : 'border-[var(--color-border)] bg-[var(--color-bg-secondary)]'
             } p-6 flex flex-col items-center justify-center text-center select-none space-y-2 transition-all`}
           >
-            <p className={`text-xs font-medium ${isOver ? 'text-indigo-600 font-semibold' : 'text-slate-400'}`}>
+            <p className={`text-xs font-medium ${isOver ? 'text-[var(--color-primary-hover)] font-semibold' : 'text-[var(--color-text-muted)]'}`}>
               {isOver ? 'Drop task here' : 'No tasks yet'}
             </p>
             {onAddTask && (
               <button
                 type="button"
                 onClick={() => onAddTask(column?.key || 'todo')}
-                className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-2 py-1"
+                className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-primary-hover)] hover:text-[var(--color-primary)] hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded px-2 py-1"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add a task</span>

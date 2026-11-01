@@ -2,15 +2,15 @@ import { Calendar, Pencil, Circle, CheckCircle2 } from 'lucide-react';
 
 const PRIORITY_THEMES = {
   high: {
-    badge: 'bg-rose-50 text-rose-700 border-rose-200/80',
+    badge: 'bg-[var(--color-danger)]/15 text-[var(--color-danger)] border-[var(--color-danger)]/40',
     label: 'High',
   },
   medium: {
-    badge: 'bg-amber-50 text-amber-700 border-amber-200/80',
+    badge: 'bg-[var(--color-warning)]/15 text-[var(--color-warning)] border-[var(--color-warning)]/40',
     label: 'Medium',
   },
   low: {
-    badge: 'bg-blue-50 text-blue-700 border-blue-200/80',
+    badge: 'bg-[var(--color-primary-muted)] text-[var(--color-text)] border-[var(--color-primary)]/40',
     label: 'Low',
   },
 };
@@ -24,6 +24,7 @@ const PRIORITY_THEMES = {
  * - Clicking the pencil icon opens the task details modal.
  * - Double clicking (or clicking) the card opens the task details modal.
  * - Supports keyboard interaction (Enter/Space opens task details modal).
+ * - Styled via centralized DevFlow CSS custom properties.
  *
  * @param {Object} props
  * @param {Object} props.task - Task data object
@@ -117,13 +118,13 @@ export function TaskCard({
           }
         }
       }}
-      className={`group relative p-2 select-none bg-white rounded-xl border border-slate-200/90 hover:border-indigo-500 hover:shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-all flex flex-col gap-2 min-w-0 cursor-grab active:cursor-grabbing ${
+      className={`group relative p-2.5 select-none bg-[var(--color-surface-elevated)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] focus-visible:border-[var(--color-primary)] transition-all flex flex-col gap-2 min-w-0 cursor-grab active:cursor-grabbing text-[var(--color-text)] ${
         isDragging
-          ? 'opacity-30 border-2 border-dashed border-indigo-400 bg-indigo-50/30 shadow-none'
+          ? 'opacity-30 border-2 border-dashed border-[var(--color-primary)] bg-[var(--color-primary-muted)]/20 shadow-none'
           : ''
       } ${
         isOverlay
-          ? 'shadow-xl ring-2 ring-indigo-500/60 rotate-1 cursor-grabbing pointer-events-none'
+          ? 'shadow-xl ring-2 ring-[var(--color-primary)]/60 rotate-1 cursor-grabbing pointer-events-none'
           : ''
       } ${className}`.trim()}
       title="Click or double-click to view task details"
@@ -147,12 +148,12 @@ export function TaskCard({
             disabled={isToggling}
             aria-label={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
             title={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
-            className="mt-0.5 p-0.5 rounded-full text-slate-400 hover:text-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer shrink-0 transition-colors disabled:opacity-50"
+            className="mt-0.5 p-0.5 rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer shrink-0 transition-colors disabled:opacity-50"
           >
             {isCompleted ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 fill-emerald-100/70" />
+              <CheckCircle2 className="w-4 h-4 text-[var(--color-primary-hover)]" />
             ) : (
-              <Circle className="w-4 h-4 hover:stroke-indigo-600" />
+              <Circle className="w-4 h-4 hover:stroke-[var(--color-primary-hover)]" />
             )}
           </button>
         </div>
@@ -162,8 +163,8 @@ export function TaskCard({
           id={`task-title-${taskKey}`}
           className={`text-sm font-semibold tracking-tight break-words flex-1 transition-all duration-200 ease-out ${
             isCompleted
-              ? 'line-through text-slate-400'
-              : 'text-slate-800 group-hover:text-indigo-600'
+              ? 'line-through text-[var(--color-text-muted)]'
+              : 'text-[var(--color-text)]'
           }`}
         >
           {task.title || 'Untitled Task'}
@@ -178,7 +179,7 @@ export function TaskCard({
           onDoubleClick={(e) => e.stopPropagation()}
           aria-label={`Edit task: ${task.title || 'Untitled Task'}`}
           title="Edit task in details modal"
-          className="p-1 -mr-1 -mt-0.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer shrink-0"
+          className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer shrink-0"
         >
           <Pencil className="w-3.5 h-3.5" />
         </button>
@@ -187,7 +188,7 @@ export function TaskCard({
       {/* Task Description (when present) */}
       {task.description ? (
         <p className={`text-xs leading-relaxed break-words line-clamp-3 ${
-          isCompleted ? 'text-slate-400' : 'text-slate-500'
+          isCompleted ? 'text-[var(--color-text-muted)]' : 'text-[var(--color-text-secondary)]'
         }`}>
           {task.description}
         </p>
@@ -195,11 +196,11 @@ export function TaskCard({
 
       {/* Task Metadata (Priority & Due Date) */}
       {(priorityTheme || formattedDueDate) && (
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100/80 mt-0.5">
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[var(--color-border)] mt-0.5">
           {priorityTheme && (
             <span
               className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
-                isCompleted ? 'bg-slate-50 text-slate-400 border-slate-200/60' : priorityTheme.badge
+                isCompleted ? 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)]' : priorityTheme.badge
               }`}
             >
               {priorityTheme.label}
@@ -208,9 +209,9 @@ export function TaskCard({
 
           {formattedDueDate && (
             <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${
-              isCompleted ? 'text-slate-400' : 'text-slate-500'
+              isCompleted ? 'text-[var(--color-text-muted)]' : 'text-[var(--color-text-secondary)]'
             }`}>
-              <Calendar className="w-3 h-3 text-slate-400 shrink-0" aria-hidden="true" />
+              <Calendar className="w-3.5 h-3.5 text-[var(--color-text-muted)] shrink-0" aria-hidden="true" />
               <span>{formattedDueDate}</span>
             </span>
           )}

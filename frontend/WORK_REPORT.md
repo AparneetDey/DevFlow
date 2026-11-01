@@ -4071,3 +4071,126 @@ The profile page was structured to support upcoming profile editing features onc
 ### 15. Known Limitations & Scope Alignment
 - **Unsupported Account Settings:** In accordance with task scope restrictions, unsupported features (password reset, email modification, avatar uploads, account deletion) were not introduced, as they require backend endpoint support.
 - **Scope Compliance:** Cleanly stopped at Task 8.3; did not proceed to Task 8.4.
+
+
+---
+
+## Task 8.4: Navigation & App-Wide UI Polish
+
+### 1. Task Objective
+Conduct an app-wide visual and navigational polish across DevFlow's primary authenticated views (Dashboard, Board Detail, and Profile) utilizing the established minimal, dark theme design system led by green hues with red accent reserves. Clean up navigation components, remove obsolete demo links, ensure strict adherence to CSS variable tokens (`var(--color-...)`), eliminate hardcoded legacy hex values, and maintain native browser scrollbars without modifying backend code or adding unsupported features.
+
+---
+
+### 2. Files Inspected
+- `frontend/src/index.css` (Design tokens and CSS custom properties)
+- `frontend/src/components/layout/Navbar.jsx` (Global navigation bar, identity badge, navigation links)
+- `frontend/src/pages/DashboardPage.jsx` (Dashboard view, overview statistics, boards grid, creation trigger)
+- `frontend/src/components/boards/BoardCard.jsx` (Board card presentation, metadata, hover transitions)
+- `frontend/src/components/boards/BoardSkeleton.jsx` (Loading skeleton for board cards)
+- `frontend/src/components/boards/CreateBoardModal.jsx` (Board creation modal dialog)
+- `frontend/src/components/boards/EditBoardModal.jsx` (Board edit modal dialog)
+- `frontend/src/components/boards/DeleteBoardModal.jsx` (Destructive board deletion confirmation dialog)
+- `frontend/src/pages/BoardPage.jsx` (Board detail view, Kanban canvas, metadata banner, error states)
+- `frontend/src/components/boards/KanbanColumn.jsx` (Column container, column header, counter pill, add task trigger)
+- `frontend/src/components/tasks/TaskCard.jsx` (Kanban task card, priority badge, completion toggle)
+- `frontend/src/components/tasks/CreateTaskModal.jsx` (Task creation modal dialog)
+- `frontend/src/components/tasks/TaskDetailsModal.jsx` (Task detail view, inline title/description editor, popovers)
+- `frontend/src/pages/ProfilePage.jsx` (Profile view, user identity card, account security details)
+- `frontend/src/components/profile/ProfileCard.jsx` & `ProfileHeader.jsx` & `ProfileActions.jsx`
+- `backend/` directory (Strictly inspected as read-only; zero backend modifications made)
+
+---
+
+### 3. Files Modified
+- `frontend/src/components/layout/Navbar.jsx`
+- `frontend/src/pages/DashboardPage.jsx`
+- `frontend/src/components/boards/BoardCard.jsx`
+- `frontend/src/components/boards/BoardSkeleton.jsx`
+- `frontend/src/components/boards/CreateBoardModal.jsx`
+- `frontend/src/components/boards/EditBoardModal.jsx`
+- `frontend/src/components/boards/DeleteBoardModal.jsx`
+- `frontend/src/pages/BoardPage.jsx`
+- `frontend/src/components/boards/KanbanColumn.jsx`
+- `frontend/src/components/tasks/TaskCard.jsx`
+- `frontend/src/components/tasks/CreateTaskModal.jsx`
+- `frontend/src/components/tasks/TaskDetailsModal.jsx`
+- `frontend/WORK_REPORT.md` (Appended this report)
+
+---
+
+### 4. Navigation Improvements
+- **Obsolete Link Removal:** Removed the hardcoded legacy `/boards/demo-101` placeholder link from `Navbar.jsx`.
+- **Exact Route Matching:** Configured the `/dashboard` NavLink with the `end` property to ensure accurate active state highlighting when on the dashboard.
+- **Unified Active State Styling:** Updated desktop and mobile navigation links to use `bg-[var(--color-primary-muted)] text-[var(--color-text)] border border-[var(--color-primary)]/40` when active, providing clear, restrained feedback without harsh contrast.
+- **Responsive User Pill:** Added truncation (`truncate max-w-[140px]`) to the user identity pill in the navigation bar to prevent layout distortion on narrower viewports.
+- **Preserved Back Navigation:** Refined the "Back to Dashboard" link in `BoardPage.jsx` with subtle hover surfaces and consistent text-muted tokens.
+
+---
+
+### 5. Responsive & Layout Adaptations
+- **Consistent Page Containers:** All pages utilize responsive containers (`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8`) with fluid grid adaptations (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`).
+- **Modal Viewport Safety:** Modals (`CreateBoardModal`, `EditBoardModal`, `DeleteBoardModal`, `CreateTaskModal`, `TaskDetailsModal`) feature fluid responsive widths with responsive paddings, safe max-widths, and auto-scrolling overflow containers using native browser scrollbars.
+- **Kanban Column Flow:** Board view adapts to viewport width with horizontal scrolling when columns overflow, preserving drag-and-drop mechanics and column visibility across tablet and desktop viewports.
+
+---
+
+### 6. Visual Consistency Verification (Dashboard, Board Detail, Profile)
+- **Design Token Discipline:** Replaced legacy Tailwind slate, white, and indigo color declarations with semantic CSS variables:
+  - Backgrounds: `var(--color-bg)` (#0c100d), `var(--color-surface)` (#141a16), `var(--color-surface-elevated)` (#1a231d).
+  - Borders: `var(--color-border)` (#233227), `var(--color-border-subtle)` (#1a261d).
+  - Primary Green Palette: `var(--color-primary)` (#22c55e), `var(--color-primary-hover)` (#16a34a), `var(--color-primary-muted)` (rgba(34, 197, 94, 0.15)).
+  - Accent / Danger Red: `var(--color-danger)` (#ef4444) reserved strictly for destructive actions (deleting boards/tasks) and critical error alerts.
+  - Warning Gold: `var(--color-warning)` (#eab308) for medium priority badges.
+  - Focus Rings: `var(--color-focus)` (rgba(34, 197, 94, 0.4)).
+  - Inputs: `var(--color-input-bg)` (#101612).
+- **Dashboard Consistency:** Overview statistics cards, empty states, error banners, and board cards harmonize with the dark theme.
+- **Board Detail Consistency:** Board metadata cards, column headers, task counter pills, empty drop zones, and task cards maintain visual hierarchy.
+- **Task Modals Consistency:** Both `CreateTaskModal` and `TaskDetailsModal` share identical form input borders, focus states, priority pill palettes, and destructive confirmation styling.
+
+---
+
+### 7. Automated Test Results
+- **Command:** `npm.cmd test --prefix frontend`
+- **Result:** **108 of 108 tests passed (0 failures, 0 skipped)** across all 22 test suites.
+- **Suites Covered:**
+  - `auth.session.test.js`: Interceptor refresh loops, token rotation, logout confirmation, route guards.
+  - `task.api.test.js`: Endpoint generation, payload formatting, error handling contracts.
+  - `taskGrouping.test.js` & `columnSorting.test.js`: Column filtering, default column sorting, edge cases.
+  - `taskReordering.test.js`: Intra-column and cross-column reordering, contiguous order normalization.
+  - `profileData.test.js`: Profile view-model data adapter, future-ready architecture contracts.
+
+---
+
+### 8. ESLint Results
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 errors, 0 warnings** across all frontend source files and test suites.
+
+---
+
+### 9. Production Build Results
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Vite build succeeded with **0 compilation errors**:
+  - `dist/index.html`: `0.45 kB` (gzip: `0.29 kB`)
+  - `dist/assets/index-BA7E_HZd.css`: `49.41 kB` (gzip: `8.67 kB`)
+  - `dist/assets/index-DMfjJIOr.js`: `474.25 kB` (gzip: `142.18 kB`)
+
+---
+
+### 10. Accessibility & Native Browser Scrollbars
+- **Native Browser Scrollbars:** Re-verified that native browser scrollbars are preserved without custom scrollbar styling, `::-webkit-scrollbar` rules, or non-standard scrollbar CSS properties.
+- **Contrast & Legibility:** Text tokens (`var(--color-text)`, `var(--color-text-muted)`) provide high contrast against elevated surfaces.
+- **Interactive States:** Distinct hover, focus-visible, and active states configured across all buttons, dropdown triggers, and interactive cards.
+
+---
+
+### 11. Backend Status & Live API Verification
+- **Backend Availability:** Headless local environment without active persistent live backend daemon on port 8000.
+- **Backend Invariance:** Confirmed with `git status --porcelain backend/` that zero backend files were altered.
+- **Verification Strategy:** UI rendering, design tokens, route navigation, and interaction handlers validated through component contracts, unit tests, ESLint, and production Vite compilation.
+
+---
+
+### 12. Known Limitations & Scope Alignment
+- **Strict Scope Boundaries:** No new unrequested features (such as board search, activity logs backend APIs, or notifications) were added.
+- **Clean Task Termination:** Execution concluded cleanly upon completion of Task 8.4; Task 8.5 has not been initiated.

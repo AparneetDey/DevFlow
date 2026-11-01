@@ -16,11 +16,11 @@ export function Navbar() {
   const [logoutError, setLogoutError] = useState(null);
 
   const navLinkClass = ({ isActive }) =>
-    `flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+    `flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-colors border ${
       isActive
-        ? 'bg-[var(--color-primary)] text-[var(--color-text)]'
-        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)]'
-    }`;
+        ? 'bg-[var(--color-primary-muted)] text-[var(--color-text)] border-[var(--color-primary)]/40 shadow-2xs'
+        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] border-transparent'
+    } focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]`;
 
   const handleOpenLogout = () => {
     setLogoutError(null);
@@ -55,14 +55,20 @@ export function Navbar() {
   return (
     <>
       <header className="bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
           {/* Brand */}
-          <Link to="/dashboard" className="flex items-center gap-2 sm:gap-2.5 group shrink-0">
-            <div className="w-9 h-9 rounded-lg bg-[var(--color-primary)] flex items-center justify-center text-[var(--color-text)] shadow-xs group-hover:bg-[var(--color-primary-hover)] transition-colors">
-              <Kanban className="w-5 h-5" />
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 sm:gap-2.5 group shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-lg p-1"
+            aria-label="DevFlow home"
+          >
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[var(--color-primary)] flex items-center justify-center text-[var(--color-text)] shadow-xs group-hover:bg-[var(--color-primary-hover)] transition-colors">
+              <Kanban className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <span className="text-lg font-bold text-[var(--color-text)] tracking-tight">DevFlow</span>
+              <span className="text-base sm:text-lg font-bold text-[var(--color-text)] tracking-tight">
+                DevFlow
+              </span>
             </div>
           </Link>
 
@@ -70,15 +76,23 @@ export function Navbar() {
           <nav className="flex items-center gap-1 sm:gap-2">
             {isAuthenticated ? (
               <>
-                <NavLink to="/dashboard" className={navLinkClass} title="Dashboard" aria-label="Dashboard">
+                <NavLink
+                  to="/dashboard"
+                  end
+                  className={navLinkClass}
+                  title="Dashboard"
+                  aria-label="Dashboard"
+                >
                   <LayoutDashboard className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">Dashboard</span>
                 </NavLink>
-                <NavLink to="/boards/demo-101" className={navLinkClass} title="Board" aria-label="Board">
-                  <Kanban className="w-4 h-4 shrink-0" />
-                  <span className="hidden sm:inline">Board</span>
-                </NavLink>
-                <NavLink to="/profile" className={navLinkClass} title="Profile" aria-label="Profile">
+
+                <NavLink
+                  to="/profile"
+                  className={navLinkClass}
+                  title="Profile"
+                  aria-label="Profile"
+                >
                   <User className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">Profile</span>
                 </NavLink>
@@ -86,17 +100,22 @@ export function Navbar() {
                 <div className="h-4 w-px bg-[var(--color-border)] mx-1 hidden sm:block" />
 
                 {/* User Identity Indicator */}
-                <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]">
-                  {user?.username}
-                </span>
+                {user?.username && (
+                  <span
+                    className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] truncate max-w-[140px]"
+                    title={`Signed in as ${user.username}`}
+                  >
+                    {user.username}
+                  </span>
+                )}
 
-                {/* Logout Button */}
+                {/* Logout Action */}
                 <button
                   type="button"
                   onClick={handleOpenLogout}
                   aria-label="Log out"
                   title="Log out"
-                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]"
                 >
                   <LogOut className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">Logout</span>

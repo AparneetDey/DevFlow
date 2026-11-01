@@ -118,16 +118,16 @@ export function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Dashboard Header */}
-      <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+      <div className="bg-[var(--color-surface)] rounded-2xl p-6 sm:p-8 border border-[var(--color-border)] shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-6">
         <div className="space-y-2 min-w-0">
-          <div className="flex items-center gap-2 text-indigo-600">
+          <div className="flex items-center gap-2 text-[var(--color-primary-hover)]">
             <LayoutDashboard className="w-5 h-5" />
             <span className="text-xs font-semibold uppercase tracking-wider">Workspaces Overview</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight break-words">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--color-text)] tracking-tight break-words">
             Welcome back{displayName}!
           </h1>
-          <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">
+          <p className="text-sm text-[var(--color-text-secondary)] max-w-2xl leading-relaxed">
             Manage your project workspaces, track Kanban cards across default status columns (Todo, In Progress, Done), and monitor development progress.
           </p>
         </div>
@@ -149,39 +149,39 @@ export function DashboardPage() {
 
       {/* Overview Statistics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shrink-0">
+        <div className="bg-[var(--color-surface)] p-4 rounded-xl border border-[var(--color-border)] shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-[var(--color-primary-muted)] text-[var(--color-text)] flex items-center justify-center border border-[var(--color-primary)]/40 shrink-0">
             <Kanban className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Active Boards</p>
+            <p className="text-xs font-medium text-[var(--color-text-secondary)]">Active Boards</p>
             {isLoading ? (
-              <div className="h-5 w-8 bg-slate-200 rounded animate-pulse mt-1" />
+              <div className="h-5 w-8 bg-[var(--color-surface-elevated)] rounded animate-pulse mt-1" />
             ) : error ? (
-              <p className="text-lg font-bold text-slate-400">—</p>
+              <p className="text-lg font-bold text-[var(--color-text-muted)]">—</p>
             ) : (
-              <p className="text-lg font-bold text-slate-900">{boards.length}</p>
+              <p className="text-lg font-bold text-[var(--color-text)]">{boards.length}</p>
             )}
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shrink-0">
+        <div className="bg-[var(--color-surface)] p-4 rounded-xl border border-[var(--color-border)] shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-[var(--color-primary-muted)] text-[var(--color-text)] flex items-center justify-center border border-[var(--color-primary)]/40 shrink-0">
             <Layers className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Workflow Columns</p>
-            <p className="text-lg font-bold text-slate-900">3 Fixed Stages</p>
+            <p className="text-xs font-medium text-[var(--color-text-secondary)]">Workflow Columns</p>
+            <p className="text-lg font-bold text-[var(--color-text)]">3 Fixed Stages</p>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center border border-violet-100 shrink-0">
+        <div className="bg-[var(--color-surface)] p-4 rounded-xl border border-[var(--color-border)] shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-[var(--color-primary-muted)] text-[var(--color-text)] flex items-center justify-center border border-[var(--color-primary)]/40 shrink-0">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Agile Workflow</p>
-            <p className="text-lg font-bold text-slate-900">Kanban Board</p>
+            <p className="text-xs font-medium text-[var(--color-text-secondary)]">Agile Workflow</p>
+            <p className="text-lg font-bold text-[var(--color-text)]">Kanban Board</p>
           </div>
         </div>
       </div>
@@ -189,8 +189,8 @@ export function DashboardPage() {
       {/* Boards Section */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Your Boards</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Select any workspace to view and organize Kanban tasks.</p>
+          <h2 className="text-lg font-bold text-[var(--color-text)] tracking-tight">Your Boards</h2>
+          <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">Select any workspace to view and organize Kanban tasks.</p>
         </div>
 
         {/* Mutually Exclusive Presentation States: Loading vs Error vs Empty vs Populated */}
@@ -203,14 +203,14 @@ export function DashboardPage() {
           /* 2. Error State: Request failure alert */
           <div
             role="alert"
-            className="bg-red-50 border border-red-200 rounded-2xl p-6 sm:p-10 text-center max-w-lg mx-auto my-6 sm:my-8 space-y-4 shadow-2xs"
+            className="bg-[var(--color-danger)]/15 border border-[var(--color-danger)]/40 rounded-2xl p-6 sm:p-10 text-center max-w-lg mx-auto my-6 sm:my-8 space-y-4 shadow-xs"
           >
-            <div className="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-2xs">
+            <div className="w-12 h-12 rounded-xl bg-[var(--color-danger)]/20 text-[var(--color-danger)] flex items-center justify-center mx-auto border border-[var(--color-danger)]/40 shadow-xs">
               <AlertCircle className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-red-900">Failed to load boards</h3>
-              <p className="text-xs text-red-700 max-w-sm mx-auto leading-relaxed">
+              <h3 className="text-base font-bold text-[var(--color-text)]">Failed to load boards</h3>
+              <p className="text-xs text-[var(--color-text-secondary)] max-w-sm mx-auto leading-relaxed">
                 {error}
               </p>
             </div>
@@ -218,7 +218,7 @@ export function DashboardPage() {
               variant="outline"
               size="sm"
               onClick={handleRetry}
-              className="inline-flex items-center gap-1.5 border-red-200 text-red-700 hover:bg-red-100/60 cursor-pointer"
+              className="inline-flex items-center gap-1.5 cursor-pointer"
               aria-label="Retry loading boards"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -230,19 +230,19 @@ export function DashboardPage() {
           <div
             role="region"
             aria-label="Empty boards state"
-            className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-6 sm:p-12 text-center max-w-lg mx-auto my-6 sm:my-8 space-y-4"
+            className="bg-[var(--color-surface)] rounded-2xl border-2 border-dashed border-[var(--color-border)] p-6 sm:p-12 text-center max-w-lg mx-auto my-6 sm:my-8 space-y-4"
           >
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto border border-indigo-100 shadow-2xs">
+            <div className="w-14 h-14 rounded-2xl bg-[var(--color-primary-muted)] text-[var(--color-text)] flex items-center justify-center mx-auto border border-[var(--color-primary)]/40 shadow-xs">
               <FolderPlus className="w-7 h-7" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900">No boards available</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              <h3 className="text-base font-bold text-[var(--color-text)]">No boards available</h3>
+              <p className="text-xs text-[var(--color-text-secondary)] max-w-sm mx-auto">
                 You do not have any active project workspaces yet. Create a new board to get started organizing your tasks.
               </p>
             </div>
             <Button
-              variant="outline"
+              variant="primary"
               size="sm"
               onClick={() => setIsCreateModalOpen(true)}
               className="inline-flex items-center gap-1.5"
@@ -260,15 +260,15 @@ export function DashboardPage() {
               type="button"
               onClick={() => setIsCreateModalOpen(true)}
               aria-label="Create new board workspace"
-              className="min-h-[170px] rounded-xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 p-6 flex flex-col items-center justify-center text-center transition-all duration-200 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              className="min-h-[170px] rounded-xl border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-primary)] bg-[var(--color-surface)]/50 hover:bg-[var(--color-surface)] p-6 flex flex-col items-center justify-center text-center transition-all duration-200 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
             >
-              <div className="w-10 h-10 rounded-full bg-white text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 flex items-center justify-center border border-slate-200 group-hover:border-indigo-200 transition-all mb-2.5 shadow-2xs">
+              <div className="w-10 h-10 rounded-full bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] group-hover:text-[var(--color-text)] group-hover:bg-[var(--color-primary-muted)] flex items-center justify-center border border-[var(--color-border)] group-hover:border-[var(--color-primary)]/40 transition-all mb-2.5 shadow-xs">
                 <Plus className="w-5 h-5" />
               </div>
-              <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-600 transition-colors">
+              <span className="text-sm font-semibold text-[var(--color-text)] group-hover:text-[var(--color-text)] transition-colors">
                 Create New Board
               </span>
-              <span className="text-[11px] text-slate-400 mt-0.5">
+              <span className="text-[11px] text-[var(--color-text-secondary)] mt-0.5">
                 Add workspace
               </span>
             </button>
