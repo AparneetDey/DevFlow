@@ -82,6 +82,31 @@ export const boardApi = {
    */
   renameColumn: (boardId, columnKey, columnData, config = {}) =>
     apiClient.patch(`/boards/${boardId}/columns/${columnKey}`, columnData, config),
+
+  /**
+   * Deletes a column from a board.
+   * Route: DELETE /api/v1/boards/:boardId/columns/:columnKey
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {string} columnKey - Unique column key
+   * @param {Object} payload - { action: 'move'|'delete', targetColumnKey?: string }
+   * @param {Object} [config] - Optional Axios request configuration
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  deleteColumn: (boardId, columnKey, payload, config = {}) =>
+    apiClient.delete(`/boards/${boardId}/columns/${columnKey}`, { data: payload, ...config }),
+
+  /**
+   * Reorders columns on a board.
+   * Route: PATCH /api/v1/boards/:boardId/columns/reorder
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {Object} payload - { columnKeys: string[] }
+   * @param {Object} [config] - Optional Axios request configuration
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  reorderColumns: (boardId, payload, config = {}) =>
+    apiClient.patch(`/boards/${boardId}/columns/reorder`, payload, config),
 };
 
 export default boardApi;

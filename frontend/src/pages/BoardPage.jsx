@@ -25,10 +25,13 @@ import {
 import {
   sortableKeyboardCoordinates,
   arrayMove,
+  horizontalListSortingStrategy,
+  SortableContext,
 } from '@dnd-kit/sortable';
 import { Button } from '../components/common/Button.jsx';
 import KanbanColumn from '../components/boards/KanbanColumn.jsx';
 import AddColumnModal from '../components/boards/AddColumnModal.jsx';
+import DeleteColumnModal from '../components/boards/DeleteColumnModal.jsx';
 import TaskCard from '../components/tasks/TaskCard.jsx';
 import CreateTaskModal from '../components/tasks/CreateTaskModal.jsx';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal.jsx';
@@ -112,6 +115,12 @@ export function BoardPage() {
 
   // Column creation modal state (Task 10)
   const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
+
+  // Column deletion modal state (Task 12)
+  const [columnToDelete, setColumnToDelete] = useState(null);
+
+  // Column reordering drag state (Task 12)
+  const [activeColumnKey, setActiveColumnKey] = useState(null);
 
   // Task details modal state
   const [selectedTask, setSelectedTask] = useState(null);
@@ -297,6 +306,53 @@ export function BoardPage() {
     }
   };
 
+  const handleOpenDeleteColumn = (column) => {
+    setColumnToDelete(column);
+  };
+
+  const handleCloseDeleteColumn = () => {
+    setColumnToDelete(null);
+  };
+
+  const handleColumnDeleted = (updatedBoard, deletedColumnKey, payload) => {
+    if (updatedBoard && Array.isArray(updatedBoard.columns)) {
+      setBoard(updatedBoard);
+    } else {
+      setBoard((prev) => ({
+        ...prev,
+        columns: (prev?.columns || []).filter((c) => c.key !== deletedColumnKey),
+      }));
+    }
+
+    if (payload?.action === 'move' && payload?.targetColumnKey) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.columnKey === deletedColumnKey
+            ? { ...t, columnKey: payload.targetColumnKey }
+            : t
+        )
+      );
+      if (selectedTask?.columnKey === deletedColumnKey) {
+        setSelectedTask((prev) =>
+          prev ? { ...prev, columnKey: payload.targetColumnKey } : null
+        );
+      }
+      // Re-fetch tasks in background to ensure strict server-synchronized order indices
+      taskApi.getTasksByBoard(boardId).then((res) => {
+        if (Array.isArray(res.data?.data)) {
+          setTasks(res.data.data);
+        }
+      }).catch(() => {});
+    } else {
+      // payload.action === 'delete'
+      setTasks((prev) => prev.filter((t) => t.columnKey !== deletedColumnKey));
+      if (selectedTask?.columnKey === deletedColumnKey) {
+        setSelectedTask(null);
+        setIsTaskDetailsModalOpen(false);
+      }
+    }
+  };
+
   const handleOpenTaskDetails = (task) => {
     if (!task) return;
     setSelectedTask(task);
@@ -441,6 +497,15 @@ export function BoardPage() {
   // --------------------------------------------------------------------------
   const handleDragStart = (event) => {
     const { active } = event;
+    const activeData = active.data.current;
+
+    // Handle column reordering drag initiation
+    if (activeData?.type === 'column') {
+      setActiveColumnKey(activeData.columnKey);
+      setActiveTask(null);
+      return;
+    }
+
     const task = tasks.find((t) => t._id === active.id);
     if (!task) return;
 
@@ -457,6 +522,11 @@ export function BoardPage() {
   };
 
   const handleDragOver = (event) => {
+    // If dragging a column, no task drag-over resolution needed
+    if (activeColumnKey) {
+      return;
+    }
+
     const { over } = event;
     if (!over) {
       if (overColumnKeyRef.current !== null) {
@@ -482,6 +552,67 @@ export function BoardPage() {
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;
+
+    // Handle Column Drop & Reordering
+    if (activeColumnKey) {
+      const activeColKey = activeColumnKey;
+      setActiveColumnKey(null);
+
+      if (!over) return;
+
+      let overColKey = null;
+      const overData = over.data.current;
+      if (overData?.type === 'column') {
+        overColKey = overData.columnKey;
+      } else if (typeof over.id === 'string' && over.id.startsWith('sortable-col-')) {
+        overColKey = over.id.replace('sortable-col-', '');
+      } else if (typeof over.id === 'string' && over.id.startsWith('column-')) {
+        overColKey = over.id.replace('column-', '');
+      } else {
+        const overTask = tasks.find((t) => t._id === over.id);
+        if (overTask?.columnKey) {
+          overColKey = overTask.columnKey;
+        }
+      }
+
+      if (!overColKey || overColKey === activeColKey) {
+        // Dropped in original position: no-op, 0 API calls!
+        return;
+      }
+
+      const oldIndex = columns.findIndex((c) => c.key === activeColKey);
+      const newIndex = columns.findIndex((c) => c.key === overColKey);
+
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) {
+        return;
+      }
+
+      const reordered = arrayMove(columns, oldIndex, newIndex);
+      const newColumnKeys = reordered.map((c) => c.key);
+      const previousBoard = board;
+
+      // Optimistic UI update
+      setBoard((prev) => ({
+        ...prev,
+        columns: reordered.map((col, idx) => ({ ...col, order: idx })),
+      }));
+
+      try {
+        const response = await boardApi.reorderColumns(boardId, {
+          columnKeys: newColumnKeys,
+        });
+        const updatedBoard = response.data?.data;
+        if (updatedBoard && Array.isArray(updatedBoard.columns)) {
+          setBoard(updatedBoard);
+        }
+      } catch (err) {
+        // Revert on error
+        setBoard(previousBoard);
+        setTaskActionError(extractErrorMessage(err));
+      }
+      return;
+    }
+
     const activeId = active?.id;
     const snapshot = dragSnapshotRef.current;
 
@@ -612,6 +743,10 @@ export function BoardPage() {
   };
 
   const handleDragCancel = () => {
+    if (activeColumnKey) {
+      setActiveColumnKey(null);
+      return;
+    }
     const snapshot = dragSnapshotRef.current;
     setActiveTask(null);
     setOverColumnKey(null);
@@ -869,11 +1004,29 @@ export function BoardPage() {
               <div
                 role="region"
                 aria-label="No workflow columns"
-                className="bg-[var(--color-surface)] rounded-2xl border-2 border-dashed border-[var(--color-border)] p-8 text-center max-w-md mx-auto my-6"
+                className="bg-[var(--color-surface)] rounded-2xl border-2 border-dashed border-[var(--color-border)] p-8 sm:p-10 text-center max-w-md mx-auto my-6 space-y-4"
               >
-                <p className="text-sm font-medium text-[var(--color-text-secondary)]">
-                  No columns configured for this board.
-                </p>
+                <div className="w-12 h-12 rounded-xl bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] flex items-center justify-center mx-auto border border-[var(--color-border)]">
+                  <Layers className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-semibold text-[var(--color-text)]">No columns on this board</h3>
+                  <p className="text-xs text-[var(--color-text-secondary)] max-w-xs mx-auto">
+                    Get started by adding your first workflow column to organize your tasks.
+                  </p>
+                </div>
+                <div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setIsAddColumnModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 cursor-pointer text-xs"
+                    aria-label="Add first column"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add First Column</span>
+                  </Button>
+                </div>
               </div>
             ) : (
               <DndContext
@@ -884,30 +1037,60 @@ export function BoardPage() {
                 onDragEnd={handleDragEnd}
                 onDragCancel={handleDragCancel}
               >
-                <div className="flex items-start gap-3 sm:gap-3.5 overflow-x-auto pb-4 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y board-canvas-scrollbar">
-                  {columns.map((column, index) => (
-                    <KanbanColumn
-                      key={column.key || column.name || column.title || `column-${index}`}
-                      column={column}
-                      tasks={getTasksForColumn(tasks, column.key)}
-                      isLoading={isLoadingTasks}
-                      isDropTarget={
-                        Boolean(activeTask && overColumnKey === column.key && activeTask.columnKey !== column.key)
-                      }
-                      onAddTask={(colKey) => handleOpenCreateTask(colKey)}
-                      onRenameColumn={handleRenameColumn}
-                      onTaskDoubleClick={handleOpenTaskDetails}
-                      onTaskEditClick={handleOpenTaskDetails}
-                      onTaskClick={handleOpenTaskDetails}
-                      onUpdateTask={handleUpdateTask}
-                      onToggleComplete={handleToggleComplete}
-                      togglingTaskIds={togglingTaskIds}
-                    />
-                  ))}
-                </div>
+                <SortableContext
+                  items={columns.map((c) => `sortable-col-${c.key}`)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  <div className="flex items-start gap-3 sm:gap-3.5 overflow-x-auto pb-4 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y board-canvas-scrollbar">
+                    {columns.map((column, index) => (
+                      <KanbanColumn
+                        key={column.key || column.name || column.title || `column-${index}`}
+                        column={column}
+                        tasks={getTasksForColumn(tasks, column.key)}
+                        isLoading={isLoadingTasks}
+                        isDropTarget={
+                          Boolean(activeTask && overColumnKey === column.key && activeTask.columnKey !== column.key)
+                        }
+                        onAddTask={(colKey) => handleOpenCreateTask(colKey)}
+                        onRenameColumn={handleRenameColumn}
+                        onDeleteColumn={handleOpenDeleteColumn}
+                        onTaskDoubleClick={handleOpenTaskDetails}
+                        onTaskEditClick={handleOpenTaskDetails}
+                        onTaskClick={handleOpenTaskDetails}
+                        onUpdateTask={handleUpdateTask}
+                        onToggleComplete={handleToggleComplete}
+                        togglingTaskIds={togglingTaskIds}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
 
                 <DragOverlay dropAnimation={null}>
-                  {activeTask ? (
+                  {activeColumnKey ? (
+                    (() => {
+                      const col = columns.find((c) => c.key === activeColumnKey);
+                      if (!col) return null;
+                      return (
+                        <div className="w-[255px] sm:w-[278px] pointer-events-none opacity-90 shadow-2xl rotate-1">
+                          <KanbanColumn
+                            column={col}
+                            tasks={getTasksForColumn(tasks, col.key)}
+                            isLoading={false}
+                            isDropTarget={false}
+                            onAddTask={() => {}}
+                            onRenameColumn={() => {}}
+                            onDeleteColumn={() => {}}
+                            onTaskDoubleClick={() => {}}
+                            onTaskEditClick={() => {}}
+                            onTaskClick={() => {}}
+                            onUpdateTask={() => {}}
+                            onToggleComplete={() => {}}
+                            togglingTaskIds={new Set()}
+                          />
+                        </div>
+                      );
+                    })()
+                  ) : activeTask ? (
                     <div className="w-[235px] sm:w-[240px] pointer-events-none">
                       <TaskCard task={activeTask} isOverlay />
                     </div>
@@ -955,6 +1138,20 @@ export function BoardPage() {
           onDeleteTask={handleDeleteTask}
           onToggleComplete={handleToggleComplete}
           isTogglingComplete={togglingTaskIds.has(selectedTask._id)}
+        />
+      )}
+
+      {/* Delete Column Modal (Task 12) */}
+      {columnToDelete && (
+        <DeleteColumnModal
+          key={columnToDelete.key}
+          boardId={boardId}
+          column={columnToDelete}
+          columns={columns}
+          tasks={tasks}
+          isOpen={Boolean(columnToDelete)}
+          onClose={handleCloseDeleteColumn}
+          onDeleted={handleColumnDeleted}
         />
       )}
     </div>

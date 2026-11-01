@@ -5330,3 +5330,106 @@ During Kanban drag-and-drop interactions, hovering a dragged task over adjacent 
 - **Automated Validation:** Pure reordering, position derivation, snapshot rollback, contiguous order indexing, and droppable container resolution were thoroughly verified via automated Node tests.
 - **Headless Environment Note:** Direct physical touch screen dragging and real-time GPU composition were derived analytically through layout constraints, pure CSS transform separation, and pointer-within collision math.
 - **Remaining Limitations:** On mobile viewports (<640px), horizontal touch-panning across 5 columns requires dragging the canvas directly, while vertical card dragging is activated with a 5px movement threshold via `PointerSensor`.
+
+
+---
+
+## Task 12 — Frontend Column Management (Delete, Move Tasks & Reorder Columns)
+
+### 1. Scope & Objectives
+Implemented complete frontend support for the Task 11 backend column deletion and reordering APIs:
+- `DELETE /api/v1/boards/:boardId/columns/:columnKey` (with task move or task delete strategies).
+- `PATCH /api/v1/boards/:boardId/columns/reorder` (with ordered column keys).
+- Drag-and-drop column reordering with dedicated grab handles.
+- Zero-column board support without UI breakages or rendering exceptions.
+- Maintained strict frontend-only boundary without modifying backend files.
+
+---
+
+### 2. Files Modified and Created
+
+#### Files Created:
+- [`frontend/src/components/boards/DeleteColumnModal.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/DeleteColumnModal.jsx): Accessible modal dialog for column deletion. Features intelligent strategy switching: simplified prompt for empty columns, Option A (move tasks to user-selected target column) vs Option B (permanently delete tasks) when tasks exist, and single-column fallback. Includes full keyboard/click-outside dismissals, duplicate-submission lock, and error banner.
+
+#### Files Modified:
+- [`frontend/src/api/board.api.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.js): Added `deleteColumn(boardId, columnKey, payload, config)` and `reorderColumns(boardId, payload, config)` methods.
+- [`frontend/src/api/board.api.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/api/board.api.test.js): Added contract tests verifying endpoints, HTTP methods, and payload structures for `deleteColumn` and `reorderColumns`.
+- [`frontend/src/components/boards/KanbanColumn.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/KanbanColumn.jsx):
+  - Added dedicated column drag handle (`GripVertical` icon button) with `setActivatorNodeRef`, isolating column dragging from column header clicks and card drags.
+  - Attached `@dnd-kit/sortable` `useSortable` to column container.
+  - Added header action dropdown menu (`MoreHorizontal`) with "Delete Column" option.
+  - Added `onDeleteColumn` callback prop.
+- [`frontend/src/pages/BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx):
+  - Wrapped Kanban columns in `@dnd-kit/sortable` `<SortableContext>` with `horizontalListSortingStrategy`.
+  - Added `activeColumnKey` state and separated column drag initiation from task drag initiation in `handleDragStart`, `handleDragOver`, `handleDragEnd`, and `handleDragCancel`.
+  - Added zero-API-call no-op guard when dropping a column back in its original position.
+  - Implemented optimistic column reordering with server rollback on error.
+  - Implemented `handleOpenDeleteColumn`, `handleCloseDeleteColumn`, and `handleColumnDeleted` state handlers.
+  - Implemented empty board state for zero columns (`columns.length === 0`) with prominent icon, description, and "Add First Column" action button.
+  - Rendered dragged column preview in `<DragOverlay>`.
+  - Rendered `<DeleteColumnModal>` with column key tracking.
+- [`frontend/src/utils/taskReordering.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/taskReordering.js): Enhanced `findColumnKey` to support `sortable-col-<key>` identifiers and safely validate against board columns.
+- [`frontend/src/utils/taskReordering.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/taskReordering.test.js): Added test cases for `sortable-col-<key>` resolution, column deletion with task moves (preserving task completion), column deletion with task removal, column reordering, and zero-column handling.
+
+---
+
+### 3. How Column Reordering and Deletion Work
+
+#### A. Column Reordering:
+1. **Activation Isolation:** Reordering is activated solely by dragging the dedicated grip handle button (`GripVertical`) in the column header. Clicking the column title, clicking action buttons, or dragging task cards will never trigger column dragging.
+2. **Sortable Context:** Columns are wrapped in `<SortableContext items={columns.map(c => 'sortable-col-' + c.key)} strategy={horizontalListSortingStrategy}>`.
+3. **Optimistic Updates & No-Op Guard:** When dragging concludes:
+   - If dropped back at the same index, the operation is a no-op: 0 state mutations and 0 API calls.
+   - If dropped at a new position, columns are immediately re-indexed with contiguous orders `(0, 1, 2, ...)` in optimistic local state.
+   - `boardApi.reorderColumns(boardId, { columnKeys: [...] })` is called. If the API fails, the board state is rolled back to the pre-drag snapshot and an error banner is displayed.
+
+#### B. Column Deletion & Task Handling:
+1. **Menu Trigger:** User clicks the `...` (`MoreHorizontal`) menu on any column header and selects "Delete Column".
+2. **Strategy Options in Modal:**
+   - **Empty Column (0 tasks):** Displays a simple confirmation asking if the user wants to remove the empty column.
+   - **Column With Tasks & Destination Columns Available:** User can choose between:
+     - **Option A (Move tasks):** Moves all column tasks into a selected destination column. Preserves independent `isCompleted` completion status and task attributes.
+     - **Option B (Permanently delete tasks):** Deletes the column and permanently deletes all tasks residing in that column.
+   - **Column With Tasks & No Destination Columns (Single column on board):** Disables move option and informs user that all tasks will be permanently removed.
+3. **Execution & Cleanup:** Submits `DELETE /api/v1/boards/:boardId/columns/:columnKey` with `{ action: 'move', targetColumnKey }` or `{ action: 'delete' }`.
+4. **Optimistic State Synchronization:**
+   - The deleted column is removed from board columns.
+   - If tasks were moved, their `columnKey` is updated locally, followed by background re-fetch for contiguous ordering synchronization.
+   - If tasks were deleted, they are immediately filtered out of local tasks state and any open task details modal for a deleted task is dismissed.
+
+#### C. Zero Columns Support:
+- Boards with 0 columns render an empty state card with a clean dashed border, informative prompt, and an "Add First Column" button.
+- Clicking "Add First Column" opens `AddColumnModal`, seamlessly transitioning the board from 0 to 1 column.
+- Header counter correctly reflects `0` columns.
+- DnD collision detection and utilities handle empty column arrays gracefully without throwing `TypeError` or `NaN`.
+
+---
+
+### 4. Edge Cases Covered
+- **Zero Columns:** Fully supported without throwing exceptions; clean empty state with add action.
+- **Single Column Deletion:** Correctly transitions board from 1 column to 0 columns; modal warns that tasks will be destroyed since no destination column exists.
+- **Drop in Original Position:** 0 API calls initiated when reorder does not alter column order.
+- **Task Drag vs Column Drag Collision:** Distinct DnD sensors, distinct activator refs, and separate event branches ensure task cards and columns do not interfere with each other.
+- **Task Completion Status Preservation:** When moving tasks via column deletion, `isCompleted: true` tasks remain marked completed in their new column.
+- **Duplicate Request Guard:** Modal submit button is disabled and shows loading indicator while deletion request is in-flight.
+- **Reorder Rollback:** Network or server errors during column reorder immediately restore original column positions and surface an error message.
+
+---
+
+### 5. Verification Results
+- **Frontend Automated Tests:** `npm --prefix frontend test`
+  - **144 of 144 tests passed** across 27 suites (0 failed, 0 skipped).
+- **Frontend Linting:** `npm --prefix frontend run lint`
+  - **0 errors, 0 warnings** across all files.
+- **Frontend Production Build:** `npm --prefix frontend run build`
+  - Vite build succeeded in 981ms (0 errors, 0 warnings).
+- **Backend Test Suite:** `npm --prefix backend test`
+  - **100 of 100 tests passed** (51 Board API, 28 Task API, 21 Auth API).
+- **Backend Integrity:** 0 backend files modified.
+
+---
+
+### 6. Honest Testing & Browser Disclosure
+- **Automated Validation:** All component contracts, API services, droppable ID resolution, reordering logic, and deletion state transitions were validated through comprehensive automated test suites.
+- **Headless Environment Note:** Drag interactions and animations were verified using synthetic DnD lifecycle testing; manual interactive browser verification with mouse drag is recommended for aesthetic fine-tuning.
+

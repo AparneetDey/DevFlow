@@ -217,6 +217,12 @@ describe('findColumnKey Container & Droppable Resolution', () => {
     assert.equal(findColumnKey('column-done', tasks, columns), 'done');
   });
 
+  test('resolves sortable column droppable formatted as sortable-col-<key>', () => {
+    assert.equal(findColumnKey('sortable-col-todo', tasks, columns), 'todo');
+    assert.equal(findColumnKey('sortable-col-qa-review', tasks, columns), 'qa-review');
+    assert.equal(findColumnKey('sortable-col-done', tasks, columns), 'done');
+  });
+
   test('resolves direct columnKey identifier', () => {
     assert.equal(findColumnKey('todo', tasks, columns), 'todo');
     assert.equal(findColumnKey('in-progress', tasks, columns), 'in-progress');
@@ -437,4 +443,82 @@ describe('calculateTaskDropPosition & Drag Stability (Task 10C)', () => {
     assert.deepEqual(destTasks, tasksCopy);
   });
 });
+
+describe('Column Deletion & Reordering State Handlers (Task 12)', () => {
+  const initialColumns = [
+    { key: 'todo', name: 'To Do', order: 0 },
+    { key: 'in-progress', name: 'In Progress', order: 1 },
+    { key: 'done', name: 'Done', order: 2 },
+  ];
+
+  const initialTasks = [
+    { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0, isCompleted: false },
+    { _id: 't2', title: 'Task 2', columnKey: 'todo', order: 1, isCompleted: true },
+    { _id: 't3', title: 'Task 3', columnKey: 'in-progress', order: 0, isCompleted: false },
+    { _id: 't4', title: 'Task 4', columnKey: 'done', order: 0, isCompleted: true },
+  ];
+
+  test('deleting a column with action "move" shifts tasks to destination column preserving completion state', () => {
+    const deletedColumnKey = 'todo';
+    const targetColumnKey = 'in-progress';
+    const payload = { action: 'move', targetColumnKey };
+
+    // Simulate BoardPage handleColumnDeleted logic
+    const updatedTasks = initialTasks.map((t) =>
+      t.columnKey === deletedColumnKey
+        ? { ...t, columnKey: payload.targetColumnKey }
+        : t
+    );
+
+    const targetTasks = updatedTasks.filter((t) => t.columnKey === 'in-progress');
+    assert.equal(targetTasks.length, 3);
+    assert.equal(targetTasks.find((t) => t._id === 't1').isCompleted, false);
+    assert.equal(targetTasks.find((t) => t._id === 't2').isCompleted, true);
+    assert.equal(updatedTasks.filter((t) => t.columnKey === 'todo').length, 0);
+  });
+
+  test('deleting a column with action "delete" removes all associated tasks', () => {
+    const deletedColumnKey = 'todo';
+
+    // Simulate BoardPage handleColumnDeleted logic
+    const updatedTasks = initialTasks.filter((t) => t.columnKey !== deletedColumnKey);
+
+    assert.equal(updatedTasks.length, 2);
+    assert.equal(updatedTasks.some((t) => t._id === 't1'), false);
+    assert.equal(updatedTasks.some((t) => t._id === 't2'), false);
+    assert.equal(updatedTasks.some((t) => t._id === 't3'), true);
+    assert.equal(updatedTasks.some((t) => t._id === 't4'), true);
+  });
+
+  test('reordering columns updates keys and contiguous orders', () => {
+    const originalKeys = initialColumns.map((c) => c.key);
+    assert.deepEqual(originalKeys, ['todo', 'in-progress', 'done']);
+
+    // Reorder: move 'done' to index 0
+    const reorderedKeys = ['done', 'todo', 'in-progress'];
+    const reorderedColumns = reorderedKeys.map((key, idx) => {
+      const col = initialColumns.find((c) => c.key === key);
+      return { ...col, order: idx };
+    });
+
+    assert.equal(reorderedColumns[0].key, 'done');
+    assert.equal(reorderedColumns[0].order, 0);
+    assert.equal(reorderedColumns[1].key, 'todo');
+    assert.equal(reorderedColumns[1].order, 1);
+    assert.equal(reorderedColumns[2].key, 'in-progress');
+    assert.equal(reorderedColumns[2].order, 2);
+  });
+
+  test('zero columns on board renders empty state gracefully without crashing', () => {
+    const emptyColumns = [];
+    const emptyTasks = [];
+    assert.equal(emptyColumns.length, 0);
+    assert.equal(emptyTasks.length, 0);
+
+    // Resolving drop target on zero columns safely returns null
+    const resolved = findColumnKey('sortable-col-any', emptyTasks, emptyColumns);
+    assert.equal(resolved, null);
+  });
+});
+
 

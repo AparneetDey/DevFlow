@@ -141,18 +141,27 @@ export function moveTaskCrossColumn(allTasks, activeTaskId, targetColumnKey, tar
  *
  * @param {string} id - Droppable target ID (e.g. 'column-todo', 'todo', or task ObjectId)
  * @param {Array<Object>} [allTasks=[]] - Current list of task objects
- * @param {Array<Object>} [allColumns=[]] - Current list of board column objects
+ * @param {Array<Object>} [allColumns=null] - Current list of board column objects
  * @returns {string|null} Resolved columnKey or null
  */
-export function findColumnKey(id, allTasks = [], allColumns = []) {
+export function findColumnKey(id, allTasks = [], allColumns = null) {
   if (!id) return null;
 
-  // Case A: Dropped directly over column droppable (e.g., 'column-todo')
-  if (typeof id === 'string' && id.startsWith('column-')) {
-    const rawKey = id.replace('column-', '');
-    if (!Array.isArray(allColumns) || allColumns.length === 0 || allColumns.some((c) => c && c.key === rawKey)) {
+  // Case A: Dropped directly over column droppable (e.g., 'column-todo' or 'sortable-col-todo')
+  if (typeof id === 'string' && id.startsWith('sortable-col-')) {
+    const rawKey = id.replace('sortable-col-', '');
+    if (!Array.isArray(allColumns) || allColumns.some((c) => c && c.key === rawKey)) {
       return rawKey;
     }
+    return null;
+  }
+
+  if (typeof id === 'string' && id.startsWith('column-')) {
+    const rawKey = id.replace('column-', '');
+    if (!Array.isArray(allColumns) || allColumns.some((c) => c && c.key === rawKey)) {
+      return rawKey;
+    }
+    return null;
   }
 
   // Case B: Directly matched a column key
