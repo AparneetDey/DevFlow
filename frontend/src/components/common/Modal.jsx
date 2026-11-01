@@ -69,8 +69,8 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--color-border)] shrink-0">
-          <div id="modal-title" className="text-base font-semibold text-[var(--color-text)] truncate pr-2">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--color-border)] shrink-0 relative z-30">
+          <div id="modal-title" className={`text-base font-semibold text-[var(--color-text)] pr-2 ${typeof title === 'string' ? 'truncate' : 'min-w-0'}`}>
             {title}
           </div>
           <button

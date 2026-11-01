@@ -155,14 +155,21 @@ export function TaskDetailsModal({
   isOpen,
   onClose,
   onUpdateTask,
+  onMoveTask,
   onDeleteTask,
   onToggleComplete,
   isTogglingComplete = false,
 }) {
   const { user } = useAuth();
   const isEscapePressedRef = useRef(false);
+  const headerColumnMenuRef = useRef(null);
   const priorityMenuRef = useRef(null);
   const dueDateMenuRef = useRef(null);
+
+  // 0. Column Selection State
+  const [isColumnOpen, setIsColumnOpen] = useState(false);
+  const [isSavingColumn, setIsSavingColumn] = useState(false);
+  const [columnError, setColumnError] = useState(null);
 
   // 1. Title Editing State
   const [titleInput, setTitleInput] = useState(task?.title || '');
@@ -232,6 +239,13 @@ export function TaskDetailsModal({
   useEffect(() => {
     function handleClickOutside(event) {
       if (
+        isColumnOpen &&
+        headerColumnMenuRef.current &&
+        !headerColumnMenuRef.current.contains(event.target)
+      ) {
+        setIsColumnOpen(false);
+      }
+      if (
         isPriorityOpen &&
         priorityMenuRef.current &&
         !priorityMenuRef.current.contains(event.target)
@@ -249,7 +263,11 @@ export function TaskDetailsModal({
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
-        if (isPriorityOpen) {
+        if (isColumnOpen) {
+          event.stopPropagation();
+          event.nativeEvent.stopImmediatePropagation();
+          setIsColumnOpen(false);
+        } else if (isPriorityOpen) {
           event.stopPropagation();
           event.nativeEvent.stopImmediatePropagation();
           setIsPriorityOpen(false);
@@ -268,7 +286,7 @@ export function TaskDetailsModal({
       }
     }
 
-    if (isPriorityOpen || isDueDateOpen || isConfirmingDelete) {
+    if (isColumnOpen || isPriorityOpen || isDueDateOpen || isConfirmingDelete) {
       document.addEventListener('mousedown', handleClickOutside);
       window.addEventListener('keydown', handleKeyDown, true);
     }
@@ -277,7 +295,7 @@ export function TaskDetailsModal({
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [isPriorityOpen, isDueDateOpen, isConfirmingDelete, isDeleting]);
+  }, [isColumnOpen, isPriorityOpen, isDueDateOpen, isConfirmingDelete, isDeleting]);
 
   if (!task || !isOpen) {
     return null;
@@ -299,6 +317,40 @@ export function TaskDetailsModal({
     .join('')
     .slice(0, 2)
     .toUpperCase() || 'AD';
+
+  // --------------------------------------------------------------------------
+  // Column / Stage Handlers
+  // --------------------------------------------------------------------------
+  const DEFAULT_COLUMNS = [
+    { key: 'todo', title: 'To Do' },
+    { key: 'in-progress', title: 'In Progress' },
+    { key: 'done', title: 'Done' },
+  ];
+
+  const availableColumns = Array.isArray(columns) && columns.length > 0 ? columns : DEFAULT_COLUMNS;
+
+  const handleSelectColumn = async (newColumnKey) => {
+    setIsColumnOpen(false);
+
+    if (!newColumnKey || newColumnKey === task.columnKey) {
+      return;
+    }
+
+    setIsSavingColumn(true);
+    setColumnError(null);
+
+    try {
+      if (typeof onMoveTask === 'function') {
+        await onMoveTask(task._id, newColumnKey);
+      } else if (typeof onUpdateTask === 'function') {
+        await onUpdateTask(task._id, { columnKey: newColumnKey });
+      }
+    } catch (err) {
+      setColumnError(extractErrorMessage(err));
+    } finally {
+      setIsSavingColumn(false);
+    }
+  };
 
   // --------------------------------------------------------------------------
   // Title Handlers
@@ -505,17 +557,81 @@ export function TaskDetailsModal({
     onClose?.();
   };
 
-  // Header Title component passed to Modal (stage pill in top left)
+  // Header Title component passed to Modal (column selector pill in top left)
   const modalHeaderPill = (
-    <div className="flex items-center gap-2">
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-[var(--color-surface-elevated)] text-[var(--color-text)] border border-[var(--color-border)]">
-        <Layers className="w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
+    <div className="flex items-center gap-2 relative" ref={headerColumnMenuRef}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsColumnOpen((prev) => !prev);
+          setIsPriorityOpen(false);
+          setIsDueDateOpen(false);
+          setColumnError(null);
+        }}
+        disabled={isSavingColumn || isDeleting}
+        aria-haspopup="listbox"
+        aria-expanded={isColumnOpen}
+        aria-label={`Current stage: ${stageName}. Click to change column`}
+        title="Change column"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-[var(--color-surface-elevated)] hover:bg-[var(--color-surface)] text-[var(--color-text)] border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-all cursor-pointer hover:shadow-2xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] disabled:opacity-60"
+      >
+        {isSavingColumn ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--color-text-muted)]" aria-hidden="true" />
+        ) : (
+          <Layers className="w-3.5 h-3.5 text-[var(--color-primary-hover)]" aria-hidden="true" />
+        )}
         <span>{stageName}</span>
-      </span>
+        <ChevronDown className="w-3 h-3 text-[var(--color-text-muted)] ml-0.5" aria-hidden="true" />
+      </button>
+
       {isCompleted && (
         <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--color-primary-muted)] text-[var(--color-primary)] border border-[var(--color-primary)]/40">
           Completed
         </span>
+      )}
+
+      {/* Column Selection Dropdown */}
+      {isColumnOpen && (
+        <div
+          role="listbox"
+          aria-label="Select workflow column"
+          className="absolute left-0 top-full mt-1.5 w-48 bg-[var(--color-surface-elevated)] rounded-xl shadow-lg border border-[var(--color-border)] py-1.5 z-50 focus:outline-none"
+        >
+          <div className="px-3 py-1 text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+            Move to Column
+          </div>
+          {availableColumns.map((col) => {
+            const isSelected = col.key === task.columnKey;
+            return (
+              <button
+                key={col.key}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => handleSelectColumn(col.key)}
+                disabled={isSavingColumn}
+                className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-surface)] cursor-pointer ${
+                  isSelected
+                    ? 'bg-[var(--color-primary-muted)] text-[var(--color-text)] font-semibold'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Layers className={`w-3.5 h-3.5 ${isSelected ? 'text-[var(--color-primary-hover)]' : 'text-[var(--color-text-muted)]'}`} aria-hidden="true" />
+                  <span>{col.title}</span>
+                </span>
+                {isSelected && <Check className="w-3.5 h-3.5 text-[var(--color-primary-hover)]" aria-hidden="true" />}
+              </button>
+            );
+          })}
+          {columnError && (
+            <div className="px-3 py-1.5 text-[11px] text-[var(--color-danger)] font-medium border-t border-[var(--color-border)] mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3 shrink-0" />
+              <span className="truncate">{columnError}</span>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -604,10 +720,6 @@ export function TaskDetailsModal({
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{titleError}</span>
               </div>
-            ) : isTitleFocused ? (
-              <p className="text-[11px] text-[var(--color-text-muted)] pl-0 sm:pl-9.5">
-                Press Enter to save, Esc to cancel
-              </p>
             ) : null}
           </div>
 
@@ -786,7 +898,7 @@ export function TaskDetailsModal({
               </div>
             </div>
 
-            {/* Error notifications for Priority & Due Date */}
+            {/* Error notifications for Priority */}
             {priorityError && (
               <div className="flex items-center gap-1 text-xs text-[var(--color-danger)] font-medium">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />

@@ -69,10 +69,6 @@ export function KanbanColumn({
       {/* Column Header */}
       <div className="flex items-center justify-between px-1.5 py-1 mb-2.5 pb-2.5 border-b border-[var(--color-border)] min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span
-            className="w-2 h-2 rounded-full bg-[var(--color-primary)] shrink-0"
-            aria-hidden="true"
-          />
           <h3
             id={`column-header-${columnKey}`}
             className="text-sm font-semibold text-[var(--color-text)] tracking-tight truncate"
@@ -107,7 +103,7 @@ export function KanbanColumn({
       {/* Column Body / Task Content Area */}
       <div
         ref={setNodeRef}
-        className={`flex-1 flex flex-col gap-2.5 min-h-[350px] rounded-xl transition-colors ${
+        className={`flex-1 flex flex-col gap-2.5 min-h-[350px] rounded-xl transition-colors touch-pan-y ${
           isOver && hasTasksArray ? 'bg-[var(--color-primary-muted)]/10 p-1 -m-1' : ''
         }`}
       >
@@ -119,20 +115,33 @@ export function KanbanColumn({
         ) : hasChildren ? (
           children
         ) : hasTasksArray ? (
-          <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-            {tasks.map((task, index) => (
-              <SortableTaskCard
-                key={task._id || task.id || `task-${columnKey}-${index}`}
-                task={task}
-                columnKey={columnKey}
-                onDoubleClick={onTaskDoubleClick || onTaskClick}
-                onEditClick={onTaskEditClick || onTaskDoubleClick || onTaskClick}
-                onClick={onTaskClick}
-                onToggleComplete={onToggleComplete}
-                isToggling={togglingTaskIds?.has?.(task._id)}
-              />
-            ))}
-          </SortableContext>
+          <>
+            <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+              {tasks.map((task, index) => (
+                <SortableTaskCard
+                  key={task._id || task.id || `task-${columnKey}-${index}`}
+                  task={task}
+                  columnKey={columnKey}
+                  onDoubleClick={onTaskDoubleClick || onTaskClick}
+                  onEditClick={onTaskEditClick || onTaskDoubleClick || onTaskClick}
+                  onClick={onTaskClick}
+                  onToggleComplete={onToggleComplete}
+                  isToggling={togglingTaskIds?.has?.(task._id)}
+                />
+              ))}
+            </SortableContext>
+            {onAddTask && (
+              <button
+                type="button"
+                onClick={() => onAddTask(column?.key || 'todo')}
+                className="mt-1 w-full flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)] rounded-xl transition-colors cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
+                aria-label={`Add task to ${columnTitle} column`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add a task</span>
+              </button>
+            )}
+          </>
         ) : (
           <div
             role="region"

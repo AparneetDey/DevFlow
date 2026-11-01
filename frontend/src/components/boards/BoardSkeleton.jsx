@@ -13,7 +13,7 @@ export function BoardSkeleton({ count = 1 }) {
   if (count === 1) {
     return (
       <div
-        className="relative bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-5 shadow-xs flex flex-col justify-between overflow-hidden animate-pulse min-h-[170px] min-w-0"
+        className="relative bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-4 sm:p-5 shadow-xs flex flex-col justify-between overflow-hidden animate-pulse min-h-[150px] min-w-0"
         aria-hidden="true"
       >
         {/* Top accent bar placeholder */}

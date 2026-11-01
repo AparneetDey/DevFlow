@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import {
   ArrowLeft,
-  Kanban,
   Clock,
   Layers,
   AlertCircle,
@@ -229,7 +228,63 @@ export function BoardPage() {
     setSelectedTask(null);
   };
 
+  const handleMoveTaskColumn = async (taskId, targetColumnKey) => {
+    if (!taskId || !boardId || !targetColumnKey) return;
+
+    const targetColTasks = getTasksForColumn(tasks, targetColumnKey);
+    const targetOrder = targetColTasks.length;
+
+    const prevTasks = tasks;
+    const prevSelectedTask = selectedTask;
+    const optimisticTask = selectedTask?._id === taskId
+      ? { ...selectedTask, columnKey: targetColumnKey, order: targetOrder }
+      : { columnKey: targetColumnKey, order: targetOrder };
+
+    setTasks((prev) =>
+      prev.map((t) => (t._id === taskId ? { ...t, columnKey: targetColumnKey, order: targetOrder } : t))
+    );
+    if (selectedTask?._id === taskId) {
+      setSelectedTask(optimisticTask);
+    }
+
+    try {
+      const response = await taskApi.moveTask(boardId, taskId, {
+        columnKey: targetColumnKey,
+        order: targetOrder,
+      });
+      const serverTask = response.data?.data;
+      if (serverTask && serverTask._id) {
+        setTasks((prev) =>
+          prev.map((t) => (t._id === serverTask._id ? { ...t, ...serverTask } : t))
+        );
+        if (selectedTask?._id === serverTask._id) {
+          setSelectedTask((prev) => ({ ...prev, ...serverTask }));
+        }
+      }
+      return serverTask;
+    } catch (err) {
+      setTasks(prevTasks);
+      if (prevSelectedTask) {
+        setSelectedTask(prevSelectedTask);
+      }
+      setTaskActionError(extractErrorMessage(err));
+      throw err;
+    }
+  };
+
   const handleUpdateTask = async (taskId, updateData) => {
+    // If updateData contains columnKey, route column move to taskApi.moveTask
+    if (updateData?.columnKey) {
+      const { columnKey, ...restUpdates } = updateData;
+      let updatedTask = null;
+      if (Object.keys(restUpdates).length > 0) {
+        const res = await taskApi.updateTask(boardId, taskId, restUpdates);
+        updatedTask = res.data?.data;
+      }
+      const moveRes = await handleMoveTaskColumn(taskId, columnKey);
+      return moveRes || updatedTask;
+    }
+
     const response = await taskApi.updateTask(boardId, taskId, updateData);
     const updatedTask = response.data?.data;
     if (updatedTask && updatedTask._id) {
@@ -653,86 +708,77 @@ export function BoardPage() {
         </div>
       ) : board ? (
         /* 4. Populated Board Detail */
-        <div className="space-y-6 sm:space-y-8">
-          {/* Back Navigation Link */}
-          <div>
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-md px-2.5 py-1.5"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Dashboard</span>
-            </Link>
-          </div>
+        <div className="space-y-4 sm:space-y-5">
+          {/* Sleek Board Toolbar */}
+          <div className="bg-[var(--color-surface)] rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 border border-[var(--color-border)] shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3 min-w-0">
+            {/* Left: Back Link & Title & Metadata */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-md px-2 py-1 shrink-0 -ml-1 self-start sm:self-auto"
+                title="Back to Dashboard"
+                aria-label="Back to Dashboard"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Boards</span>
+              </Link>
 
-          {/* Board Header Card */}
-          <div className="bg-[var(--color-surface)] rounded-2xl p-6 sm:p-7 border border-[var(--color-border)] shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-              <div className="space-y-2 max-w-3xl">
-                <div className="flex items-center gap-1.5 text-[var(--color-primary-hover)]">
-                  <Kanban className="w-4 h-4" />
-                  <span className="text-xs font-semibold uppercase tracking-wider">Board Workspace</span>
+              <div className="h-4 w-px bg-[var(--color-border)] hidden sm:block shrink-0" />
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-lg sm:text-xl font-bold text-[var(--color-text)] tracking-tight truncate max-w-md sm:max-w-xl" title={board.title}>
+                    {board.title}
+                  </h1>
+
+                  {/* Metadata Pills */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] rounded-md font-medium border border-[var(--color-border)]">
+                      <Layers className="w-3 h-3 text-[var(--color-text-muted)]" />
+                      <span>{columns.length}</span>
+                    </span>
+
+                    {!isLoadingTasks && !taskError && (
+                      <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] rounded-md font-medium border border-[var(--color-border)]">
+                        <CheckSquare className="w-3 h-3 text-[var(--color-text-muted)]" />
+                        <span>{tasks.length}</span>
+                      </span>
+                    )}
+
+                    {formattedDate && (
+                      <span className="hidden lg:inline-flex items-center gap-1 text-[11px] text-[var(--color-text-muted)] bg-[var(--color-surface-elevated)] px-2 py-0.5 rounded-md border border-[var(--color-border)] font-medium">
+                        <Clock className="w-3 h-3 text-[var(--color-text-muted)]" />
+                        <span>{formattedDate}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-[var(--color-text)] tracking-tight break-words">
-                  {board.title}
-                </h1>
-                {board.description ? (
-                  <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed break-words whitespace-pre-line max-w-3xl">
+
+                {board.description && (
+                  <p className="text-xs text-[var(--color-text-secondary)] truncate max-w-lg mt-0.5">
                     {board.description}
                   </p>
-                ) : (
-                  <p className="text-xs text-[var(--color-text-muted)] italic">
-                    No description provided for this board.
-                  </p>
                 )}
-
-                {/* Board Metadata Pills */}
-                <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                  <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] rounded-lg font-medium border border-[var(--color-border)]">
-                    <Layers className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
-                    <span>{columns.length} {columns.length === 1 ? 'Column' : 'Columns'}</span>
-                  </span>
-
-                  {!isLoadingTasks && !taskError && (
-                    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] rounded-lg font-medium border border-[var(--color-border)]">
-                      <CheckSquare className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
-                      <span>{tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'}</span>
-                    </span>
-                  )}
-
-                  {formattedDate && (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] bg-[var(--color-surface-elevated)] px-2.5 py-1 rounded-lg border border-[var(--color-border)] font-medium">
-                      <Clock className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
-                      <span>Updated {formattedDate}</span>
-                    </span>
-                  )}
-                </div>
               </div>
+            </div>
 
-              {/* Action Buttons: Create Task */}
-              <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto">
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => handleOpenCreateTask('todo')}
-                  className="flex items-center justify-center gap-2 w-full md:w-auto cursor-pointer"
-                  aria-label="Create new task"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Task</span>
-                </Button>
-              </div>
+            {/* Right: Quick Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => handleOpenCreateTask('todo')}
+                className="flex items-center justify-center gap-1.5 cursor-pointer text-xs"
+                aria-label="Create new task"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Task</span>
+              </Button>
             </div>
           </div>
 
           {/* Kanban Columns Section */}
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-[var(--color-text)] flex items-center gap-2">
-                <Layers className="w-4 h-4 text-[var(--color-primary)]" />
-                <span>Workflow Stages</span>
-              </h2>
-            </div>
+          <div className="space-y-3">
 
             {/* Task Action Error Banner (completion toggle or update rollback) */}
             {taskActionError && (
@@ -802,7 +848,7 @@ export function BoardPage() {
                 onDragEnd={handleDragEnd}
                 onDragCancel={handleDragCancel}
               >
-                <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0">
+                <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y">
                   {columns.map((column, index) => (
                     <KanbanColumn
                       key={column.key || column.title || `column-${index}`}
@@ -855,6 +901,7 @@ export function BoardPage() {
           isOpen={isTaskDetailsModalOpen}
           onClose={handleCloseTaskDetails}
           onUpdateTask={handleUpdateTask}
+          onMoveTask={handleMoveTaskColumn}
           onDeleteTask={handleDeleteTask}
           onToggleComplete={handleToggleComplete}
           isTogglingComplete={togglingTaskIds.has(selectedTask._id)}
