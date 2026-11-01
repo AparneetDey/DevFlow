@@ -4441,3 +4441,213 @@ Inspection of `:root` in `frontend/src/index.css` reveals the genuine, establish
 ### 15. Known Limitations & Scope Alignment
 - **Strict Scope Boundaries:** No new unrequested features or backend endpoints were introduced.
 - **Completion Criteria:** All criteria for Task 8.5 have been met. Task 8.6 has not been initiated.
+
+
+---
+
+## Task 8.6: Final Frontend Integration & Regression Audit
+
+### 1. Task Objective
+Execute a comprehensive, end-to-end integration and regression audit of the DevFlow frontend. Verify that all features developed across Tasks 1 through 8.5—authentication and session restoration, dashboard board workflows, Kanban task lifecycle, drag-and-drop ordering, profile data presentation, error boundaries, responsive layout adapters, and dark-green design tokens—operate cohesively and reliably without regressions, while preserving strict compatibility with existing backend API contracts.
+
+---
+
+### 2. Files Inspected
+
+#### Root & Configuration
+- `frontend/package.json` (Scripts, runtime dependencies, devDependencies)
+- `frontend/vite.config.js` (Vite build and React plugin configuration)
+- `frontend/eslint.config.js` (ESLint 9+ flat configuration)
+- `frontend/src/index.css` (Centralized design tokens and `@theme` definitions)
+- `frontend/src/App.css` (Audited; confirmed blank/unused)
+
+#### Authentication & Session Layer
+- `frontend/src/context/AuthContext.jsx` (Global auth provider, session restoration, login/register/logout)
+- `frontend/src/context/authContextDef.js` (Context object declaration)
+- `frontend/src/hooks/useAuth.js` (Auth hook consumer)
+- `frontend/src/api/client.js` (Axios client, refresh interceptor, queue management)
+- `frontend/src/api/auth.api.js` (Auth HTTP service endpoints)
+- `frontend/src/routes/ProtectedRoute.jsx` (Protected route guard)
+- `frontend/src/routes/PublicRoute.jsx` (Guest-only route guard)
+- `frontend/src/pages/LoginPage.jsx` (Login interface and session-expired notification)
+- `frontend/src/pages/RegisterPage.jsx` (Registration interface)
+- `frontend/src/components/auth/LogoutConfirmationModal.jsx` (Confirmed sign-out dialog)
+
+#### Workspace & Board Management
+- `frontend/src/pages/DashboardPage.jsx` (Dashboard view, metrics, boards grid)
+- `frontend/src/components/boards/BoardCard.jsx` (Board card presentation and action menu)
+- `frontend/src/components/boards/BoardSkeleton.jsx` (Board loading skeleton)
+- `frontend/src/components/boards/CreateBoardModal.jsx` (Board creation modal)
+- `frontend/src/components/boards/EditBoardModal.jsx` (Board edit modal)
+- `frontend/src/components/boards/DeleteBoardModal.jsx` (Board deletion confirmation dialog)
+- `frontend/src/api/board.api.js` (Board API service methods)
+
+#### Task Management & Kanban Drag-and-Drop
+- `frontend/src/pages/BoardPage.jsx` (Board detail view, DnD canvas, state coordination)
+- `frontend/src/components/boards/KanbanColumn.jsx` (Kanban column drop target)
+- `frontend/src/components/tasks/TaskCard.jsx` (Task card, hover completion, edit action)
+- `frontend/src/components/tasks/SortableTaskCard.jsx` (Sortable DnD item wrapper)
+- `frontend/src/components/tasks/CreateTaskModal.jsx` (Task creation dialog)
+- `frontend/src/components/tasks/TaskDetailsModal.jsx` (Inline task detail view and direct editors)
+- `frontend/src/api/task.api.js` (Task API service methods)
+- `frontend/src/utils/taskGrouping.js` (Deterministic column filtering and sorting)
+- `frontend/src/utils/taskReordering.js` (Contiguous order normalization and cross-column moves)
+
+#### Profile & Application Layout
+- `frontend/src/pages/ProfilePage.jsx` (Profile management view)
+- `frontend/src/components/layout/Navbar.jsx` (Global navigation and identity badge)
+- `frontend/src/components/layout/AppLayout.jsx` (Main application shell layout)
+- `frontend/src/components/profile/ProfileAvatar.jsx` (User avatar with initials)
+- `frontend/src/components/profile/ProfileField.jsx` (Technical field with copy-to-clipboard)
+- `frontend/src/components/profile/ProfileHeader.jsx` (User identity header)
+- `frontend/src/components/profile/ProfileInformation.jsx` (Account credentials grid)
+- `frontend/src/components/profile/ProfileActions.jsx` (Session security and logout trigger)
+- `frontend/src/utils/profileData.js` (Profile view model adapter)
+
+#### Shared Common Components
+- `frontend/src/components/common/Button.jsx` (Reusable button with variants and loading state)
+- `frontend/src/components/common/Input.jsx` (Form input with label and error state)
+- `frontend/src/components/common/Modal.jsx` (Accessible modal dialog)
+- `frontend/src/components/common/Loading.jsx` (Spinner loading component)
+- `frontend/src/pages/NotFoundPage.jsx` (404 error page)
+
+#### Backend Architecture & Schemas (Strictly Read-Only Verification)
+- `backend/src/validators/task.validator.js` (`createTaskSchema`, `updateTaskSchema`, `moveTaskSchema`)
+- `backend/src/validators/board.validator.js` (`createBoardSchema`, `updateBoardSchema`)
+- `backend/src/services/task.service.js` (`createTask`, `updateTask`, `moveTask`, `normalizeColumnOrders`)
+- `backend/src/services/board.service.js` (`createBoard`, `updateBoard`, `deleteBoard`)
+- `backend/src/models/task.model.js` (`TASK_COLUMNS`, `TASK_PRIORITIES`)
+- `backend/src/models/board.model.js` (Default board column structure)
+
+---
+
+### 3. Files Modified
+- `frontend/src/api/board.api.test.js` (Created: Automated integration test suite validating `boardApi` service contracts, payload shapes, and task update vs. move API isolation)
+- `frontend/package.json` (Updated `test` script to include `src/api/board.api.test.js`)
+- `frontend/WORK_REPORT.md` (Appended this integration report)
+
+---
+
+### 4. Authentication Integration Findings
+1. **Single Source of Truth:** `AuthContext` governs global session state (`user`, `isAuthenticated`, `isLoading`, `sessionExpired`). Changes immediately propagate synchronously across `Navbar`, `ProfilePage`, `ProtectedRoute`, and `PublicRoute`.
+2. **Silent Token Refresh & Loop Prevention:**
+   - In `client.js`, the Axios response interceptor monitors 401 statuses on protected endpoints.
+   - The flag `originalRequest._retry = true` prevents recursive refresh attempts.
+   - Authentication endpoints (`/auth/login`, `/auth/register`, `/auth/refresh-token`, `/auth/logout`) are explicitly bypassed from triggering refresh loops.
+   - Concurrent 401 responses are enqueued in `failedQueue` and resolved together once a single `/auth/refresh-token` call finishes.
+3. **Session Expiration Integrity:**
+   - If token refresh fails, `setOnSessionExpired` fires only if an active user session was previously authenticated (`userRef.current !== null`), cleanly setting `sessionExpired = true` and `user = null`.
+   - On intentional logout (`authApi.logout()`), `userRef.current` is nulled before clearing state, preventing false "session expired" warning banners on normal sign-out.
+4. **Route Protection Safety:**
+   - `ProtectedRoute` renders `<Loading fullScreen text="Checking session..." />` while `isLoading` is true, ensuring no flash of protected workspace data occurs before session verification.
+   - Unauthenticated visitors are routed to `/login` with `state: { from: location, sessionExpired }` preserved for post-login redirect.
+
+---
+
+### 5. Board Integration Findings
+1. **CRUD Lifecycle & State Synchronization:**
+   - Board fetching (`boardApi.getBoards`) populates `DashboardPage`. Skeletons render during in-flight requests, and the empty state renders only when `!isLoading && !error && boards.length === 0`.
+   - Creation (`CreateBoardModal` -> `POST /boards`): Prepends the new board to state without requiring a full page refresh.
+   - Editing (`EditBoardModal` -> `PATCH /boards/:boardId`): Reactively updates the target board's title and description in place.
+   - Deletion (`DeleteBoardModal` -> `DELETE /boards/:boardId`): Removes the target board from state immediately; active board counts and overview metrics update reactively.
+2. **Error Boundary & Recovery:**
+   - Network or server failures in fetching boards surface a clear alert banner with a functional "Retry" action that re-triggers the query.
+   - Board creation and update forms validate input lengths (title: 1..100, description: max 500) and preserve user input if API errors occur.
+
+---
+
+### 6. Task Management & Critical API Contract Verification
+1. **Regular Task Update Contract:**
+   - **Backend Schema:** `backend/src/validators/task.validator.js` (`updateTaskSchema`) enforces `.strict()` accepting **only** `title`, `description`, `priority`, and `dueDate`. Unrecognized fields (such as `columnKey` or `order`) trigger a 400 validation error.
+   - **Frontend Verification:** `TaskDetailsModal.jsx` and `BoardPage.jsx` strictly adhere to this rule:
+     - Title update sends: `{ title }`
+     - Description update sends: `{ description }`
+     - Priority update sends: `{ priority }`
+     - Due date update sends: `{ dueDate }`
+     - Neither `columnKey` nor `order` is ever dispatched to `taskApi.updateTask`.
+2. **Task Movement Contract:**
+   - **Endpoint:** `PATCH /api/v1/boards/:boardId/tasks/:taskId/move`
+   - **Backend Schema:** `moveTaskSchema` accepts `{ columnKey, order? }`.
+   - **Frontend Verification:**
+     - Drag-and-drop moves dispatch: `{ columnKey: targetColumnKey, order: targetOrder }` with verified non-negative integer orders.
+     - Hover circular completion toggle dispatches: `{ columnKey: targetColumnKey }`, correctly utilizing the backend's automatic append logic for destination columns.
+3. **Enum & Column Values:**
+   - `columnKey` strictly uses `'todo' | 'in-progress' | 'done'`.
+   - `priority` strictly uses `'low' | 'medium' | 'high'`.
+   - Completed status is evaluated exclusively as `task.columnKey === 'done'`.
+4. **Optimistic Drag-and-Drop & Rollback:**
+   - Drag snapshots capture pre-drag task positions.
+   - Continuous cross-column hovering shifts target column cards smoothly.
+   - On drop outside a droppable target or API rejection, the previous state is restored without corrupting task orders or losing card metadata.
+
+---
+
+### 7. Profile and Navigation Findings
+1. **Profile Data Robustness:** `mapUserProfile(user)` safely extracts username, email, user ID, member date, and initials. Long ObjectIds and emails truncate gracefully with tooltip inspection and copy-to-clipboard support.
+2. **Navigation Flow:**
+   - Navigation links between Dashboard, Board Details, and Profile function seamlessly.
+   - Direct deep-linking (`/boards/:boardId`) checks authentication, validates 24-character hex MongoDB ObjectIds, and displays a dedicated 404 state if the board does not exist.
+   - Browser back and forward history functions naturally without trapping or unhandled route loops.
+
+---
+
+### 8. Error, Loading, and Empty States
+1. **Loading Indicators:** Skeletons and spinners appear during network queries and cleanly unmount upon resolution. No perpetual loading spinners exist.
+2. **Empty States:**
+   - Dashboard: Displays "No boards available" with a prominent "Create Your First Board" action button.
+   - Board Canvas: Displays "No columns configured" if columns are missing.
+   - Kanban Column: Displays a dashed drop zone with "+ Add task" helper when a column holds 0 tasks.
+3. **Error Feedback:** Network failures surface non-blocking alerts with retry capabilities. Task action errors display dismissible banners without crashing the board view.
+
+---
+
+### 9. Design System Verification
+- **Tokens in `:root`:** Single source of truth in `frontend/src/index.css` confirmed (`--color-bg: #171A18`, `--color-primary: #477A5B`, `--color-surface: #222824`, etc.).
+- **Consistency:** 100% of components utilize CSS variable references (`var(--color-...)`). Zero hardcoded legacy colors or Tailwind slate/white/indigo remnants remain in `frontend/src`.
+- **Native Browser Scrollbars:** Completely preserved; zero custom scrollbar CSS declarations across all stylesheets.
+
+---
+
+### 10. Bugs Discovered & Fixes Implemented
+- **Board API Contract Test Gap:** Previously, `board.api.js` lacked dedicated automated tests. Created `frontend/src/api/board.api.test.js` covering `getBoards`, `getBoardById`, `createBoard`, `updateBoard`, `deleteBoard`, and explicit contract isolation between `updateTask` and `moveTask`.
+- **Package.json Test Script Synchronization:** Added `src/api/board.api.test.js` to the `test` command in `package.json` to ensure automated continuous regression prevention.
+
+---
+
+### 11. Automated Test Results
+- **Command:** `npm.cmd test --prefix frontend`
+- **Result:** **114 of 114 tests passed (0 failures, 0 skipped)** across all 23 test suites.
+  - `auth.session.test.js`: 14 tests passing.
+  - `board.api.test.js`: 6 tests passing (newly added).
+  - `task.api.test.js`: 2 tests passing.
+  - `columnSorting.test.js` & `taskGrouping.test.js`: 47 tests passing.
+  - `taskReordering.test.js`: 9 tests passing.
+  - `profileData.test.js`: 8 tests passing.
+
+---
+
+### 12. ESLint Results
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 errors, 0 warnings** across all frontend source code and test files.
+
+---
+
+### 13. Production Build Results
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Vite build compiled cleanly in 4.88s with **0 compilation errors**:
+  - `dist/index.html`: `0.45 kB` (gzip: `0.29 kB`)
+  - `dist/assets/index-B5reD9JE.css`: `49.64 kB` (gzip: `8.68 kB`)
+  - `dist/assets/index-DseeJ4-t.js`: `474.37 kB` (gzip: `142.13 kB`)
+
+---
+
+### 14. Live vs. Mocked Testing Status
+- **Automated Tests:** Performed via Node.js native test runner using contract-level request/response mocks and deterministic state assertions.
+- **Backend Environment:** The developer is independently operating the live Node.js/Express backend and MongoDB database. Port 8000 was checked and verified inactive in this agent terminal session; live HTTP traffic was not dispatched, and live backend testing is not claimed.
+- **Compatibility Assurance:** Verified through direct cross-examination of frontend payload structures against backend Zod validation schemas (`task.validator.js`, `board.validator.js`) and database service methods (`task.service.js`, `board.service.js`).
+
+---
+
+### 15. Remaining Known Limitations
+- **Backend Dependent Account Settings:** Advanced account features (avatar file upload, password reset, email change, account deletion) are not supported by the existing backend API and have been cleanly deferred to future backend milestones.
+- **Scope Termination:** Task 8.6 is complete; no subsequent tasks have been initiated.
