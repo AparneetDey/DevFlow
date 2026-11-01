@@ -5133,3 +5133,105 @@ Refined DevFlow's Board page layout and global viewport structure in direct resp
 ### 9. Honest Testing Disclosure
 - **Visual & Device Verification:** Direct browser rendering and physical touch screen verification were not performed in this headless terminal session. Responsive calculations and CSS flex constraints were analytically derived and validated using Vite compilation and unit tests.
 - **Backend Services:** Backend endpoints were tested against standardized API contracts in test suites. The real backend and database are being independently operated by the developer.
+
+
+---
+
+## Critical Additional Task — Drag-and-Drop Lifecycle Safeguards & Maximum Update Depth Fix
+
+### 1. Incident Summary & Root Cause Analysis
+
+#### Reported Issue:
+While dragging and dropping tasks on the Kanban board, a fatal React runtime error occurred:
+- **Error:** `Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.`
+- **Crashing Component:** `<SortableContext>` (`@dnd-kit/sortable`)
+- **Impact:** Application unmounted with a blank page.
+
+#### Root Causes Identified:
+1. **Unmemoized `taskIds` in `<SortableContext>`:**
+   In `KanbanColumn.jsx`, `taskIds` was computed as a newly allocated array literal (`tasks.map((t) => t._id || t.id)`) on every render.
+   Internally, `@dnd-kit/sortable`'s `SortableContext` executes an isomorphic layout effect checking `!itemsEqual(items, previousItemsRef.current)`. When `isDragging` is active and items change reference, it calls `measureDroppableContainers(items)`.
+2. **Unguarded `handleDragOver` State Updates:**
+   On every pointer move across column boundaries (or micro-pointer movement over task cards), `handleDragOver` called `setTasks(...)`.
+3. **Flawed Insertion Index & Order Incoherence:**
+   `handleDragOver` previously derived `newOrderIndex` by searching for `overId` in `prevTasks` (the global all-board tasks array) rather than within the destination column tasks. It spliced the task without re-normalizing contiguous sequential orders (`0, 1, 2, ...`).
+4. **Collision Ping-Pong Loop:**
+   Because orders were not normalized during the drag-over state update, `getTasksForColumn` re-sorted the tasks on the subsequent render. This shifted DOM element coordinates, causing `@dnd-kit`'s `closestCorners` collision detector to detect a new or inverted collision, firing another `onDragOver` event in an infinite synchronous cycle, immediately hitting React's maximum update depth.
+
+---
+
+### 2. Architecture & Safeguards Implemented
+
+#### A. Stable Memoization in `KanbanColumn.jsx`
+- Wrapped `taskIds` in `useMemo`:
+  ```jsx
+  const taskIds = useMemo(
+    () => (hasTasksArray ? tasks.map((t) => t._id || t.id).filter(Boolean) : []),
+    [hasTasksArray, tasks]
+  );
+  ```
+- This guarantees `taskIds` reference stability across render passes when column tasks have not changed.
+
+#### B. Robust Droppable Resolution Helper (`findColumnKey`)
+- Centralized container resolution in `src/utils/taskReordering.js`:
+  - Strips `column-` prefixes (e.g. `column-todo` -> `todo`, `column-custom_1` -> `custom_1`).
+  - Matches direct column keys from board metadata.
+  - Matches task ObjectIds and resolves to their current `columnKey`.
+  - Safely returns `null` for unrecognized or malformed targets.
+
+#### C. Multi-Layer Guarding in `handleDragOver`
+- **Ref Debounce:** Added `lastOverColumnKeyRef = useRef(null)` to prevent rapid re-triggering for the same destination column.
+- **Same-Column Bypass:** If `activeTaskItem.columnKey === targetColumnKey`, `handleDragOver` returns immediately without updating state. Within the same column, `@dnd-kit/sortable` natively coordinates visual card transforms without React state mutations.
+- **State Bail-Out:** Inside `setTasks((prevTasks) => ...)`, if the active task's `columnKey` is already `targetColumnKey`, returns the existing `prevTasks` reference unchanged, allowing React to bail out of the render pipeline entirely.
+- **Strict Column-Local Insertion:** Derived insertion positions solely within destination column tasks (`destTasks`).
+- **Dual Contiguous Normalization:** Applied `normalizeColumnTasks` to both destination and source columns during cross-column movement, ensuring contiguous 0-based orders (`0, 1, 2, ...`) and eliminating layout thrashing.
+
+#### D. Deterministic Drop Commit in `handleDragEnd`
+- **Outside Droppable / Cancel:** Restores `dragSnapshotRef.current.tasks` cleanly with 0 API calls.
+- **No-Op Reorder Detection:** In same-column drops, if `oldIndex === overIndex`, restores pre-drag snapshot immediately without mutating state or sending network requests.
+- **Order Modification:** Computes contiguous orders using `arrayMove` and `normalizeColumnTasks`, issues `taskApi.moveTask(boardId, activeId, { columnKey, order })`.
+- **Concurrency & Failure Protection:** `movingTaskIds` Set prevents concurrent duplicate API calls; catches network failures and reverts optimistic state to `snapshot.tasks` while surfacing an actionable error banner.
+
+---
+
+### 3. Scenario Verification Matrix
+
+| Scenario | Expected Behavior | Implementation & Safeguard | Test Status |
+|---|---|---|---|
+| **1. Same-column drag (no position change)** | No state update, no API call, pristine restoration | Same-column drag-over skipped; `oldIndex === overIndex` drop restores snapshot cleanly | PASSED |
+| **1B. Same-column drag (order changed)** | Cards reorder with contiguous 0-based orders | `reorderSameColumn` normalizes orders 0..N, triggers single API call | PASSED |
+| **2. Cross-column drag** | Moves to target column, normalizes source & target | Dual `normalizeColumnTasks` re-indexes both columns without orphans | PASSED |
+| **3. Drag over empty column** | Card positioned at order 0 without error | Destination length clamped between 0 and `destTasks.length`, order = 0 | PASSED |
+| **4. Drag across multiple columns** | Sequential moves retain single task instance | Each transition updates `destMap` / `sourceMap`; task exists in exactly one column | PASSED |
+| **5. Drag cancellation / drop outside** | Reverts to pre-drag state | If `!over`, immediately sets `tasks = snapshot.tasks` | PASSED |
+| **6. Drag completed task** | Retains independent `isCompleted: true` | `isCompleted` preserved across `moveTaskCrossColumn` and optimistic state | PASSED |
+| **7. Drag with dynamic columns** | Works seamlessly with custom column keys | `findColumnKey` dynamically resolves custom keys (e.g. `col_custom_testing`) | PASSED |
+
+---
+
+### 4. Verification Results
+
+#### Automated Tests:
+- **Command:** `npm.cmd test --prefix frontend`
+- **Result:** **130 of 130 tests passed (0 failures, 0 skipped)** across all 25 suites:
+  - `taskReordering.test.js`: 21 passed (including 12 dedicated drag lifecycle & safeguard tests)
+  - `columnSorting.test.js`: 13 passed
+  - `board.api.test.js`: 8 passed
+  - `task.api.test.js`: 18 passed
+  - `taskGrouping.test.js`: 6 passed
+  - `auth.session.test.js`: 14 passed
+  - `profileData.test.js`: 8 passed
+
+#### ESLint Check:
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 errors, 0 warnings** across all files.
+
+#### Production Build:
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Succeeded in 8.23s with **0 compilation errors**:
+  - `dist/index.html`: 0.45 kB (gzip: 0.29 kB)
+  - `dist/assets/index-CdinoJw2.css`: 53.66 kB (gzip: 9.21 kB)
+  - `dist/assets/index-BSQCJUIM.js`: 478.82 kB (gzip: 143.19 kB)
+
+#### Backend Integrity:
+- **Result:** **0 backend files modified.** Backend remains completely untouched.

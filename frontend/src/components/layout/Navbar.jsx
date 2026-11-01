@@ -99,16 +99,6 @@ export function Navbar() {
 
                 <div className="h-4 w-px bg-[var(--color-border)] mx-1 hidden sm:block" />
 
-                {/* User Identity Indicator */}
-                {user?.username && (
-                  <span
-                    className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] truncate max-w-[140px]"
-                    title={`Signed in as ${user.username}`}
-                  >
-                    {user.username}
-                  </span>
-                )}
-
                 {/* Logout Action */}
                 <button
                   type="button"

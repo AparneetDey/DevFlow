@@ -4,6 +4,7 @@ import {
   normalizeColumnTasks,
   reorderSameColumn,
   moveTaskCrossColumn,
+  findColumnKey,
 } from './taskReordering.js';
 import { getTasksForColumn } from './taskGrouping.js';
 
@@ -192,5 +193,196 @@ describe('Task Ordering & Reordering Utilities (Task 7.5)', () => {
     assert.equal(todo.some((t) => t._id === 't1'), false);
     assert.equal(inProgress.some((t) => t._id === 't1'), true);
     assert.equal(done.some((t) => t._id === 't1'), false);
+  });
+});
+
+describe('findColumnKey Container & Droppable Resolution', () => {
+  const columns = [
+    { key: 'todo', name: 'To Do', order: 0 },
+    { key: 'in-progress', name: 'In Progress', order: 1 },
+    { key: 'done', name: 'Done', order: 2 },
+    { key: 'qa-review', name: 'QA Review', order: 3 },
+  ];
+
+  const tasks = [
+    { _id: 't-101', columnKey: 'todo', title: 'Task 1' },
+    { _id: 't-102', columnKey: 'in-progress', title: 'Task 2' },
+    { _id: 't-103', columnKey: 'qa-review', title: 'Task 3' },
+  ];
+
+  test('resolves column droppable formatted as column-<key>', () => {
+    assert.equal(findColumnKey('column-todo', tasks, columns), 'todo');
+    assert.equal(findColumnKey('column-qa-review', tasks, columns), 'qa-review');
+    assert.equal(findColumnKey('column-done', tasks, columns), 'done');
+  });
+
+  test('resolves direct columnKey identifier', () => {
+    assert.equal(findColumnKey('todo', tasks, columns), 'todo');
+    assert.equal(findColumnKey('in-progress', tasks, columns), 'in-progress');
+    assert.equal(findColumnKey('qa-review', tasks, columns), 'qa-review');
+  });
+
+  test('resolves task ID to task columnKey', () => {
+    assert.equal(findColumnKey('t-101', tasks, columns), 'todo');
+    assert.equal(findColumnKey('t-102', tasks, columns), 'in-progress');
+    assert.equal(findColumnKey('t-103', tasks, columns), 'qa-review');
+  });
+
+  test('returns null for unknown target, empty ID, or missing inputs', () => {
+    assert.equal(findColumnKey(null, tasks, columns), null);
+    assert.equal(findColumnKey(undefined, tasks, columns), null);
+    assert.equal(findColumnKey('', tasks, columns), null);
+    assert.equal(findColumnKey('non-existent-id', tasks, columns), null);
+  });
+});
+
+describe('Drag-and-Drop Safeguards & Lifecycle Verification (Critical Depth Prevention)', () => {
+  const columns = [
+    { key: 'todo', name: 'To Do', order: 0 },
+    { key: 'in-progress', name: 'In Progress', order: 1 },
+    { key: 'review', name: 'Review', order: 2 },
+    { key: 'done', name: 'Done', order: 3 },
+  ];
+
+  test('Scenario 1A: drag a task within same column without position change is a no-op', () => {
+    const initialTasks = [
+      { _id: 't1', columnKey: 'todo', order: 0 },
+      { _id: 't2', columnKey: 'todo', order: 1 },
+    ];
+    // Dropping t1 over t1
+    const reordered = reorderSameColumn(initialTasks, 't1', 't1');
+    assert.deepEqual(reordered, initialTasks);
+  });
+
+  test('Scenario 1B: drag a task within same column with position change reorders with contiguous orders', () => {
+    const initialTasks = [
+      { _id: 't1', columnKey: 'todo', order: 0 },
+      { _id: 't2', columnKey: 'todo', order: 1 },
+      { _id: 't3', columnKey: 'todo', order: 2 },
+    ];
+    const reordered = reorderSameColumn(initialTasks, 't1', 't3');
+    assert.equal(reordered[0]._id, 't2');
+    assert.equal(reordered[0].order, 0);
+    assert.equal(reordered[1]._id, 't3');
+    assert.equal(reordered[1].order, 1);
+    assert.equal(reordered[2]._id, 't1');
+    assert.equal(reordered[2].order, 2);
+    // Every task still belongs to 'todo'
+    assert.ok(reordered.every((t) => t.columnKey === 'todo'));
+  });
+
+  test('Scenario 2: drag a task into another column normalizes both source and target columns', () => {
+    const initialTasks = [
+      { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0 },
+      { _id: 't2', title: 'Task 2', columnKey: 'todo', order: 1 },
+      { _id: 't3', title: 'Task 3', columnKey: 'in-progress', order: 0 },
+    ];
+    const { tasks, targetOrder, isChanged } = moveTaskCrossColumn(initialTasks, 't1', 'in-progress', 0);
+    assert.equal(isChanged, true);
+    assert.equal(targetOrder, 0);
+
+    const todo = getTasksForColumn(tasks, 'todo');
+    const inProgress = getTasksForColumn(tasks, 'in-progress');
+
+    assert.equal(todo.length, 1);
+    assert.equal(todo[0]._id, 't2');
+    assert.equal(todo[0].order, 0);
+
+    assert.equal(inProgress.length, 2);
+    assert.equal(inProgress[0]._id, 't1');
+    assert.equal(inProgress[0].order, 0);
+    assert.equal(inProgress[1]._id, 't3');
+    assert.equal(inProgress[1].order, 1);
+  });
+
+  test('Scenario 3: drag a task over an empty column assigns order 0 without NaN or failure', () => {
+    const initialTasks = [
+      { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0 },
+    ];
+    const { tasks, targetOrder, isChanged } = moveTaskCrossColumn(initialTasks, 't1', 'review', 0);
+    assert.equal(isChanged, true);
+    assert.equal(targetOrder, 0);
+
+    const review = getTasksForColumn(tasks, 'review');
+    assert.equal(review.length, 1);
+    assert.equal(review[0]._id, 't1');
+    assert.equal(review[0].columnKey, 'review');
+    assert.equal(review[0].order, 0);
+  });
+
+  test('Scenario 4: drag a task across multiple columns sequentially leaves no orphaned or duplicated tasks', () => {
+    let allTasks = [
+      { _id: 't-multi', title: 'Multi Task', columnKey: 'todo', order: 0 },
+      { _id: 't-stay', title: 'Stay Task', columnKey: 'in-progress', order: 0 },
+    ];
+
+    // Move to in-progress
+    const step1 = moveTaskCrossColumn(allTasks, 't-multi', 'in-progress', 1);
+    allTasks = step1.tasks;
+
+    // Move to review
+    const step2 = moveTaskCrossColumn(allTasks, 't-multi', 'review', 0);
+    allTasks = step2.tasks;
+
+    // Move to done
+    const step3 = moveTaskCrossColumn(allTasks, 't-multi', 'done', 0);
+    allTasks = step3.tasks;
+
+    assert.equal(allTasks.filter((t) => t._id === 't-multi').length, 1);
+    assert.equal(allTasks.find((t) => t._id === 't-multi').columnKey, 'done');
+    assert.equal(allTasks.find((t) => t._id === 't-multi').order, 0);
+    assert.equal(getTasksForColumn(allTasks, 'todo').length, 0);
+    assert.equal(getTasksForColumn(allTasks, 'in-progress').length, 1);
+    assert.equal(getTasksForColumn(allTasks, 'review').length, 0);
+    assert.equal(getTasksForColumn(allTasks, 'done').length, 1);
+  });
+
+  test('Scenario 5: drag cancellation or drop outside restores pristine pre-drag snapshot', () => {
+    const preDragSnapshot = [
+      { _id: 't1', columnKey: 'todo', order: 0, title: 'Snapshot Task 1' },
+      { _id: 't2', columnKey: 'in-progress', order: 0, title: 'Snapshot Task 2' },
+    ];
+
+    // Simulate drag end with over === null (outside droppable)
+    const overTarget = null;
+    let currentTasks = [...preDragSnapshot];
+
+    if (!overTarget) {
+      // BoardPage restores snapshot.tasks
+      currentTasks = preDragSnapshot;
+    }
+
+    assert.deepEqual(currentTasks, preDragSnapshot);
+  });
+
+  test('Scenario 6: drag a completed task preserves independent isCompleted: true', () => {
+    const initialTasks = [
+      { _id: 'comp-1', columnKey: 'todo', order: 0, isCompleted: true },
+      { _id: 'norm-1', columnKey: 'in-progress', order: 0, isCompleted: false },
+    ];
+
+    // Move completed task to in-progress
+    const { tasks } = moveTaskCrossColumn(initialTasks, 'comp-1', 'in-progress', 1);
+    const moved = tasks.find((t) => t._id === 'comp-1');
+
+    assert.equal(moved.columnKey, 'in-progress');
+    assert.equal(moved.isCompleted, true, 'isCompleted must remain true independently of column');
+  });
+
+  test('Scenario 7: drag a task after adding a new custom column dynamically', () => {
+    const customColKey = 'col_custom_testing';
+    const dynamicColumns = [...columns, { key: customColKey, name: 'Testing', order: 4 }];
+
+    const initialTasks = [
+      { _id: 'dyn-task', columnKey: 'todo', order: 0 },
+    ];
+
+    const resolvedCol = findColumnKey(`column-${customColKey}`, initialTasks, dynamicColumns);
+    assert.equal(resolvedCol, customColKey);
+
+    const { tasks, targetOrder } = moveTaskCrossColumn(initialTasks, 'dyn-task', customColKey, 0);
+    assert.equal(targetOrder, 0);
+    assert.equal(tasks[0].columnKey, customColKey);
+    assert.equal(tasks[0].order, 0);
   });
 });

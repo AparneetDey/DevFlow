@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Plus, AlertCircle } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -132,14 +132,15 @@ export function KanbanColumn({
     ? tasks.length
     : React.Children.count(children);
 
-  const taskIds = hasTasksArray
-    ? tasks.map((t) => t._id || t.id).filter(Boolean)
-    : [];
+  const taskIds = useMemo(
+    () => (hasTasksArray ? tasks.map((t) => t._id || t.id).filter(Boolean) : []),
+    [hasTasksArray, tasks]
+  );
 
   return (
     <section
       aria-labelledby={`column-header-${columnKey}`}
-      className={`w-[255px] sm:w-[276px] shrink-0 bg-[var(--color-surface)] border ${
+      className={`w-[255px] sm:w-[278px] shrink-0 bg-[var(--color-surface)] border ${
         isOver
           ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/40 bg-[var(--color-primary-muted)]/15'
           : 'border-[var(--color-border)]'

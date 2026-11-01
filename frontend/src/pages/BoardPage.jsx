@@ -35,7 +35,7 @@ import taskApi from '../api/task.api.js';
 import { sortBoardColumns } from '../utils/columnSorting.js';
 import { getTasksForColumn } from '../utils/taskGrouping.js';
 import { extractErrorMessage } from '../api/error.js';
-import { normalizeColumnTasks } from '../utils/taskReordering.js';
+import { normalizeColumnTasks, findColumnKey } from '../utils/taskReordering.js';
 
 export function BoardPage() {
   const { boardId } = useParams();
@@ -61,6 +61,7 @@ export function BoardPage() {
   const [activeTask, setActiveTask] = useState(null);
   const [movingTaskIds, setMovingTaskIds] = useState(new Set());
   const dragSnapshotRef = useRef(null);
+  const lastOverColumnKeyRef = useRef(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -418,6 +419,7 @@ export function BoardPage() {
       sourceColumnKey: task.columnKey,
       sourceOrder: typeof task.order === 'number' && Number.isFinite(task.order) ? task.order : 0,
     };
+    lastOverColumnKeyRef.current = task.columnKey;
     setTaskActionError(null);
   };
 
@@ -430,58 +432,88 @@ export function BoardPage() {
 
     if (activeId === overId) return;
 
+    // Resolve target columnKey using available columns and current tasks
+    const targetColumnKey = findColumnKey(overId, tasks, columns);
+    if (!targetColumnKey) return;
+
+    // Fast check: find active task in current state
     const activeTaskItem = tasks.find((t) => t._id === activeId);
     if (!activeTaskItem) return;
 
-    // Resolve target columnKey
-    let targetColumnKey = null;
-    if (typeof overId === 'string' && overId.startsWith('column-')) {
-      targetColumnKey = overId.replace('column-', '');
-    } else {
-      const overTaskItem = tasks.find((t) => t._id === overId);
-      if (overTaskItem) {
-        targetColumnKey = overTaskItem.columnKey;
+    // If active task is already in the target column, do NOT update state during drag-over.
+    // Within the same column, @dnd-kit/sortable handles visual reordering via transform CSS.
+    if (activeTaskItem.columnKey === targetColumnKey) {
+      return;
+    }
+
+    // Guard against rapid duplicate firing for the same destination column
+    if (lastOverColumnKeyRef.current === targetColumnKey) {
+      return;
+    }
+    lastOverColumnKeyRef.current = targetColumnKey;
+
+    setTasks((prevTasks) => {
+      const activeIndex = prevTasks.findIndex((t) => t._id === activeId);
+      if (activeIndex === -1) return prevTasks;
+
+      const currentActive = prevTasks[activeIndex];
+      if (currentActive.columnKey === targetColumnKey) {
+        return prevTasks;
       }
-    }
 
-    if (!targetColumnKey) return;
+      // Extract tasks currently in target column (excluding active task)
+      const destTasks = prevTasks
+        .filter((t) => t.columnKey === targetColumnKey && t._id !== activeId)
+        .sort((a, b) => {
+          const oA = typeof a.order === 'number' && Number.isFinite(a.order) ? a.order : Infinity;
+          const oB = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : Infinity;
+          return oA - oB;
+        });
 
-    // Continuous state update for cross-column hovering so cards shift smoothly
-    if (activeTaskItem.columnKey !== targetColumnKey) {
-      setTasks((prevTasks) => {
-        const activeIndex = prevTasks.findIndex((t) => t._id === activeId);
-        if (activeIndex === -1) return prevTasks;
+      // Find insertion index within destTasks
+      const overIndex = destTasks.findIndex((t) => t._id === overId);
+      let newOrderIndex;
 
-        const overIndex = prevTasks.findIndex((t) => t._id === overId);
-        const tasksInDest = prevTasks.filter(
-          (t) => t.columnKey === targetColumnKey && t._id !== activeId
-        );
+      if (overIndex === -1) {
+        newOrderIndex = destTasks.length;
+      } else {
+        const isBelowOver =
+          over &&
+          active.rect.current.translated &&
+          active.rect.current.translated.top > over.rect.top + over.rect.height / 2;
+        newOrderIndex = overIndex + (isBelowOver ? 1 : 0);
+      }
 
-        let newOrderIndex;
-        if (overIndex === -1) {
-          newOrderIndex = tasksInDest.length;
-        } else {
-          const isBelowOver =
-            over &&
-            active.rect.current.translated &&
-            active.rect.current.translated.top > over.rect.top + over.rect.height;
+      const insertPos = Math.min(Math.max(0, newOrderIndex), destTasks.length);
 
-          newOrderIndex = overIndex >= 0 ? overIndex + (isBelowOver ? 1 : 0) : tasksInDest.length;
-        }
+      const movedTask = {
+        ...currentActive,
+        columnKey: targetColumnKey,
+        order: insertPos,
+      };
 
-        const updated = [...prevTasks];
-        const [moved] = updated.splice(activeIndex, 1);
-        const updatedMoved = {
-          ...moved,
-          columnKey: targetColumnKey,
-        };
+      destTasks.splice(insertPos, 0, movedTask);
+      const normalizedDest = normalizeColumnTasks(destTasks, targetColumnKey);
 
-        const insertPos = Math.min(Math.max(0, newOrderIndex), updated.length);
-        updated.splice(insertPos, 0, updatedMoved);
+      // Normalize source column tasks
+      const sourceTasks = prevTasks
+        .filter((t) => t.columnKey === currentActive.columnKey && t._id !== activeId)
+        .sort((a, b) => {
+          const oA = typeof a.order === 'number' && Number.isFinite(a.order) ? a.order : Infinity;
+          const oB = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : Infinity;
+          return oA - oB;
+        });
+      const normalizedSource = normalizeColumnTasks(sourceTasks, currentActive.columnKey);
 
-        return updated;
+      const destMap = new Map(normalizedDest.map((t) => [t._id, t]));
+      const sourceMap = new Map(normalizedSource.map((t) => [t._id, t]));
+
+      return prevTasks.map((t) => {
+        if (destMap.has(t._id)) return destMap.get(t._id);
+        if (sourceMap.has(t._id)) return sourceMap.get(t._id);
+        return t;
       });
-    }
+    });
   };
 
   const handleDragEnd = async (event) => {
@@ -490,108 +522,101 @@ export function BoardPage() {
     const snapshot = dragSnapshotRef.current;
     setActiveTask(null);
     dragSnapshotRef.current = null;
+    lastOverColumnKeyRef.current = null;
 
     if (!activeId || !snapshot) return;
 
-    // Dropped outside any droppable target: rollback to pre-drag state
+    // 1. Dropped outside any droppable target: rollback to pre-drag state
     if (!over) {
       setTasks(snapshot.tasks);
       if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
       return;
     }
 
-    // Resolve destination columnKey
-    let targetColumnKey = null;
-    if (typeof over.id === 'string' && over.id.startsWith('column-')) {
-      targetColumnKey = over.id.replace('column-', '');
-    } else {
-      const overTaskItem = tasks.find((t) => t._id === over.id);
-      if (overTaskItem) {
-        targetColumnKey = overTaskItem.columnKey;
-      } else {
-        targetColumnKey = snapshot.sourceColumnKey;
-      }
+    const overId = over.id;
+
+    // 2. Resolve destination columnKey
+    const targetColumnKey = findColumnKey(overId, tasks, columns);
+    if (!targetColumnKey) {
+      setTasks(snapshot.tasks);
+      if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
+      return;
     }
 
     const isSameColumn = snapshot.sourceColumnKey === targetColumnKey;
 
-    let finalTasksInDest;
+    let targetOrder;
+    let finalOptimisticTasks;
+
     if (isSameColumn) {
-      // Reorder within the same column using the pre-drag snapshot tasks for stable order calculation
-      const originalColTasks = snapshot.tasks
+      // Reordering within the same column
+      const colTasks = snapshot.tasks
         .filter((t) => t.columnKey === targetColumnKey)
-        .sort((a, b) => {
-          const oA = typeof a.order === 'number' && Number.isFinite(a.order) ? a.order : Infinity;
-          const oB = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : Infinity;
-          return oA - oB;
-        });
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-      const oldIndex = originalColTasks.findIndex((t) => t._id === activeId);
-      const overIndex = originalColTasks.findIndex((t) => t._id === over.id);
+      const oldIndex = colTasks.findIndex((t) => t._id === activeId);
+      let overIndex = colTasks.findIndex((t) => t._id === overId);
 
-      if (oldIndex !== -1 && overIndex !== -1 && oldIndex !== overIndex) {
-        finalTasksInDest = arrayMove(originalColTasks, oldIndex, overIndex);
-      } else {
-        finalTasksInDest = originalColTasks;
+      if (overIndex === -1 && typeof overId === 'string' && overId.startsWith('column-')) {
+        overIndex = colTasks.length - 1;
       }
+
+      // Check if position actually changed
+      if (oldIndex === -1 || overIndex === -1 || oldIndex === overIndex) {
+        // No-op: restore pre-drag snapshot cleanly
+        setTasks(snapshot.tasks);
+        if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
+        return;
+      }
+
+      const reordered = arrayMove(colTasks, oldIndex, overIndex);
+      const normalizedCol = normalizeColumnTasks(reordered, targetColumnKey);
+      targetOrder = normalizedCol.findIndex((t) => t._id === activeId);
+
+      const colMap = new Map(normalizedCol.map((t) => [t._id, t]));
+      finalOptimisticTasks = tasks.map((t) => (colMap.has(t._id) ? colMap.get(t._id) : t));
     } else {
-      // Cross-column move: ensure active task is present in final destination list
-      finalTasksInDest = tasks.filter((t) => t.columnKey === targetColumnKey);
-      const alreadyInDest = finalTasksInDest.some((t) => t._id === activeId);
-      if (!alreadyInDest) {
+      // Cross-column movement
+      const destTasks = tasks
+        .filter((t) => t.columnKey === targetColumnKey)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+      const activeTaskInDest = destTasks.find((t) => t._id === activeId);
+
+      if (!activeTaskInDest) {
         const activeTaskItem =
           tasks.find((t) => t._id === activeId) ||
           snapshot.tasks.find((t) => t._id === activeId);
 
         if (activeTaskItem) {
-          const movedTask = { ...activeTaskItem, columnKey: targetColumnKey };
-          const overIndex = finalTasksInDest.findIndex((t) => t._id === over.id);
-          if (overIndex !== -1) {
-            finalTasksInDest = [
-              ...finalTasksInDest.slice(0, overIndex),
-              movedTask,
-              ...finalTasksInDest.slice(overIndex),
-            ];
-          } else {
-            finalTasksInDest = [...finalTasksInDest, movedTask];
-          }
+          const overIndex = destTasks.findIndex((t) => t._id === overId);
+          const insertPos = overIndex !== -1 ? overIndex : destTasks.length;
+          destTasks.splice(insertPos, 0, { ...activeTaskItem, columnKey: targetColumnKey });
         }
       }
+
+      const normalizedDest = normalizeColumnTasks(destTasks, targetColumnKey);
+      targetOrder = Math.max(0, normalizedDest.findIndex((t) => t._id === activeId));
+
+      const sourceTasks = tasks
+        .filter((t) => t.columnKey === snapshot.sourceColumnKey && t._id !== activeId)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const normalizedSource = normalizeColumnTasks(sourceTasks, snapshot.sourceColumnKey);
+
+      const destMap = new Map(normalizedDest.map((t) => [t._id, t]));
+      const sourceMap = new Map(normalizedSource.map((t) => [t._id, t]));
+
+      finalOptimisticTasks = tasks.map((t) => {
+        if (destMap.has(t._id)) return destMap.get(t._id);
+        if (sourceMap.has(t._id)) return sourceMap.get(t._id);
+        return t;
+      });
     }
-
-    // Re-index target column tasks with sequential 0-based orders
-    const normalizedDest = normalizeColumnTasks(finalTasksInDest, targetColumnKey);
-    const targetOrder = Math.max(0, normalizedDest.findIndex((t) => t._id === activeId));
-
-    // Check if position and column are unchanged
-    if (isSameColumn && snapshot.sourceOrder === targetOrder) {
-      // No-op: restore pre-drag snapshot clean state
-      setTasks(snapshot.tasks);
-      return;
-    }
-
-    // If cross-column, also normalize remaining source column tasks
-    let normalizedSource = [];
-    if (!isSameColumn) {
-      const remainingInSource = tasks.filter(
-        (t) => t.columnKey === snapshot.sourceColumnKey && t._id !== activeId
-      );
-      normalizedSource = normalizeColumnTasks(remainingInSource, snapshot.sourceColumnKey);
-    }
-
-    const destMap = new Map(normalizedDest.map((t) => [t._id, t]));
-    const srcMap = new Map(normalizedSource.map((t) => [t._id, t]));
-
-    const optimisticTasks = tasks.map((t) => {
-      if (destMap.has(t._id)) return destMap.get(t._id);
-      if (srcMap.has(t._id)) return srcMap.get(t._id);
-      return t;
-    });
 
     // Apply optimistic update immediately
-    setTasks(optimisticTasks);
+    setTasks(finalOptimisticTasks);
 
-    const updatedActiveTask = destMap.get(activeId);
+    const updatedActiveTask = finalOptimisticTasks.find((t) => t._id === activeId);
     if (selectedTask?._id === activeId && updatedActiveTask) {
       setSelectedTask(updatedActiveTask);
     }
@@ -638,6 +663,7 @@ export function BoardPage() {
     const snapshot = dragSnapshotRef.current;
     setActiveTask(null);
     dragSnapshotRef.current = null;
+    lastOverColumnKeyRef.current = null;
     if (snapshot) {
       setTasks(snapshot.tasks);
       if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
