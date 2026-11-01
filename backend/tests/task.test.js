@@ -157,6 +157,28 @@ describe("Task API", () => {
             expect(boardInDb.columns).toBeDefined();
             expect(boardInDb.columns).toHaveLength(3);
         });
+
+        it("should reject task creation on a board with zero columns with 400", async () => {
+            const { user, authHeaders } = await createTestUser();
+
+            const emptyInsert = await Board.collection.insertOne({
+                title: "Board With No Columns",
+                owner: user._id,
+                columns: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            const boardId = emptyInsert.insertedId;
+
+            const res = await request(app)
+                .post(`/api/v1/boards/${boardId}/tasks`)
+                .set(authHeaders)
+                .send({ title: "Impossible Task" });
+
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
+            expect(res.body.message).toContain("no columns");
+        });
     });
 
     describe("GET /api/v1/boards/:boardId/tasks", () => {
@@ -178,6 +200,27 @@ describe("Task API", () => {
             expect(res.body.data[0].title).toBe("T0");
             expect(res.body.data[1].title).toBe("T1");
             expect(res.body.data[2].title).toBe("T2");
+        });
+
+        it("should return an empty list of tasks when board has zero columns", async () => {
+            const { user, authHeaders } = await createTestUser();
+
+            const emptyInsert = await Board.collection.insertOne({
+                title: "Empty Board Tasks",
+                owner: user._id,
+                columns: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            const boardId = emptyInsert.insertedId;
+
+            const res = await request(app)
+                .get(`/api/v1/boards/${boardId}/tasks`)
+                .set(authHeaders);
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toEqual([]);
         });
 
         it("should filter tasks by columnKey", async () => {

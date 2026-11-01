@@ -6,7 +6,9 @@ import {
     updateBoard,
     deleteBoard,
     addColumn,
-    renameColumn
+    renameColumn,
+    deleteColumn,
+    reorderColumns
 } from "../controllers/board.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { validate, validateParams } from "../middlewares/validate.middleware.js";
@@ -16,7 +18,9 @@ import {
     boardIdParamSchema,
     addColumnSchema,
     renameColumnSchema,
-    columnKeyParamSchema
+    columnKeyParamSchema,
+    deleteColumnSchema,
+    reorderColumnsSchema
 } from "../validators/board.validator.js";
 import taskRouter from "./task.routes.js";
 
@@ -43,12 +47,26 @@ router
         addColumn
     );
 
+// Reorder board columns (must precede /:columnKey parameter route)
+router
+    .route("/:boardId/columns/reorder")
+    .patch(
+        validateParams(boardIdParamSchema),
+        validate(reorderColumnsSchema),
+        reorderColumns
+    );
+
 router
     .route("/:boardId/columns/:columnKey")
     .patch(
         validateParams(columnKeyParamSchema),
         validate(renameColumnSchema),
         renameColumn
+    )
+    .delete(
+        validateParams(columnKeyParamSchema),
+        validate(deleteColumnSchema),
+        deleteColumn
     );
 
 // Individual board item routes

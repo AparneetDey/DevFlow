@@ -29,6 +29,8 @@ DevFlow provides a structured, production-grade RESTful API for user authenticat
    - [9.5 Delete Board (`DELETE /api/v1/boards/:boardId`)](#95-delete-board)
    - [9.6 Add Column (`POST /api/v1/boards/:boardId/columns`)](#96-add-column)
    - [9.7 Rename Column (`PATCH /api/v1/boards/:boardId/columns/:columnKey`)](#97-rename-column)
+   - [9.8 Reorder Columns (`PATCH /api/v1/boards/:boardId/columns/reorder`)](#98-reorder-columns)
+   - [9.9 Delete Column (`DELETE /api/v1/boards/:boardId/columns/:columnKey`)](#99-delete-column)
 10. [Task and Card Management API Group](#10-task-and-card-management-api-group)
     - [10.1 Create Task (`POST /api/v1/boards/:boardId/tasks`)](#101-create-task)
     - [10.2 List Tasks for a Board (`GET /api/v1/boards/:boardId/tasks`)](#102-list-tasks-for-a-board)
@@ -251,6 +253,8 @@ The table below catalogs all **16 endpoints** implemented in DevFlow:
 | `DELETE` | `/api/v1/boards/:boardId` | `verifyJWT` | Delete a board and cascade delete all its tasks |
 | `POST` | `/api/v1/boards/:boardId/columns` | `verifyJWT` | Add a new column to a board (up to max 5 columns) |
 | `PATCH` | `/api/v1/boards/:boardId/columns/:columnKey` | `verifyJWT` | Rename an existing board column without changing key/order |
+| `PATCH` | `/api/v1/boards/:boardId/columns/reorder` | `verifyJWT` | Reorder columns with persistent sequential order values |
+| `DELETE` | `/api/v1/boards/:boardId/columns/:columnKey` | `verifyJWT` | Delete a column with task move or cascade task delete |
 | **Task Management** | | | |
 | `POST` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | Create a new task under a board |
 | `GET` | `/api/v1/boards/:boardId/tasks` | `verifyJWT` | List tasks on a board (supports optional `?columnKey=` filter) |
@@ -1230,6 +1234,194 @@ Triggered when the name is empty or contains only whitespace.
   "errors": [
     "Column name cannot be empty"
   ]
+}
+```
+
+##### Error: 404 Not Found
+Triggered when the board or the column key does not exist.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Column not found",
+  "errors": []
+}
+```
+
+---
+
+### 9.8 Reorder Columns
+
+#### A. Endpoint Information
+- **API Name:** Reorder Columns
+- **HTTP Method:** `PATCH`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/columns/reorder`
+- **Authentication Required:** Yes (`Bearer <accessToken>` header or `accessToken` cookie)
+- **Purpose and Functionality:** Reorders the columns of an existing board based on a full list of existing column keys.
+- **Business Logic & Side Effects:**
+  - Verifies board ownership.
+  - Validates that `columnKeys` is an array of strings.
+  - Ensures no duplicate column keys are provided.
+  - Confirms that the list of keys is an exact match for the board's existing columns (all existing keys must be present, no extra or unknown keys).
+  - Assigns contiguous 0-based sequential orders to each column based on array index.
+  - An empty array is supported if and only if the board itself has zero columns.
+  - Associated task data, `columnKey`, order, and `isCompleted` status are completely unmodified.
+  - Persists and returns the updated board document.
+
+#### B. Request Details
+- **Path Parameters:**
+  - `boardId` (string, required): 24-character hexadecimal MongoDB ObjectId.
+- **Request Headers:**
+  - `Authorization: Bearer <access_token>`
+  - `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "columnKeys": [
+    "in-progress",
+    "todo",
+    "done"
+  ]
+}
+```
+
+#### C. Validation Rules
+- `boardId`: Valid MongoDB ObjectId.
+- `columnKeys`: Array of non-empty strings, maximum 5 items. Must be an exact permutation of existing board column keys without duplicates.
+- Strict schema prevents additional unrecognized fields.
+
+#### D. Success Response (200 OK)
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "_id": "671bb200e4b0234567890456",
+    "title": "Mobile App Launch",
+    "description": "Tasks and sprint backlog for iOS and Android release",
+    "owner": "671aa100e4b0234567890123",
+    "columns": [
+      { "name": "In Progress", "title": "In Progress", "key": "in-progress", "order": 0 },
+      { "name": "To Do", "title": "To Do", "key": "todo", "order": 1 },
+      { "name": "Done", "title": "Done", "key": "done", "order": 2 }
+    ],
+    "createdAt": "2026-10-25T10:15:00.000Z",
+    "updatedAt": "2026-11-01T10:40:00.000Z"
+  },
+  "message": "Columns reordered successfully",
+  "success": true
+}
+```
+
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when keys are duplicated, missing, unknown, or length does not match board column count.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "columnKeys cannot contain duplicate keys",
+  "errors": []
+}
+```
+
+##### Error: 404 Not Found
+Triggered when the board does not exist or does not belong to the authenticated user.
+```json
+{
+  "statusCode": 404,
+  "success": false,
+  "message": "Board not found",
+  "errors": []
+}
+```
+
+---
+
+### 9.9 Delete Column
+
+#### A. Endpoint Information
+- **API Name:** Delete Column
+- **HTTP Method:** `DELETE`
+- **Complete Endpoint URL:** `/api/v1/boards/:boardId/columns/:columnKey`
+- **Authentication Required:** Yes (`Bearer <accessToken>` header or `accessToken` cookie)
+- **Purpose and Functionality:** Removes a column from a board using either a task move strategy or a permanent task delete strategy.
+- **Business Logic & Side Effects:**
+  - Verifies board ownership.
+  - Verifies that the source column exists on the board.
+  - **Option A (`action: "move"`):**
+    - Verifies that `targetColumnKey` is provided and exists on the board.
+    - Rejects moving tasks into the column being deleted.
+    - Moves all tasks from `columnKey` to `targetColumnKey`, appending them after existing destination tasks and preserving their relative order.
+    - Normalizes destination tasks strictly to sequential 0-based orders.
+    - Preserves task IDs, titles, descriptions, priorities, due dates, and `isCompleted` status.
+    - Removes the column from the board and normalizes remaining column orders.
+  - **Option B (`action: "delete"`):**
+    - Permanently deletes all tasks belonging to `columnKey`.
+    - Removes the column from the board and normalizes remaining column orders.
+  - Entire operation runs inside an atomic MongoDB session/transaction.
+  - If the last remaining column is deleted, the board persists with `columns: []`. Zero columns is a valid board state.
+  - Returns the updated board document.
+
+#### B. Request Details
+- **Path Parameters:**
+  - `boardId` (string, required): 24-character hexadecimal MongoDB ObjectId.
+  - `columnKey` (string, required): Identifier of column to delete.
+- **Request Headers:**
+  - `Authorization: Bearer <access_token>`
+  - `Content-Type: application/json`
+- **Request Body (Option A: Move Tasks):**
+```json
+{
+  "action": "move",
+  "targetColumnKey": "in-progress"
+}
+```
+- **Request Body (Option B: Delete Tasks):**
+```json
+{
+  "action": "delete"
+}
+```
+
+#### C. Validation Rules
+- `boardId`: Valid MongoDB ObjectId.
+- `columnKey`: Non-empty string.
+- `action`: Either `"move"` or `"delete"`.
+- `targetColumnKey`: Required when `action === "move"`. Disallowed when `action === "delete"`.
+- Strict schema prevents additional unrecognized fields.
+
+#### D. Success Response (200 OK)
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "_id": "671bb200e4b0234567890456",
+    "title": "Mobile App Launch",
+    "description": "Tasks and sprint backlog for iOS and Android release",
+    "owner": "671aa100e4b0234567890123",
+    "columns": [
+      { "name": "In Progress", "title": "In Progress", "key": "in-progress", "order": 0 },
+      { "name": "Done", "title": "Done", "key": "done", "order": 1 }
+    ],
+    "createdAt": "2026-10-25T10:15:00.000Z",
+    "updatedAt": "2026-11-01T10:45:00.000Z"
+  },
+  "message": "Column deleted successfully",
+  "success": true
+}
+```
+
+#### E. Error Responses
+
+##### Error: 400 Bad Request
+Triggered when action is invalid, `targetColumnKey` is missing for move, or target is the source column.
+```json
+{
+  "statusCode": 400,
+  "success": false,
+  "message": "Cannot move tasks to the column being deleted",
+  "errors": []
 }
 ```
 

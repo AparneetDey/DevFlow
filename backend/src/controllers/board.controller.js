@@ -83,6 +83,39 @@ export const renameColumn = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Controller to delete a column from a board.
+ * Route: DELETE /api/v1/boards/:boardId/columns/:columnKey
+ */
+export const deleteColumn = asyncHandler(async (req, res) => {
+    const { boardId, columnKey } = req.params;
+    const { action, targetColumnKey } = req.body;
+    const board = await boardService.deleteColumn(
+        boardId,
+        columnKey,
+        { action, targetColumnKey },
+        req.user._id
+    );
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, board, "Column deleted successfully"));
+});
+
+/**
+ * Controller to reorder columns on a board.
+ * Route: PATCH /api/v1/boards/:boardId/columns/reorder
+ */
+export const reorderColumns = asyncHandler(async (req, res) => {
+    const { boardId } = req.params;
+    const { columnKeys } = req.body;
+    const board = await boardService.reorderColumns(boardId, { columnKeys }, req.user._id);
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, board, "Columns reordered successfully"));
+});
+
+/**
  * Controller to delete a board.
  * Route: DELETE /api/v1/boards/:boardId
  */

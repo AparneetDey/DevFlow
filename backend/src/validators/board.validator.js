@@ -120,3 +120,71 @@ export const columnKeyParamSchema = z.object({
         .trim()
         .min(1, "Column key cannot be empty")
 });
+
+/**
+ * Validation schema for deleting a column.
+ * Supports action: "move" (with required targetColumnKey) and action: "delete".
+ */
+export const deleteColumnSchema = z
+    .object({
+        action: z.enum(["move", "delete"], {
+            required_error: "Action is required",
+            invalid_type_error: "Action must be either 'move' or 'delete'"
+        }),
+        targetColumnKey: z
+            .string({
+                invalid_type_error: "Target column key must be a string"
+            })
+            .trim()
+            .min(1, "Target column key cannot be empty")
+            .optional()
+    })
+    .strict({ message: "Unrecognized field provided. Only action and targetColumnKey are allowed" })
+    .refine(
+        (data) => {
+            if (data.action === "move") {
+                return typeof data.targetColumnKey === "string" && data.targetColumnKey.length > 0;
+            }
+            return true;
+        },
+        {
+            message: "targetColumnKey is required when action is 'move'",
+            path: ["targetColumnKey"]
+        }
+    )
+    .refine(
+        (data) => {
+            if (data.action === "delete" && data.targetColumnKey !== undefined) {
+                return false;
+            }
+            return true;
+        },
+        {
+            message: "targetColumnKey is not allowed when action is 'delete'",
+            path: ["targetColumnKey"]
+        }
+    );
+
+/**
+ * Validation schema for reordering columns.
+ * Accepts columnKeys array containing between 0 and 5 column keys.
+ */
+export const reorderColumnsSchema = z
+    .object({
+        columnKeys: z
+            .array(
+                z
+                    .string({
+                        required_error: "Column key is required",
+                        invalid_type_error: "Column key must be a string"
+                    })
+                    .trim()
+                    .min(1, "Column key cannot be empty"),
+                {
+                    required_error: "columnKeys is required",
+                    invalid_type_error: "columnKeys must be an array of strings"
+                }
+            )
+            .max(5, "A board cannot have more than 5 columns")
+    })
+    .strict({ message: "Unrecognized field provided. Only columnKeys is allowed" });

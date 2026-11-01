@@ -46,16 +46,17 @@ class TaskService {
     }
 
     /**
-     * Resolves valid column keys for a board, falling back to DEFAULT_COLUMNS if missing.
+     * Resolves valid column keys for a board.
+     * Returns empty array if board has zero columns.
      *
      * @param {Object} board - Board document
      * @returns {Array<string>} List of valid column keys
      */
     getValidColumnKeys(board) {
-        if (board && Array.isArray(board.columns) && board.columns.length > 0) {
+        if (board && Array.isArray(board.columns)) {
             return board.columns.map((c) => c.key);
         }
-        return DEFAULT_COLUMNS.map((c) => c.key);
+        return [];
     }
 
     /**
@@ -72,7 +73,11 @@ class TaskService {
         const board = await this.verifyBoardOwnership(boardId, userId);
 
         const validColumnKeys = this.getValidColumnKeys(board);
-        const targetColumnKey = columnKey || validColumnKeys[0] || "todo";
+        if (validColumnKeys.length === 0) {
+            throw new ApiError(400, "Cannot create a task on a board with no columns");
+        }
+
+        const targetColumnKey = columnKey || validColumnKeys[0];
 
         if (!validColumnKeys.includes(targetColumnKey)) {
             throw new ApiError(400, `Column key '${targetColumnKey}' does not exist on this board`);

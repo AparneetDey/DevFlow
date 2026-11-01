@@ -95,7 +95,8 @@ export async function createTestTask(boardId, override = {}) {
         columnKey: override.columnKey || "todo",
         order: override.order !== undefined ? override.order : 0,
         priority: override.priority || "medium",
-        dueDate: override.dueDate || null
+        dueDate: override.dueDate || null,
+        isCompleted: override.isCompleted !== undefined ? override.isCompleted : false
     });
 
     return task;

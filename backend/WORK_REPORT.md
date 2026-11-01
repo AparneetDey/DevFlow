@@ -2195,3 +2195,143 @@ Executed the Vitest test suite against live MongoDB Atlas test database (`devflo
 
 ### 4. Readiness for Frontend Task 10
 The backend is confirmed stable, race-condition safe, fully backward compatible, and ready for Frontend Task 10.
+
+---
+
+## Task 11: Backend: Column Deletion, Task Handling & Reordering
+
+### 1. Objective & Scope
+Extend DevFlow's backend to support deleting and reordering board columns:
+1. Support boards having between 0 and 5 columns (0 columns is now a valid board state).
+2. Deleting any column (including default columns) with two strategies:
+   - Move tasks (`action: "move"`): Relocates all tasks in the deleted column to `targetColumnKey`, appending them after existing destination tasks in sequential order and normalizing destination orders to 0-based integers. Preserves all task fields (ID, title, description, priority, due date, timestamps, `isCompleted`).
+   - Delete tasks (`action: "delete"`): Permanently deletes all tasks associated with the deleted column.
+3. Transaction safety: Uses MongoDB replica set multi-document sessions and transactions (`session.startTransaction()`, `commitTransaction()`, `abortTransaction()`) to guarantee atomic execution of task operations and board column updates.
+4. Column reordering: `PATCH /api/v1/boards/:boardId/columns/reorder` accepting a permutation of existing column keys and updating each column's `order` to sequential 0-based indices without altering associated task data or task orders.
+5. Zero-column migration safety: Adjusts Mongoose schema and lifecycle hooks so that `columns: []` is preserved and not silently overwritten by default columns, while legacy boards genuinely lacking the `columns` field still receive default columns on retrieval.
+6. Backend only: No frontend files modified.
+
+---
+
+### 2. Files Inspected & Modified
+- **`backend/src/models/board.model.js`**:
+  - Configured `columns` schema with `default: undefined`.
+  - Added `pre("validate")` hook ensuring new board documents (`this.isNew && this.columns === undefined`) initialize with 3 default columns.
+  - Updated `post("init")` hook to check `doc.columns === undefined` rather than `columns.length === 0`. Boards explicitly saved with `columns: []` remain empty and do not trigger default column recreation.
+- **`backend/src/validators/board.validator.js`**:
+  - Added `deleteColumnSchema`: Validates `action` (`"move"` or `"delete"`), requires `targetColumnKey` when `action === "move"`, disallows `targetColumnKey` when `action === "delete"`, and enforces `.strict()`.
+  - Added `reorderColumnsSchema`: Validates `columnKeys` as an array of trimmed strings with `.max(5)` and `.strict()`.
+- **`backend/src/services/board.service.js`**:
+  - Implemented `deleteColumn(boardId, columnKey, { action, targetColumnKey }, userId)`:
+    - Validates board ownership and source/target column existence.
+    - Rejects moving tasks into the source column itself.
+    - Uses MongoDB transaction to atomically update/delete task documents, remove source column, and re-index remaining column orders.
+  - Implemented `reorderColumns(boardId, { columnKeys }, userId)`:
+    - Validates board ownership.
+    - Validates duplicate keys, missing keys, and unknown keys.
+    - Updates column orders to sequential 0-based values matching the array order.
+- **`backend/src/services/task.service.js`**:
+  - Updated `getValidColumnKeys(board)` to return `[]` when `board.columns` is empty (instead of falling back to defaults).
+  - Updated `createTask` to reject creating tasks on a board with 0 columns with HTTP 400.
+- **`backend/src/controllers/board.controller.js`**:
+  - Added `deleteColumn` controller returning `ApiResponse(200, board, "Column deleted successfully")`.
+  - Added `reorderColumns` controller returning `ApiResponse(200, board, "Columns reordered successfully")`.
+- **`backend/src/routes/board.routes.js`**:
+  - Mounted `PATCH /api/v1/boards/:boardId/columns/reorder` before `/:columnKey` to prevent route parameter collision.
+  - Mounted `DELETE /api/v1/boards/:boardId/columns/:columnKey` with validation and controller.
+- **`backend/tests/board.test.js`**:
+  - Added 12 tests for column deletion (move strategy, append order, task field preservation, delete strategy, empty column, default column, final column deletion to 0 columns, error handling).
+  - Added 7 tests for column reordering (3 columns, 5 columns, task preservation, duplicate keys, unknown keys, missing keys, empty board).
+  - Updated migration tests to verify `columns: []` is preserved and not overwritten.
+- **`backend/tests/task.test.js`**:
+  - Added test rejecting task creation on a 0-column board.
+  - Added test verifying GET tasks returns an empty array on a 0-column board.
+- **`backend/tests/helpers.js`**:
+  - Updated `createTestTask` to pass through `isCompleted`.
+- **`backend/README.md`**:
+  - Added complete documentation for endpoints 9.8 (`PATCH /api/v1/boards/:boardId/columns/reorder`) and 9.9 (`DELETE /api/v1/boards/:boardId/columns/:columnKey`).
+
+---
+
+### 3. API Contract Summary
+
+#### A. Delete Column: `DELETE /api/v1/boards/:boardId/columns/:columnKey`
+- **Headers:** `Authorization: Bearer <accessToken>`
+- **Option 1 (Move Tasks):**
+  ```json
+  {
+    "action": "move",
+    "targetColumnKey": "in-progress"
+  }
+  ```
+- **Option 2 (Delete Tasks):**
+  ```json
+  {
+    "action": "delete"
+  }
+  ```
+- **Response (200 OK):**
+  ```json
+  {
+    "statusCode": 200,
+    "data": {
+      "_id": "671bb200e4b0234567890456",
+      "title": "Project Alpha",
+      "columns": [
+        { "name": "In Progress", "title": "In Progress", "key": "in-progress", "order": 0 },
+        { "name": "Done", "title": "Done", "key": "done", "order": 1 }
+      ]
+    },
+    "message": "Column deleted successfully",
+    "success": true
+  }
+  ```
+
+#### B. Reorder Columns: `PATCH /api/v1/boards/:boardId/columns/reorder`
+- **Headers:** `Authorization: Bearer <accessToken>`
+- **Body:**
+  ```json
+  {
+    "columnKeys": [
+      "in-progress",
+      "todo",
+      "done"
+    ]
+  }
+  ```
+- **Response (200 OK):**
+  ```json
+  {
+    "statusCode": 200,
+    "data": {
+      "_id": "671bb200e4b0234567890456",
+      "title": "Project Alpha",
+      "columns": [
+        { "name": "In Progress", "title": "In Progress", "key": "in-progress", "order": 0 },
+        { "name": "To Do", "title": "To Do", "key": "todo", "order": 1 },
+        { "name": "Done", "title": "Done", "key": "done", "order": 2 }
+      ]
+    },
+    "message": "Columns reordered successfully",
+    "success": true
+  }
+  ```
+
+---
+
+### 4. Transaction Safety Verification
+- **Environment:** MongoDB Atlas replica set cluster (`cluster0.zab9c3k.mongodb.net`).
+- Verified that `mongoose.startSession()` and `session.startTransaction()` succeed natively.
+- In `boardService.deleteColumn`, all mutations (task movements/deletions and board column removals) execute within a single transaction. If an error occurs during any phase, `session.abortTransaction()` reverts all mutations atomically, ensuring no partial board updates or orphaned tasks occur.
+
+---
+
+### 5. Automated Test Suite Results
+Executed Vitest test suite against live MongoDB Atlas test database (`devflow_test`):
+- **Command:** `npm test`
+- **Total Test Files:** 3 passed (3 total)
+  - `backend/tests/board.test.js`: **51 passed** (added 19 tests for deletion, reordering, and zero-column persistence)
+  - `backend/tests/task.test.js`: **28 passed** (added 2 tests for zero-column task rejection & listing)
+  - `backend/tests/auth.test.js`: **21 passed**
+- **Total Tests Passed:** **100 passed (100 total, 0 failed, 0 skipped)**
+- **Duration:** 89.10 seconds

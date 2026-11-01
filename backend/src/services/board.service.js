@@ -274,11 +274,9 @@ class BoardService {
 
         await this.ensureBoardColumnsPersisted(board);
 
-        if (!board.columns || !Array.isArray(board.columns)) {
-            board.columns = DEFAULT_COLUMNS.map((col) => ({ ...col }));
-        }
+        const currentColumns = board.columns || [];
 
-        const targetColumn = board.columns.find((c) => c.key === columnKey);
+        const targetColumn = currentColumns.find((c) => c.key === columnKey);
         if (!targetColumn) {
             throw new ApiError(404, "Column not found");
         }
@@ -286,6 +284,182 @@ class BoardService {
         targetColumn.name = trimmedName;
         targetColumn.title = trimmedName;
 
+        await board.save();
+        return board;
+    }
+
+    /**
+     * Deletes a column from a board.
+     * Supports action="move" (moves tasks to targetColumnKey and normalizes destination order)
+     * and action="delete" (permanently deletes all tasks belonging to columnKey).
+     * Normalizes remaining column orders.
+     * Operates atomically within a MongoDB session/transaction.
+     *
+     * @param {string} boardId - Board ObjectId string
+     * @param {string} columnKey - Column key to delete
+     * @param {Object} options - { action: "move"|"delete", targetColumnKey }
+     * @param {string|mongoose.Types.ObjectId} userId - Authenticated user ID
+     * @returns {Promise<Object>} Updated board document
+     */
+    async deleteColumn(boardId, columnKey, { action, targetColumnKey }, userId) {
+        this.validateObjectId(boardId);
+
+        if (!userId) {
+            throw new ApiError(401, "User is not authenticated");
+        }
+
+        const board = await Board.findOne({ _id: boardId, owner: userId });
+        if (!board) {
+            throw new ApiError(404, "Board not found");
+        }
+
+        await this.ensureBoardColumnsPersisted(board);
+
+        const currentColumns = board.columns || [];
+        const sourceColumn = currentColumns.find((c) => c.key === columnKey);
+        if (!sourceColumn) {
+            throw new ApiError(404, "Column not found");
+        }
+
+        if (action === "move") {
+            if (!targetColumnKey) {
+                throw new ApiError(400, "targetColumnKey is required when action is 'move'");
+            }
+            if (targetColumnKey === columnKey) {
+                throw new ApiError(400, "Cannot move tasks to the column being deleted");
+            }
+            const targetColumn = currentColumns.find((c) => c.key === targetColumnKey);
+            if (!targetColumn) {
+                throw new ApiError(400, `Target column '${targetColumnKey}' does not exist on this board`);
+            }
+        } else if (action !== "delete") {
+            throw new ApiError(400, "Action must be either 'move' or 'delete'");
+        }
+
+        const session = await mongoose.startSession();
+        try {
+            session.startTransaction();
+
+            if (action === "move") {
+                // Find all tasks in source column, sorted by their existing order
+                const sourceTasks = await Task.find({ boardId, columnKey })
+                    .sort({ order: 1 })
+                    .session(session);
+
+                if (sourceTasks.length > 0) {
+                    // Find max order in target column to append after existing tasks
+                    const lastTargetTask = await Task.findOne({ boardId, columnKey: targetColumnKey })
+                        .sort({ order: -1 })
+                        .session(session);
+
+                    const baseOrder = lastTargetTask ? lastTargetTask.order + 1 : 0;
+
+                    for (let i = 0; i < sourceTasks.length; i++) {
+                        await Task.updateOne(
+                            { _id: sourceTasks[i]._id },
+                            { $set: { columnKey: targetColumnKey, order: baseOrder + i } },
+                            { session }
+                        );
+                    }
+
+                    // Strictly normalize destination column tasks to sequential 0-based orders
+                    const allTargetTasks = await Task.find({ boardId, columnKey: targetColumnKey })
+                        .sort({ order: 1, updatedAt: 1 })
+                        .session(session);
+
+                    for (let i = 0; i < allTargetTasks.length; i++) {
+                        if (allTargetTasks[i].order !== i) {
+                            await Task.updateOne(
+                                { _id: allTargetTasks[i]._id },
+                                { $set: { order: i } },
+                                { session }
+                            );
+                        }
+                    }
+                }
+            } else if (action === "delete") {
+                // Permanently delete all tasks in the deleted column
+                await Task.deleteMany({ boardId, columnKey }).session(session);
+            }
+
+            // Remove source column from board
+            board.columns = currentColumns.filter((c) => c.key !== columnKey);
+
+            // Normalize remaining column order values
+            board.columns.forEach((col, idx) => {
+                col.order = idx;
+            });
+
+            await board.save({ session });
+
+            await session.commitTransaction();
+            return board;
+        } catch (error) {
+            if (session.inTransaction()) {
+                await session.abortTransaction();
+            }
+            throw error;
+        } finally {
+            await session.endSession();
+        }
+    }
+
+    /**
+     * Reorders columns on a board.
+     * Validates that columnKeys is a valid permutation of existing board column keys.
+     * Updates each column's order to sequential values starting at 0.
+     *
+     * @param {string} boardId - Board ObjectId string
+     * @param {Object} data - { columnKeys }
+     * @param {string|mongoose.Types.ObjectId} userId - Authenticated user ID
+     * @returns {Promise<Object>} Updated board document
+     */
+    async reorderColumns(boardId, { columnKeys }, userId) {
+        this.validateObjectId(boardId);
+
+        if (!userId) {
+            throw new ApiError(401, "User is not authenticated");
+        }
+
+        if (!Array.isArray(columnKeys)) {
+            throw new ApiError(400, "columnKeys must be an array of strings");
+        }
+
+        const board = await Board.findOne({ _id: boardId, owner: userId });
+        if (!board) {
+            throw new ApiError(404, "Board not found");
+        }
+
+        await this.ensureBoardColumnsPersisted(board);
+
+        const currentColumns = board.columns || [];
+        const uniqueKeys = new Set(columnKeys);
+
+        if (uniqueKeys.size !== columnKeys.length) {
+            throw new ApiError(400, "columnKeys cannot contain duplicate keys");
+        }
+
+        if (columnKeys.length !== currentColumns.length) {
+            throw new ApiError(
+                400,
+                `columnKeys length (${columnKeys.length}) must match the number of columns on the board (${currentColumns.length})`
+            );
+        }
+
+        const currentKeyMap = new Map(currentColumns.map((c) => [c.key, c]));
+        for (const key of columnKeys) {
+            if (!currentKeyMap.has(key)) {
+                throw new ApiError(400, `Column key '${key}' does not exist on this board`);
+            }
+        }
+
+        const reorderedColumns = columnKeys.map((key, index) => {
+            const col = currentKeyMap.get(key);
+            col.order = index;
+            return col;
+        });
+
+        board.columns = reorderedColumns;
         await board.save();
         return board;
     }

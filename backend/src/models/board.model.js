@@ -70,7 +70,7 @@ const boardSchema = new Schema(
         },
         columns: {
             type: [columnSchema],
-            default: () => DEFAULT_COLUMNS.map((col) => ({ ...col }))
+            default: undefined
         }
     },
     {
@@ -78,10 +78,16 @@ const boardSchema = new Schema(
     }
 );
 
-boardSchema.post("init", function () {
-    if (!this.columns || this.columns.length === 0) {
+boardSchema.pre("validate", function () {
+    if (this.isNew && this.columns === undefined) {
         this.columns = DEFAULT_COLUMNS.map((col) => ({ ...col }));
-    } else {
+    }
+});
+
+boardSchema.post("init", function (doc) {
+    if (doc.columns === undefined) {
+        this.columns = DEFAULT_COLUMNS.map((col) => ({ ...col }));
+    } else if (Array.isArray(this.columns)) {
         for (const col of this.columns) {
             if (!col.name && col.title) col.name = col.title;
             if (!col.title && col.name) col.title = col.name;
