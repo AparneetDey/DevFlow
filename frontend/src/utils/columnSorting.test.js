@@ -175,4 +175,44 @@ describe('sortBoardColumns', () => {
     assert.equal(originalInput[1].title, 'Column A');
     assert.equal(originalInput[2].title, 'Column B');
   });
+
+  test('9. correctly sorts and normalizes dynamic columns providing name property (Task 10)', () => {
+    const input = [
+      { name: 'Testing', key: 'testing', order: 3 },
+      { name: 'To Do', key: 'todo', order: 0 },
+      { name: 'In Progress', key: 'in-progress', order: 1 },
+      { name: 'Review', key: 'review', order: 2 },
+      { name: 'Done', key: 'done', order: 4 },
+    ];
+    const result = sortBoardColumns(input);
+    assert.equal(result.length, 5);
+    assert.deepEqual(
+      result.map((c) => c.name),
+      ['To Do', 'In Progress', 'Review', 'Testing', 'Done']
+    );
+    assert.deepEqual(
+      result.map((c) => c.title),
+      ['To Do', 'In Progress', 'Review', 'Testing', 'Done']
+    );
+  });
+
+  test('10. handles mixed name and title properties across up to 5 dynamic columns', () => {
+    const input = [
+      { title: 'Done', key: 'done', order: 4 },
+      { name: 'QA Review', key: 'qa-review', order: 3 },
+      { title: 'In Progress', key: 'in-progress', order: 1 },
+      { name: 'Code Review', key: 'code-review', order: 2 },
+      { title: 'Backlog', key: 'backlog', order: 0 },
+    ];
+    const result = sortBoardColumns(input);
+    assert.equal(result.length, 5);
+    assert.deepEqual(
+      result.map((c) => c.key),
+      ['backlog', 'in-progress', 'code-review', 'qa-review', 'done']
+    );
+    assert.equal(result[1].name, 'In Progress');
+    assert.equal(result[1].title, 'In Progress');
+    assert.equal(result[2].name, 'Code Review');
+    assert.equal(result[2].title, 'Code Review');
+  });
 });

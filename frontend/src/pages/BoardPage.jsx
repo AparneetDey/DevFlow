@@ -26,6 +26,7 @@ import {
 } from '@dnd-kit/sortable';
 import { Button } from '../components/common/Button.jsx';
 import KanbanColumn from '../components/boards/KanbanColumn.jsx';
+import AddColumnModal from '../components/boards/AddColumnModal.jsx';
 import TaskCard from '../components/tasks/TaskCard.jsx';
 import CreateTaskModal from '../components/tasks/CreateTaskModal.jsx';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal.jsx';
@@ -75,6 +76,9 @@ export function BoardPage() {
   // Task creation modal state
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [selectedColumnKey, setSelectedColumnKey] = useState('todo');
+
+  // Column creation modal state (Task 10)
+  const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
 
   // Task details modal state
   const [selectedTask, setSelectedTask] = useState(null);
@@ -217,6 +221,49 @@ export function BoardPage() {
     setTasks((prevTasks) => [...prevTasks, newTask]);
   };
 
+  const handleColumnAdded = (updatedBoard) => {
+    if (!updatedBoard) return;
+    if (Array.isArray(updatedBoard.columns)) {
+      setBoard(updatedBoard);
+    } else if (board) {
+      setBoard((prev) => ({
+        ...prev,
+        columns: [...(prev?.columns || []), updatedBoard],
+      }));
+    }
+  };
+
+  const handleRenameColumn = async (columnKey, newName) => {
+    if (!columnKey || !newName || !boardId) return;
+
+    const prevBoard = board;
+    // Optimistic UI update: rename column in board columns array
+    setBoard((prev) => {
+      if (!prev || !Array.isArray(prev.columns)) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.map((c) =>
+          c.key === columnKey ? { ...c, name: newName, title: newName } : c
+        ),
+      };
+    });
+
+    try {
+      const response = await boardApi.renameColumn(boardId, columnKey, {
+        name: newName,
+      });
+      const updatedBoard = response.data?.data;
+      if (updatedBoard && Array.isArray(updatedBoard.columns)) {
+        setBoard(updatedBoard);
+      }
+    } catch (err) {
+      // Revert on error
+      setBoard(prevBoard);
+      setTaskActionError(extractErrorMessage(err));
+      throw err;
+    }
+  };
+
   const handleOpenTaskDetails = (task) => {
     if (!task) return;
     setSelectedTask(task);
@@ -310,16 +357,16 @@ export function BoardPage() {
 
   const handleToggleComplete = async (task) => {
     if (!task || !task._id || togglingTaskIds.has(task._id)) return;
-    const targetColumnKey = task.columnKey === 'done' ? 'todo' : 'done';
+    const nextCompleted = !task.isCompleted;
 
     setTogglingTaskIds((prev) => new Set(prev).add(task._id));
     setTaskActionError(null);
 
     const prevTasks = tasks;
     const prevSelectedTask = selectedTask;
-    const optimisticTask = { ...task, columnKey: targetColumnKey };
+    const optimisticTask = { ...task, isCompleted: nextCompleted };
 
-    // Optimistic UI update
+    // Optimistic UI update: completed tasks stay in their current column and order
     setTasks((prev) =>
       prev.map((t) => (t._id === task._id ? optimisticTask : t))
     );
@@ -328,8 +375,8 @@ export function BoardPage() {
     }
 
     try {
-      const response = await taskApi.moveTask(boardId, task._id, {
-        columnKey: targetColumnKey,
+      const response = await taskApi.updateTask(boardId, task._id, {
+        isCompleted: nextCompleted,
       });
       const updatedTask = response.data?.data;
       if (updatedTask && updatedTask._id) {
@@ -762,17 +809,27 @@ export function BoardPage() {
               </div>
             </div>
 
-            {/* Right: Quick Action Buttons */}
+            {/* Right: Quick Action Buttons: Add Column (Max 5) */}
             <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+              {columns.length >= 5 && (
+                <span
+                  className="text-[11px] text-[var(--color-text-muted)] font-medium hidden sm:inline"
+                  title="Maximum limit of 5 columns reached for this board"
+                >
+                  (5/5 columns max)
+                </span>
+              )}
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => handleOpenCreateTask('todo')}
-                className="flex items-center justify-center gap-1.5 cursor-pointer text-xs"
-                aria-label="Create new task"
+                onClick={() => setIsAddColumnModalOpen(true)}
+                disabled={columns.length >= 5}
+                className="flex items-center justify-center gap-1.5 cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={columns.length >= 5 ? 'Maximum of 5 columns reached' : 'Add new column'}
+                title={columns.length >= 5 ? 'Maximum of 5 columns reached' : 'Add new column'}
               >
                 <Plus className="w-4 h-4" />
-                <span>Create Task</span>
+                <span>Add Column</span>
               </Button>
             </div>
           </div>
@@ -851,11 +908,12 @@ export function BoardPage() {
                 <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y">
                   {columns.map((column, index) => (
                     <KanbanColumn
-                      key={column.key || column.title || `column-${index}`}
+                      key={column.key || column.name || column.title || `column-${index}`}
                       column={column}
                       tasks={getTasksForColumn(tasks, column.key)}
                       isLoading={isLoadingTasks}
                       onAddTask={(colKey) => handleOpenCreateTask(colKey)}
+                      onRenameColumn={handleRenameColumn}
                       onTaskDoubleClick={handleOpenTaskDetails}
                       onTaskEditClick={handleOpenTaskDetails}
                       onTaskClick={handleOpenTaskDetails}
@@ -878,6 +936,16 @@ export function BoardPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Add Column Modal (Task 10) */}
+      {isAddColumnModalOpen && (
+        <AddColumnModal
+          boardId={boardId}
+          isOpen={isAddColumnModalOpen}
+          onClose={() => setIsAddColumnModalOpen(false)}
+          onColumnAdded={handleColumnAdded}
+        />
+      )}
 
       {/* Create Task Modal */}
       {isCreateTaskModalOpen && (

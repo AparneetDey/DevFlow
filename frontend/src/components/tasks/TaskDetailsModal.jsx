@@ -110,8 +110,8 @@ function formatReadableTimestamp(dateVal) {
 function resolveColumnTitle(columnKey, columns = []) {
   if (Array.isArray(columns) && columnKey) {
     const matched = columns.find((c) => c.key === columnKey);
-    if (matched?.title) {
-      return matched.title;
+    if (matched?.name || matched?.title) {
+      return matched.name || matched.title;
     }
   }
 
@@ -301,7 +301,7 @@ export function TaskDetailsModal({
     return null;
   }
 
-  const isCompleted = task.columnKey === 'done';
+  const isCompleted = Boolean(task.isCompleted);
   const priorityKey = (task.priority || 'medium').toLowerCase();
   const priorityInfo = PRIORITY_CONFIG[priorityKey] || PRIORITY_CONFIG.medium;
   const stageName = resolveColumnTitle(task.columnKey, columns);
@@ -619,7 +619,7 @@ export function TaskDetailsModal({
               >
                 <span className="flex items-center gap-2">
                   <Layers className={`w-3.5 h-3.5 ${isSelected ? 'text-[var(--color-primary-hover)]' : 'text-[var(--color-text-muted)]'}`} aria-hidden="true" />
-                  <span>{col.title}</span>
+                  <span>{col.name || col.title}</span>
                 </span>
                 {isSelected && <Check className="w-3.5 h-3.5 text-[var(--color-primary-hover)]" aria-hidden="true" />}
               </button>

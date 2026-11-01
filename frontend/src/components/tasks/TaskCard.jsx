@@ -55,7 +55,7 @@ export function TaskCard({
   }
 
   const taskKey = task._id || task.id || 'task';
-  const isCompleted = task.columnKey === 'done';
+  const isCompleted = Boolean(task.isCompleted);
   const priorityTheme = task.priority ? PRIORITY_THEMES[task.priority.toLowerCase()] : null;
 
   const formattedDueDate = (() => {

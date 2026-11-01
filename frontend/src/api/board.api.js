@@ -57,6 +57,31 @@ export const boardApi = {
    */
   deleteBoard: (boardId, config = {}) =>
     apiClient.delete(`/boards/${boardId}`, config),
+
+  /**
+   * Adds a new column to a board.
+   * Route: POST /api/v1/boards/:boardId/columns
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {Object} columnData - { name: string }
+   * @param {Object} [config] - Optional Axios request configuration
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  addColumn: (boardId, columnData, config = {}) =>
+    apiClient.post(`/boards/${boardId}/columns`, columnData, config),
+
+  /**
+   * Renames an existing column on a board.
+   * Route: PATCH /api/v1/boards/:boardId/columns/:columnKey
+   *
+   * @param {string} boardId - MongoDB ObjectId string
+   * @param {string} columnKey - Unique column key
+   * @param {Object} columnData - { name: string }
+   * @param {Object} [config] - Optional Axios request configuration
+   * @returns {Promise<import('axios').AxiosResponse>}
+   */
+  renameColumn: (boardId, columnKey, columnData, config = {}) =>
+    apiClient.patch(`/boards/${boardId}/columns/${columnKey}`, columnData, config),
 };
 
 export default boardApi;

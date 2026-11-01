@@ -4838,3 +4838,144 @@ All updated styles strictly use the established design tokens from `frontend/src
   - Resolved issue where `truncate` (`overflow: hidden`) on `#modal-title` clipped the absolute dropdown menu (`top-full`).
   - Added conditional `truncate` only when `typeof title === 'string'`, and added `relative z-30` to the header.
   - Added `e.stopPropagation()` on the header dropdown toggle button.
+
+
+---
+
+## Task 10: Dynamic Columns, Independent Completion & Kanban Layout
+
+### 1. Executive Summary
+Integrated the backend dynamic columns and independent task completion architecture (from Tasks 9 & 9A) into the DevFlow React frontend:
+1. **Dynamic Board Columns**: Boards now support dynamic workflow columns (minimum default set up to a maximum of 5 columns per board). Column ordering is strictly governed by `column.order`, with deterministic sorting that handles both legacy `title` and backend `name` attributes.
+2. **"Add Column" Feature**: Replaced the redundant top board header "+ Create Task" button with "+ Add Column". Created `AddColumnModal` with strict 50-character limit, whitespace trimming, real-time counter, error banners, and automatic client/server enforcement of the 5-column maximum limit (with disabling and informative badges when at capacity).
+3. **Inline Column Renaming**: Double-clicking any column header switches the title into an inline `<input>` that auto-focuses and selects all text. Saves on `Enter` or `blur` (click outside), cancels on `Escape`, validates 1-50 characters, and preserves `column.key` and `column.order` with immediate optimistic UI feedback and automatic rollback on network failure.
+4. **Column Footer "+ Add a task" Action**: Removed redundant top-of-column create buttons. Pinned a clean "+ Add a task" action to the bottom of each column. Clicking opens `CreateTaskModal` with that column pre-selected.
+5. **Adaptive Column Height & Internal Scrolling**: Refactored Kanban columns into a flex container (`max-h-[calc(100vh-13rem)] min-h-[440px]`) with a pinned non-shrinking header, an internally scrollable task list (`flex-1 overflow-y-auto min-h-0`) utilizing native browser scrollbars without vertical page blowout, and a pinned non-shrinking footer.
+6. **Independent Task Completion**: Completely removed legacy `columnKey === 'done'` completion coupling across the application. Task completion is now strictly governed by the independent `task.isCompleted` boolean. Toggling completion issues `taskApi.updateTask(boardId, taskId, { isCompleted: !task.isCompleted })`—tasks remain in their current column and retain their position/order. Both completed and incomplete tasks can coexist in any column.
+7. **Drag-and-Drop Across Dynamic Columns**: Maintained smooth `@dnd-kit` drag-and-drop mechanics across all dynamic columns using stable `column.key` identifiers. Tasks can be reordered within columns and moved between any custom columns while preserving their independent `isCompleted` status.
+8. **Design System & Token Adherence**: Built entirely with established CSS tokens from `index.css` (`var(--color-surface)`, `var(--color-border)`, `var(--color-primary)`, `var(--color-danger)`, `var(--color-text-muted)`, etc.) with native browser scrollbar preservation.
+
+---
+
+### 2. Files Created and Modified
+
+#### Created:
+- `frontend/src/components/boards/AddColumnModal.jsx`: Accessible modal dialog for creating dynamic columns. Validates column name (trimmed, 1–50 characters, non-empty), shows real-time character count (`0/50`) and 5-column maximum notice, handles loading state and server errors, and updates the board state on success.
+
+#### Modified:
+- `frontend/src/api/board.api.js`:
+  - Added `addColumn: (boardId, columnData, config) => apiClient.post('/boards/' + boardId + '/columns', columnData, config)`
+  - Added `renameColumn: (boardId, columnKey, columnData, config) => apiClient.patch('/boards/' + boardId + '/columns/' + columnKey, columnData, config)`
+- `frontend/src/utils/columnSorting.js`:
+  - Enhanced `sortBoardColumns` to accept column objects with `name` and/or `title`, normalizing them so both properties are present while sorting by ascending numerical `order` and preserving input stability.
+- `frontend/src/components/boards/KanbanColumn.jsx`:
+  - Added double-click inline renaming with auto-focus, select-all, `Enter`/`blur` save, `Escape` cancel, 50-character limit, and optimistic update.
+  - Removed top-of-column `+` icon button to eliminate header clutter.
+  - Implemented pinned footer `+ Add a task` button opening creation modal for that column.
+  - Configured flex layout with `flex-1 overflow-y-auto min-h-0` for internal task list scrolling with native scrollbars.
+- `frontend/src/components/tasks/TaskCard.jsx`:
+  - Decoupled completion state from column: `const isCompleted = Boolean(task.isCompleted);`.
+  - Checkbox circle toggle triggers `onToggleComplete(task)` directly.
+  - Strikethrough, muted badges, and completion animations are purely driven by `isCompleted`.
+- `frontend/src/components/tasks/TaskDetailsModal.jsx`:
+  - Decoupled completion: `const isCompleted = Boolean(task.isCompleted);`.
+  - Updated column title resolver and dropdown stage options to display `col.name || col.title`.
+  - Moving stage via modal dropdown moves column without mutating `isCompleted`.
+  - Toggling completion checkmark updates `isCompleted` without shifting column.
+- `frontend/src/components/tasks/CreateTaskModal.jsx`:
+  - Updated column options to display `col.name || col.title`.
+  - Pre-selects column based on the column footer button clicked.
+- `frontend/src/pages/BoardPage.jsx`:
+  - Replaced top header "+ Create Task" button with "+ Add Column", disabled when `columns.length >= 5` with informative `(5/5 columns max)` pill.
+  - Integrated `AddColumnModal` and `handleColumnAdded`.
+  - Implemented `handleRenameColumn` with optimistic UI update and error rollback.
+  - Refactored `handleToggleComplete` to send `taskApi.updateTask(boardId, task._id, { isCompleted: !task.isCompleted })`—keeping tasks in their column.
+- `frontend/src/utils/columnSorting.test.js`:
+  - Added unit test cases 9 & 10 validating dynamic column sorting with `name` properties and mixed legacy `title` across up to 5 columns.
+- `frontend/src/api/board.api.test.js`:
+  - Added unit test cases verifying `boardApi.addColumn` and `boardApi.renameColumn` endpoint contracts and payload formats.
+  - Updated API isolation test to include `isCompleted` in allowed task update fields.
+- `frontend/src/api/task.api.test.js`:
+  - Replaced legacy `columnKey === 'done'` toggle tests with independent `isCompleted` tests: verification that column and order are untouched, coexistence of complete/incomplete tasks in any column, optimistic rollback, and accessible ARIA labels.
+
+---
+
+### 3. Dynamic Column Lifecycle
+- **Creation**:
+  - The top toolbar displays `+ Add Column`.
+  - When `columns.length >= 5`, the button is disabled and displays a `(5/5 columns max)` indicator and tooltip.
+  - Clicking opens `AddColumnModal`.
+  - Submission issues `POST /api/v1/boards/:boardId/columns` with payload `{ name }`.
+  - On success, the board state is updated with the returned updated board document and the modal closes.
+- **Rendering & Ordering**:
+  - Columns are deterministically sorted via `sortBoardColumns(board.columns)` by ascending finite numeric `order`.
+  - Each column uses its unique, permanent `column.key` as its identifier and droppable target (`column-${column.key}`).
+  - Both `name` and `title` properties are normalized for backward and forward compatibility.
+- **Renaming**:
+  - Double-clicking the column title switches the text node into an inline `<input>`.
+  - The input auto-focuses with all text selected (`inputRef.current.select()`).
+  - Pressing `Enter` or clicking outside (`blur`) saves the trimmed name (max 50 chars).
+  - Pressing `Escape` restores the original name without saving.
+  - State updates optimistically; on error, the previous name is restored and an error message is displayed.
+
+---
+
+### 4. Independent Task Completion Architecture
+- **Decoupling from Columns**:
+  - Previously, tasks were treated as completed solely if `task.columnKey === 'done'`.
+  - Under the new model, completion is represented by the boolean property `task.isCompleted`.
+  - Tasks can be complete or incomplete in *any* column (`To Do`, `In Progress`, `Review`, `Done`, etc.).
+- **Toggling Behavior**:
+  - Toggling completion executes `taskApi.updateTask(boardId, taskId, { isCompleted: !task.isCompleted })`.
+  - The task does NOT move across columns or change its `order`.
+  - Optimistic UI updates apply the new `isCompleted` status immediately to both the task list and the active modal task.
+  - If the request fails, the task state rolls back to its prior `isCompleted` value and an alert banner is shown.
+- **Card & Modal Presentation**:
+  - `TaskCard`: When `task.isCompleted === true`, the title receives `line-through text-[var(--color-text-muted)]`, priority and date badges switch to muted styling, and the completion toggle displays `<CheckCircle2 />`.
+  - `TaskDetailsModal`: The header pill displays a `Completed` badge, the completion toggle circle reflects status, and title text displays strikethrough when not actively focused.
+
+---
+
+### 5. Column Layout & Scroll Architecture
+- **Column Sizing**:
+  - Fixed width: `w-72 sm:w-80 shrink-0`.
+  - Vertical height constraint: `max-h-[calc(100vh-13rem)] min-h-[440px]`.
+- **Flex Container Hierarchy**:
+  - Header (`shrink-0`): Displays column title / inline rename input and task count badge. Fixed at top.
+  - Task List (`flex-1 overflow-y-auto min-h-0`): Flex child with internal scrolling and `touch-pan-y`. Uses native browser scrollbars. Tasks scroll smoothly without causing the page or board header to blow out vertically.
+  - Footer (`shrink-0`): Displays full-width "+ Add a task" button pinned to the column bottom.
+- **Board Canvas**:
+  - Horizontal scrolling container (`overflow-x-auto min-w-0 touch-pan-x touch-pan-y`) allows smooth panning across up to 5 columns on desktop, tablet, and mobile devices.
+
+---
+
+### 6. Automated Test Results
+- **Command:** `npm.cmd test --prefix frontend`
+- **Result:** **118 of 118 tests passed (0 failures, 0 skipped)** across all 23 test suites.
+  - `columnSorting.test.js`: 13 tests passing (includes dynamic column sorting and mixed property normalizer).
+  - `board.api.test.js`: 8 tests passing (includes `addColumn`, `renameColumn`, and update isolation).
+  - `task.api.test.js`: 18 tests passing (includes independent completion toggle, coexistence in any column, optimistic rollback, and ARIA attributes).
+  - `taskGrouping.test.js`: 6 tests passing.
+  - `taskReordering.test.js`: 9 tests passing.
+  - `auth.session.test.js`: 14 tests passing.
+  - `profileData.test.js`: 8 tests passing.
+
+---
+
+### 7. ESLint Results
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 errors, 0 warnings** across all frontend source files.
+
+---
+
+### 8. Production Build Results
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Vite production build succeeded in 8.90s with **0 compilation errors**:
+  - `dist/index.html`: `0.45 kB` (gzip: `0.29 kB`)
+  - `dist/assets/index-C9oM_TBi.css`: `51.57 kB` (gzip: `8.92 kB`)
+  - `dist/assets/index-BUpKG40N.js`: `478.05 kB` (gzip: `143.07 kB`)
+
+---
+
+### 9. Backend Integrity Confirmation
+- **Status:** The backend codebase was strictly unedited during Task 10. All API integrations match the existing endpoints deployed in Tasks 9 & 9A (`POST /boards/:boardId/columns`, `PATCH /boards/:boardId/columns/:columnKey`, `PATCH /boards/:boardId/tasks/:taskId` with `isCompleted`).
