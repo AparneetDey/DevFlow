@@ -15,6 +15,8 @@ import {
   DndContext,
   DragOverlay,
   closestCorners,
+  pointerWithin,
+  rectIntersection,
   PointerSensor,
   KeyboardSensor,
   useSensor,
@@ -35,7 +37,36 @@ import taskApi from '../api/task.api.js';
 import { sortBoardColumns } from '../utils/columnSorting.js';
 import { getTasksForColumn } from '../utils/taskGrouping.js';
 import { extractErrorMessage } from '../api/error.js';
-import { normalizeColumnTasks, findColumnKey } from '../utils/taskReordering.js';
+import {
+  normalizeColumnTasks,
+  findColumnKey,
+  calculateTaskDropPosition,
+  moveTaskCrossColumn,
+} from '../utils/taskReordering.js';
+
+/**
+ * Stable collision detection strategy optimized for DevFlow Kanban board.
+ * Prioritizes direct pointer collision (pointerWithin) for stable, jitter-free targeting.
+ * - When pointer is over a task card, returns that task card.
+ * - When pointer is over column space, returns that column.
+ * - When pointer is in a gutter between columns, falls back to rectIntersection / closestCorners.
+ */
+function kanbanCollisionDetection(args) {
+  // 1. Direct pointer collision is primary
+  const pointerCollisions = pointerWithin(args);
+  if (pointerCollisions.length > 0) {
+    return pointerCollisions;
+  }
+
+  // 2. Bounding box intersection when pointer is in gaps
+  const rectCollisions = rectIntersection(args);
+  if (rectCollisions.length > 0) {
+    return rectCollisions;
+  }
+
+  // 3. Distance-based fallback
+  return closestCorners(args);
+}
 
 export function BoardPage() {
   const { boardId } = useParams();
@@ -59,9 +90,10 @@ export function BoardPage() {
 
   // Drag-and-drop state & sensors
   const [activeTask, setActiveTask] = useState(null);
+  const [overColumnKey, setOverColumnKey] = useState(null);
   const [movingTaskIds, setMovingTaskIds] = useState(new Set());
   const dragSnapshotRef = useRef(null);
-  const lastOverColumnKeyRef = useRef(null);
+  const overColumnKeyRef = useRef(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -413,120 +445,54 @@ export function BoardPage() {
     if (!task) return;
 
     setActiveTask(task);
+    setOverColumnKey(task.columnKey);
+    overColumnKeyRef.current = task.columnKey;
     dragSnapshotRef.current = {
       tasks: [...tasks],
       selectedTask: selectedTask ? { ...selectedTask } : null,
       sourceColumnKey: task.columnKey,
       sourceOrder: typeof task.order === 'number' && Number.isFinite(task.order) ? task.order : 0,
     };
-    lastOverColumnKeyRef.current = task.columnKey;
     setTaskActionError(null);
   };
 
   const handleDragOver = (event) => {
-    const { active, over } = event;
-    if (!over) return;
+    const { over } = event;
+    if (!over) {
+      if (overColumnKeyRef.current !== null) {
+        overColumnKeyRef.current = null;
+        setOverColumnKey(null);
+      }
+      return;
+    }
 
-    const activeId = active.id;
     const overId = over.id;
+    // Resolve target columnKey from overId using available columns and snapshot/current tasks
+    const targetColumnKey = findColumnKey(
+      overId,
+      dragSnapshotRef.current?.tasks || tasks,
+      columns
+    );
 
-    if (activeId === overId) return;
-
-    // Resolve target columnKey using available columns and current tasks
-    const targetColumnKey = findColumnKey(overId, tasks, columns);
-    if (!targetColumnKey) return;
-
-    // Fast check: find active task in current state
-    const activeTaskItem = tasks.find((t) => t._id === activeId);
-    if (!activeTaskItem) return;
-
-    // If active task is already in the target column, do NOT update state during drag-over.
-    // Within the same column, @dnd-kit/sortable handles visual reordering via transform CSS.
-    if (activeTaskItem.columnKey === targetColumnKey) {
-      return;
+    if (targetColumnKey && targetColumnKey !== overColumnKeyRef.current) {
+      overColumnKeyRef.current = targetColumnKey;
+      setOverColumnKey(targetColumnKey);
     }
-
-    // Guard against rapid duplicate firing for the same destination column
-    if (lastOverColumnKeyRef.current === targetColumnKey) {
-      return;
-    }
-    lastOverColumnKeyRef.current = targetColumnKey;
-
-    setTasks((prevTasks) => {
-      const activeIndex = prevTasks.findIndex((t) => t._id === activeId);
-      if (activeIndex === -1) return prevTasks;
-
-      const currentActive = prevTasks[activeIndex];
-      if (currentActive.columnKey === targetColumnKey) {
-        return prevTasks;
-      }
-
-      // Extract tasks currently in target column (excluding active task)
-      const destTasks = prevTasks
-        .filter((t) => t.columnKey === targetColumnKey && t._id !== activeId)
-        .sort((a, b) => {
-          const oA = typeof a.order === 'number' && Number.isFinite(a.order) ? a.order : Infinity;
-          const oB = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : Infinity;
-          return oA - oB;
-        });
-
-      // Find insertion index within destTasks
-      const overIndex = destTasks.findIndex((t) => t._id === overId);
-      let newOrderIndex;
-
-      if (overIndex === -1) {
-        newOrderIndex = destTasks.length;
-      } else {
-        const isBelowOver =
-          over &&
-          active.rect.current.translated &&
-          active.rect.current.translated.top > over.rect.top + over.rect.height / 2;
-        newOrderIndex = overIndex + (isBelowOver ? 1 : 0);
-      }
-
-      const insertPos = Math.min(Math.max(0, newOrderIndex), destTasks.length);
-
-      const movedTask = {
-        ...currentActive,
-        columnKey: targetColumnKey,
-        order: insertPos,
-      };
-
-      destTasks.splice(insertPos, 0, movedTask);
-      const normalizedDest = normalizeColumnTasks(destTasks, targetColumnKey);
-
-      // Normalize source column tasks
-      const sourceTasks = prevTasks
-        .filter((t) => t.columnKey === currentActive.columnKey && t._id !== activeId)
-        .sort((a, b) => {
-          const oA = typeof a.order === 'number' && Number.isFinite(a.order) ? a.order : Infinity;
-          const oB = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : Infinity;
-          return oA - oB;
-        });
-      const normalizedSource = normalizeColumnTasks(sourceTasks, currentActive.columnKey);
-
-      const destMap = new Map(normalizedDest.map((t) => [t._id, t]));
-      const sourceMap = new Map(normalizedSource.map((t) => [t._id, t]));
-
-      return prevTasks.map((t) => {
-        if (destMap.has(t._id)) return destMap.get(t._id);
-        if (sourceMap.has(t._id)) return sourceMap.get(t._id);
-        return t;
-      });
-    });
   };
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;
     const activeId = active?.id;
     const snapshot = dragSnapshotRef.current;
+
     setActiveTask(null);
+    setOverColumnKey(null);
+    overColumnKeyRef.current = null;
     dragSnapshotRef.current = null;
-    lastOverColumnKeyRef.current = null;
 
     if (!activeId || !snapshot) return;
 
-    // 1. Dropped outside any droppable target: rollback to pre-drag state
+    // 1. Dropped outside any droppable target: restore pristine snapshot
     if (!over) {
       setTasks(snapshot.tasks);
       if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
@@ -536,7 +502,7 @@ export function BoardPage() {
     const overId = over.id;
 
     // 2. Resolve destination columnKey
-    const targetColumnKey = findColumnKey(overId, tasks, columns);
+    const targetColumnKey = findColumnKey(overId, snapshot.tasks, columns);
     if (!targetColumnKey) {
       setTasks(snapshot.tasks);
       if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
@@ -563,7 +529,7 @@ export function BoardPage() {
 
       // Check if position actually changed
       if (oldIndex === -1 || overIndex === -1 || oldIndex === overIndex) {
-        // No-op: restore pre-drag snapshot cleanly
+        // No-op: restore pre-drag snapshot cleanly with 0 API calls
         setTasks(snapshot.tasks);
         if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
         return;
@@ -574,43 +540,29 @@ export function BoardPage() {
       targetOrder = normalizedCol.findIndex((t) => t._id === activeId);
 
       const colMap = new Map(normalizedCol.map((t) => [t._id, t]));
-      finalOptimisticTasks = tasks.map((t) => (colMap.has(t._id) ? colMap.get(t._id) : t));
+      finalOptimisticTasks = snapshot.tasks.map((t) => (colMap.has(t._id) ? colMap.get(t._id) : t));
     } else {
       // Cross-column movement
-      const destTasks = tasks
+      const destTasks = snapshot.tasks
         .filter((t) => t.columnKey === targetColumnKey)
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-      const activeTaskInDest = destTasks.find((t) => t._id === activeId);
+      const insertPos = calculateTaskDropPosition(
+        destTasks,
+        overId,
+        over.rect,
+        active.rect?.current?.translated
+      );
 
-      if (!activeTaskInDest) {
-        const activeTaskItem =
-          tasks.find((t) => t._id === activeId) ||
-          snapshot.tasks.find((t) => t._id === activeId);
+      const result = moveTaskCrossColumn(
+        snapshot.tasks,
+        activeId,
+        targetColumnKey,
+        insertPos
+      );
 
-        if (activeTaskItem) {
-          const overIndex = destTasks.findIndex((t) => t._id === overId);
-          const insertPos = overIndex !== -1 ? overIndex : destTasks.length;
-          destTasks.splice(insertPos, 0, { ...activeTaskItem, columnKey: targetColumnKey });
-        }
-      }
-
-      const normalizedDest = normalizeColumnTasks(destTasks, targetColumnKey);
-      targetOrder = Math.max(0, normalizedDest.findIndex((t) => t._id === activeId));
-
-      const sourceTasks = tasks
-        .filter((t) => t.columnKey === snapshot.sourceColumnKey && t._id !== activeId)
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const normalizedSource = normalizeColumnTasks(sourceTasks, snapshot.sourceColumnKey);
-
-      const destMap = new Map(normalizedDest.map((t) => [t._id, t]));
-      const sourceMap = new Map(normalizedSource.map((t) => [t._id, t]));
-
-      finalOptimisticTasks = tasks.map((t) => {
-        if (destMap.has(t._id)) return destMap.get(t._id);
-        if (sourceMap.has(t._id)) return sourceMap.get(t._id);
-        return t;
-      });
+      finalOptimisticTasks = result.tasks;
+      targetOrder = result.targetOrder;
     }
 
     // Apply optimistic update immediately
@@ -662,8 +614,9 @@ export function BoardPage() {
   const handleDragCancel = () => {
     const snapshot = dragSnapshotRef.current;
     setActiveTask(null);
+    setOverColumnKey(null);
+    overColumnKeyRef.current = null;
     dragSnapshotRef.current = null;
-    lastOverColumnKeyRef.current = null;
     if (snapshot) {
       setTasks(snapshot.tasks);
       if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
@@ -925,7 +878,7 @@ export function BoardPage() {
             ) : (
               <DndContext
                 sensors={sensors}
-                collisionDetection={closestCorners}
+                collisionDetection={kanbanCollisionDetection}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
@@ -938,6 +891,9 @@ export function BoardPage() {
                       column={column}
                       tasks={getTasksForColumn(tasks, column.key)}
                       isLoading={isLoadingTasks}
+                      isDropTarget={
+                        Boolean(activeTask && overColumnKey === column.key && activeTask.columnKey !== column.key)
+                      }
                       onAddTask={(colKey) => handleOpenCreateTask(colKey)}
                       onRenameColumn={handleRenameColumn}
                       onTaskDoubleClick={handleOpenTaskDetails}

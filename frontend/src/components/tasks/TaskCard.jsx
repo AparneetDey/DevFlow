@@ -120,7 +120,7 @@ export function TaskCard({
       }}
       className={`group relative p-2.5 select-none bg-[var(--color-surface-elevated)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] focus-visible:border-[var(--color-primary)] transition-all flex flex-col gap-2 min-w-0 cursor-grab active:cursor-grabbing text-[var(--color-text)] ${
         isDragging
-          ? 'opacity-30 border-2 border-dashed border-[var(--color-primary)] bg-[var(--color-primary-muted)]/20 shadow-none'
+          ? 'opacity-30 border-dashed border-[var(--color-primary)] bg-[var(--color-primary-muted)]/20 shadow-none'
           : ''
       } ${
         isOverlay

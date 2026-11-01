@@ -5235,3 +5235,98 @@ While dragging and dropping tasks on the Kanban board, a fatal React runtime err
 
 #### Backend Integrity:
 - **Result:** **0 backend files modified.** Backend remains completely untouched.
+
+
+---
+
+## Task 10C — Fix Drag-and-Drop Column Jitter & Collision Instability
+
+### 1. Incident Summary & Root Cause Analysis
+
+#### Reported Issue:
+During Kanban drag-and-drop interactions, hovering a dragged task over adjacent columns caused visible jitter, shifting, and card rearrangements before releasing the mouse.
+
+#### Actual Root Causes Identified:
+1. **Premature Task Array Mutation in `handleDragOver`:**
+   Previously, `handleDragOver` called `setTasks(...)` to splice the active task into the hovered column on every cross-column move. This caused:
+   - The source column's task count to decrease, shrinking its vertical height and shifting cards upward.
+   - The destination column's task count to increase, expanding its height and pushing existing cards downward by ~80px.
+   - Immediate shifting of all DOM bounding boxes under the cursor.
+2. **Dynamic 4px Padding/Margin Shift in `KanbanColumn.jsx`:**
+   When `isOver` toggled, the tasks container applied `bg-[var(--color-primary-muted)]/10 p-1 -m-1`. The `p-1 -m-1` shift added 4px of padding and -4px of margin, physically jarring all child cards in that column on every hover state change.
+3. **Collision Detection Instability (`closestCorners`):**
+   `closestCorners` measured distances between the 4 corners of the 240px-wide dragged card and all droppables. When hovering near column boundaries, a slight expansion in one column shifted its coordinates, causing the closest corner to flip to the neighboring column, creating an oscillating feedback loop.
+4. **Column Target Flickering on Task Card Hover:**
+   `useDroppable` on the column droppable (`column-${key}`) became `false` when hovering directly over a `<SortableTaskCard>` inside that column. This caused the column's highlight ring and padding to toggle on and off rapidly as the cursor crossed task card boundaries.
+5. **Shrunken Droppable Zone in Empty Columns:**
+   The empty column container lacked `flex-1`, causing the droppable target to shrink to ~45px ("No tasks" box), leaving the lower area of the column completely non-droppable.
+
+---
+
+### 2. Architecture & Safeguards Implemented
+
+#### A. Decoupled Visual Drag-Over State from Task Mutations
+- **Zero `tasks` Mutation During Drag:** `handleDragOver` no longer modifies `tasks`. The board tasks state remains completely frozen while dragging.
+- **Lightweight Target Tracking:** Introduced `overColumnKey` state and `overColumnKeyRef` in [`BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx). It only updates when the cursor moves to a different column. Hovering over cards within the same column triggers 0 state updates and 0 re-renders.
+- **Single Drop Commit:** Task movement and order re-indexing are calculated and committed exactly once in `handleDragEnd`.
+
+#### B. Stable Collision Detection (`kanbanCollisionDetection`)
+- Implemented a custom three-tier collision detection strategy:
+  1. `pointerWithin`: Checks whether the pointer coordinates `(x, y)` reside directly inside a droppable (task card or column). Eliminates corner-distance ambiguity across column boundaries.
+  2. `rectIntersection`: Secondary check when pointer is in the gutter between columns.
+  3. `closestCorners`: Fallback distance-based resolution.
+
+#### C. Layout-Shift Elimination in `KanbanColumn.jsx`
+- Removed `p-1 -m-1` from the tasks container. Applied background tint with static padding/margins.
+- Added `isDropTarget` prop (`overColumnKey === column.key && activeTask.columnKey !== column.key`) to maintain stable, non-flickering green ring highlight across the entire column body, regardless of whether hovering over cards or empty space.
+- Added `min-h-[120px] flex-1` to the droppable container and `flex-1 min-h-[90px] flex flex-col items-center justify-center` to the empty column container, ensuring empty columns provide a large, prominent drop target.
+- Changed card `isDragging` styling in [`TaskCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/tasks/TaskCard.jsx) from `border-2` to `border` with `border-dashed` to prevent 1px border-width box-sizing jumps.
+
+#### D. Precise Drop Calculation (`calculateTaskDropPosition`)
+- Extracted [`calculateTaskDropPosition`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/taskReordering.js) to deterministically compute 0-based insertion order based on whether the drop occurred in the top or bottom half of the target card.
+
+---
+
+### 3. Files Modified
+- [`frontend/src/pages/BoardPage.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/pages/BoardPage.jsx): Implemented `kanbanCollisionDetection`, stable `handleDragOver` without `setTasks`, single-drop commit in `handleDragEnd`.
+- [`frontend/src/components/boards/KanbanColumn.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/boards/KanbanColumn.jsx): Removed `p-1 -m-1`, added `isDropTarget` support, added `min-h-[120px] flex-1`.
+- [`frontend/src/components/tasks/TaskCard.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/tasks/TaskCard.jsx): Prevented border-width jump on `isDragging`.
+- [`frontend/src/utils/taskReordering.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/taskReordering.js): Added pure utility `calculateTaskDropPosition`.
+- [`frontend/src/utils/taskReordering.test.js`](file:///e:/GitHub-Repo/DevFlow/frontend/src/utils/taskReordering.test.js): Added 6 unit tests for drop position calculation and drag stability.
+- [`frontend/src/components/layout/Navbar.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/layout/Navbar.jsx) & [`frontend/src/components/profile/ProfileActions.jsx`](file:///e:/GitHub-Repo/DevFlow/frontend/src/components/profile/ProfileActions.jsx): Fixed unused variable lint warnings.
+
+---
+
+### 4. Verification Results
+
+#### Automated Tests:
+- **Command:** `npm.cmd test --prefix frontend`
+- **Result:** **136 of 136 tests passed (0 failures, 0 skipped)** across 26 suites:
+  - `taskReordering.test.js`: 27 passed (12 drag safeguards + 6 drop position tests)
+  - `columnSorting.test.js`: 13 passed
+  - `board.api.test.js`: 8 passed
+  - `task.api.test.js`: 18 passed
+  - `taskGrouping.test.js`: 6 passed
+  - `auth.session.test.js`: 14 passed
+  - `profileData.test.js`: 8 passed
+
+#### ESLint Check:
+- **Command:** `npm.cmd run lint --prefix frontend`
+- **Result:** **0 errors, 0 warnings** across the entire codebase.
+
+#### Production Build:
+- **Command:** `npm.cmd run build --prefix frontend`
+- **Result:** Built successfully in 4.18s with **0 compilation errors**:
+  - `dist/index.html`: 0.45 kB (gzip: 0.29 kB)
+  - `dist/assets/index-xi326mf1.css`: 53.62 kB (gzip: 9.20 kB)
+  - `dist/assets/index-DffJNBtg.js`: 477.82 kB (gzip: 143.03 kB)
+
+#### Backend Integrity:
+- **Result:** **0 backend files modified.** Backend remains completely untouched.
+
+---
+
+### 5. Honest Testing & Browser Disclosure
+- **Automated Validation:** Pure reordering, position derivation, snapshot rollback, contiguous order indexing, and droppable container resolution were thoroughly verified via automated Node tests.
+- **Headless Environment Note:** Direct physical touch screen dragging and real-time GPU composition were derived analytically through layout constraints, pure CSS transform separation, and pointer-within collision math.
+- **Remaining Limitations:** On mobile viewports (<640px), horizontal touch-panning across 5 columns requires dragging the canvas directly, while vertical card dragging is activated with a 5px movement threshold via `PointerSensor`.

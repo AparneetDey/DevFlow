@@ -9,7 +9,7 @@ import { LogoutConfirmationModal } from '../auth/LogoutConfirmationModal.jsx';
  * user identity presentation, and confirmed logout initiation.
  */
 export function Navbar() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);

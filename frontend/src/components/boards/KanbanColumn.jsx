@@ -31,6 +31,7 @@ export function KanbanColumn({
   tasks,
   children,
   isLoading = false,
+  isDropTarget = false,
   onAddTask,
   onRenameColumn,
   onTaskClick,
@@ -125,6 +126,8 @@ export function KanbanColumn({
     },
   });
 
+  const isTarget = isOver || isDropTarget;
+
   const hasTasksArray = Array.isArray(tasks) && tasks.length > 0;
   const hasChildren = Boolean(children);
 
@@ -141,7 +144,7 @@ export function KanbanColumn({
     <section
       aria-labelledby={`column-header-${columnKey}`}
       className={`w-[255px] sm:w-[278px] shrink-0 bg-[var(--color-surface)] border ${
-        isOver
+        isTarget
           ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/40 bg-[var(--color-primary-muted)]/15'
           : 'border-[var(--color-border)]'
       } rounded-xl p-2.5 sm:p-3 shadow-xs flex flex-col max-h-[calc(100vh-13.5rem)] transition-colors ${className}`.trim()}
@@ -193,8 +196,8 @@ export function KanbanColumn({
       {/* 2. Tasks Container: Internally scrollable with themed scrollbar */}
       <div
         ref={setNodeRef}
-        className={`overflow-y-auto min-h-0 flex flex-col gap-2 pr-1 rounded-lg touch-pan-y column-scrollbar ${
-          isOver && hasTasksArray ? 'bg-[var(--color-primary-muted)]/10 p-1 -m-1' : ''
+        className={`overflow-y-auto min-h-[120px] flex-1 flex flex-col gap-2 pr-1 rounded-lg touch-pan-y column-scrollbar ${
+          isTarget && hasTasksArray ? 'bg-[var(--color-primary-muted)]/10' : ''
         }`}
       >
         {isLoading ? (
@@ -223,14 +226,14 @@ export function KanbanColumn({
           <div
             role="region"
             aria-label={`Empty ${columnTitle} column`}
-            className={`rounded-lg border border-dashed ${
-              isOver
+            className={`rounded-lg border border-dashed flex-1 min-h-[90px] flex flex-col items-center justify-center ${
+              isTarget
                 ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]/20 ring-2 ring-[var(--color-primary)]/40'
                 : 'border-[var(--color-border)]/60 bg-[var(--color-bg-secondary)]/40'
             } px-2.5 py-2.5 text-center select-none transition-all`}
           >
-            <p className={`text-xs font-medium ${isOver ? 'text-[var(--color-primary-hover)] font-semibold' : 'text-[var(--color-text-muted)]'}`}>
-              {isOver ? 'Drop task here' : 'No tasks'}
+            <p className={`text-xs font-medium ${isTarget ? 'text-[var(--color-primary-hover)] font-semibold' : 'text-[var(--color-text-muted)]'}`}>
+              {isTarget ? 'Drop task here' : 'No tasks'}
             </p>
           </div>
         )}

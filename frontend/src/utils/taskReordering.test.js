@@ -5,6 +5,7 @@ import {
   reorderSameColumn,
   moveTaskCrossColumn,
   findColumnKey,
+  calculateTaskDropPosition,
 } from './taskReordering.js';
 import { getTasksForColumn } from './taskGrouping.js';
 
@@ -386,3 +387,54 @@ describe('Drag-and-Drop Safeguards & Lifecycle Verification (Critical Depth Prev
     assert.equal(tasks[0].order, 0);
   });
 });
+
+describe('calculateTaskDropPosition & Drag Stability (Task 10C)', () => {
+  const destTasks = [
+    { _id: 'card-1', title: 'Card 1', columnKey: 'in-progress', order: 0 },
+    { _id: 'card-2', title: 'Card 2', columnKey: 'in-progress', order: 1 },
+    { _id: 'card-3', title: 'Card 3', columnKey: 'in-progress', order: 2 },
+  ];
+
+  test('returns 0 when destination column has no tasks', () => {
+    assert.equal(calculateTaskDropPosition([], 'column-empty'), 0);
+    assert.equal(calculateTaskDropPosition(null, 'column-empty'), 0);
+  });
+
+  test('returns destTasks.length when dropped on column container or unmatched ID', () => {
+    assert.equal(calculateTaskDropPosition(destTasks, 'column-in-progress'), 3);
+    assert.equal(calculateTaskDropPosition(destTasks, 'non-existent-task'), 3);
+  });
+
+  test('places before card when dropped in top half of card', () => {
+    // Card 2: top = 100, height = 80 -> center = 140
+    // Active card: top = 110 (above center 140) -> index = 1
+    const overRect = { top: 100, height: 80 };
+    const activeRect = { top: 110 };
+    const pos = calculateTaskDropPosition(destTasks, 'card-2', overRect, activeRect);
+    assert.equal(pos, 1);
+  });
+
+  test('places after card when dropped in bottom half of card', () => {
+    // Card 2: top = 100, height = 80 -> center = 140
+    // Active card: top = 150 (below center 140) -> index = 2
+    const overRect = { top: 100, height: 80 };
+    const activeRect = { top: 150 };
+    const pos = calculateTaskDropPosition(destTasks, 'card-2', overRect, activeRect);
+    assert.equal(pos, 2);
+  });
+
+  test('clamps out-of-range positions to valid [0, destTasks.length]', () => {
+    // Card 3: index 2 + 1 = 3 -> valid insertion at end of list
+    const overRect = { top: 200, height: 60 };
+    const activeRect = { top: 250 };
+    const pos = calculateTaskDropPosition(destTasks, 'card-3', overRect, activeRect);
+    assert.equal(pos, 3);
+  });
+
+  test('stable drag-over: inspecting position does not mutate destination tasks array', () => {
+    const tasksCopy = [...destTasks];
+    calculateTaskDropPosition(destTasks, 'card-2', { top: 100, height: 80 }, { top: 150 });
+    assert.deepEqual(destTasks, tasksCopy);
+  });
+});
+

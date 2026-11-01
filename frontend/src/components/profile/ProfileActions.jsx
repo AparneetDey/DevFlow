@@ -1,4 +1,4 @@
-import { ShieldCheck, LogOut, AlertCircle } from 'lucide-react';
+import { LogOut, AlertCircle } from 'lucide-react';
 import { Button } from '../common/Button.jsx';
 
 /**

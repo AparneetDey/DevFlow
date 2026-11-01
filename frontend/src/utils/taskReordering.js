@@ -170,3 +170,39 @@ export function findColumnKey(id, allTasks = [], allColumns = []) {
 
   return null;
 }
+
+/**
+ * Calculates the 0-based insertion index for a dropped task within destination column tasks.
+ *
+ * @param {Array<Object>} destTasks - Tasks currently in the destination column, sorted by order
+ * @param {string} overId - ID of droppable dropped over (task ID or column container ID)
+ * @param {Object} [overRect] - Optional bounding rect of the over target
+ * @param {Object} [activeRect] - Optional translated bounding rect of the dragged card
+ * @returns {number} 0-based insertion index clamped between 0 and destTasks.length
+ */
+export function calculateTaskDropPosition(destTasks, overId, overRect = null, activeRect = null) {
+  if (!Array.isArray(destTasks) || destTasks.length === 0) {
+    return 0;
+  }
+
+  const overIndex = destTasks.findIndex((t) => (t._id || t.id) === overId);
+
+  // If dropped on column container or unmatched target, place at the bottom of the list
+  if (overIndex === -1) {
+    return destTasks.length;
+  }
+
+  // If bounding rects are available, determine if dropped in top half or bottom half of the target card
+  if (
+    overRect &&
+    activeRect &&
+    typeof overRect.top === 'number' &&
+    typeof activeRect.top === 'number'
+  ) {
+    const isBelowOver = activeRect.top > overRect.top + (overRect.height || 0) / 2;
+    return Math.min(Math.max(0, overIndex + (isBelowOver ? 1 : 0)), destTasks.length);
+  }
+
+  return Math.min(Math.max(0, overIndex), destTasks.length);
+}
+
