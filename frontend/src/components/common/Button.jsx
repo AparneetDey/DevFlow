@@ -8,7 +8,7 @@ const variantClasses = {
   outline:
     'border border-[var(--color-border)] hover:bg-[var(--color-surface)] text-[var(--color-text)] focus-visible:ring-[var(--color-focus)]',
   danger:
-    'bg-[var(--color-danger)] hover:bg-[var(--color-accent-hover)] text-white shadow-xs focus-visible:ring-[var(--color-danger)]',
+    'bg-[var(--color-danger)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text)] shadow-xs focus-visible:ring-[var(--color-danger)]',
 };
 
 const sizeClasses = {
