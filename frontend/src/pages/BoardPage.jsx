@@ -683,17 +683,17 @@ export function BoardPage() {
               <div className="w-4 h-4 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
               <div className="h-4 w-28 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
             </div>
-            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 min-w-0">
-              {[1, 2, 3].map((colIndex) => (
+            <div className="flex items-start gap-3 sm:gap-3.5 overflow-x-auto pb-4 pt-1 min-w-0 board-canvas-scrollbar">
+              {[1, 2, 3, 4, 5].map((colIndex) => (
                 <div
                   key={colIndex}
-                  className="w-72 sm:w-80 shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-3 sm:p-3.5 min-h-[440px] animate-pulse flex flex-col"
+                  className="w-[235px] sm:w-[240px] shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-2.5 sm:p-3 h-48 animate-pulse flex flex-col"
                 >
-                  <div className="flex items-center gap-2 px-1.5 py-1 mb-2.5 pb-2.5 border-b border-[var(--color-border)]">
+                  <div className="flex items-center gap-2 px-1 py-0.5 mb-2 pb-2 border-b border-[var(--color-border)]">
                     <div className="w-2 h-2 rounded-full bg-[var(--color-border)] shrink-0" />
-                    <div className="h-4 w-24 bg-[var(--color-surface-elevated)] rounded" />
+                    <div className="h-4 w-20 bg-[var(--color-surface-elevated)] rounded" />
                   </div>
-                  <div className="flex-1 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-6 flex flex-col items-center justify-center" />
+                  <div className="flex-1 rounded-lg border border-dashed border-[var(--color-border)]/60 bg-[var(--color-bg-secondary)]/40 p-3 flex flex-col items-center justify-center" />
                 </div>
               ))}
             </div>
@@ -755,7 +755,7 @@ export function BoardPage() {
         </div>
       ) : board ? (
         /* 4. Populated Board Detail */
-        <div className="space-y-4 sm:space-y-5">
+        <div className="space-y-3 sm:space-y-4">
           {/* Sleek Board Toolbar */}
           <div className="bg-[var(--color-surface)] rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 border border-[var(--color-border)] shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3 min-w-0">
             {/* Left: Back Link & Title & Metadata */}
@@ -905,7 +905,7 @@ export function BoardPage() {
                 onDragEnd={handleDragEnd}
                 onDragCancel={handleDragCancel}
               >
-                <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y">
+                <div className="flex items-start gap-3 sm:gap-3.5 overflow-x-auto pb-4 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y board-canvas-scrollbar">
                   {columns.map((column, index) => (
                     <KanbanColumn
                       key={column.key || column.name || column.title || `column-${index}`}
@@ -926,7 +926,7 @@ export function BoardPage() {
 
                 <DragOverlay dropAnimation={null}>
                   {activeTask ? (
-                    <div className="w-72 sm:w-80 pointer-events-none">
+                    <div className="w-[235px] sm:w-[240px] pointer-events-none">
                       <TaskCard task={activeTask} isOverlay />
                     </div>
                   ) : null}

@@ -139,15 +139,15 @@ export function KanbanColumn({
   return (
     <section
       aria-labelledby={`column-header-${columnKey}`}
-      className={`w-72 sm:w-80 shrink-0 bg-[var(--color-surface)] border ${
+      className={`w-[235px] sm:w-[276px] shrink-0 bg-[var(--color-surface)] border ${
         isOver
           ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/40 bg-[var(--color-primary-muted)]/15'
           : 'border-[var(--color-border)]'
-      } rounded-2xl p-3 sm:p-3.5 shadow-xs flex flex-col max-h-[calc(100vh-13rem)] min-h-[440px] transition-colors ${className}`.trim()}
+      } rounded-xl p-2.5 sm:p-3 shadow-xs flex flex-col max-h-[calc(100vh-13.5rem)] transition-colors ${className}`.trim()}
     >
-      {/* 1. Pinned Column Header */}
-      <div className="shrink-0 flex items-center justify-between px-1.5 py-1 mb-2.5 pb-2.5 border-b border-[var(--color-border)] min-w-0">
-        <div className="flex-1 min-w-0 mr-2">
+      {/* 1. Column Header (shrink-0) */}
+      <div className="shrink-0 flex items-center justify-between px-1 py-0.5 mb-2 pb-2 border-b border-[var(--color-border)] min-w-0">
+        <div className="flex-1 min-w-0 mr-1.5">
           {isEditingTitle ? (
             <input
               ref={inputRef}
@@ -189,17 +189,17 @@ export function KanbanColumn({
         </div>
       </div>
 
-      {/* 2. Tasks Container: Internally Scrollable with Native Scrollbar */}
+      {/* 2. Tasks Container: Internally scrollable with themed scrollbar */}
       <div
         ref={setNodeRef}
-        className={`flex-1 overflow-y-auto min-h-0 flex flex-col gap-2.5 pr-0.5 rounded-xl touch-pan-y ${
+        className={`overflow-y-auto min-h-0 flex flex-col gap-2 pr-1 rounded-lg touch-pan-y column-scrollbar ${
           isOver && hasTasksArray ? 'bg-[var(--color-primary-muted)]/10 p-1 -m-1' : ''
         }`}
       >
         {isLoading ? (
-          <div className="space-y-2.5" aria-busy="true">
-            <div className="h-20 bg-[var(--color-surface-elevated)] rounded-xl border border-[var(--color-border)] animate-pulse" />
-            <div className="h-20 bg-[var(--color-surface-elevated)] rounded-xl border border-[var(--color-border)] animate-pulse" />
+          <div className="space-y-2" aria-busy="true">
+            <div className="h-16 bg-[var(--color-surface-elevated)] rounded-lg border border-[var(--color-border)] animate-pulse" />
+            <div className="h-16 bg-[var(--color-surface-elevated)] rounded-lg border border-[var(--color-border)] animate-pulse" />
           </div>
         ) : hasChildren ? (
           children
@@ -222,26 +222,26 @@ export function KanbanColumn({
           <div
             role="region"
             aria-label={`Empty ${columnTitle} column`}
-            className={`flex-1 rounded-xl border border-dashed ${
+            className={`rounded-lg border border-dashed ${
               isOver
                 ? 'border-[var(--color-primary)] bg-[var(--color-primary-muted)]/20 ring-2 ring-[var(--color-primary)]/40'
-                : 'border-[var(--color-border)] bg-[var(--color-bg-secondary)]'
-            } p-6 flex flex-col items-center justify-center text-center select-none space-y-2 transition-all`}
+                : 'border-[var(--color-border)]/60 bg-[var(--color-bg-secondary)]/40'
+            } px-2.5 py-2.5 text-center select-none transition-all`}
           >
             <p className={`text-xs font-medium ${isOver ? 'text-[var(--color-primary-hover)] font-semibold' : 'text-[var(--color-text-muted)]'}`}>
-              {isOver ? 'Drop task here' : 'No tasks yet'}
+              {isOver ? 'Drop task here' : 'No tasks'}
             </p>
           </div>
         )}
       </div>
 
-      {/* 3. Pinned Column Footer: "+ Add a task" action */}
+      {/* 3. Add Task Action (In normal document flow after task list, not a pinned footer) */}
       {onAddTask && (
-        <div className="shrink-0 pt-2 border-t border-[var(--color-border)]/50 mt-auto">
+        <div className="shrink-0 pt-1.5 mt-1">
           <button
             type="button"
             onClick={() => onAddTask(column?.key || 'todo')}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)] rounded-xl transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
+            className="w-full flex items-center justify-start gap-1.5 px-2 py-1.5 text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)] rounded-lg transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
             aria-label={`Add task to ${columnTitle} column`}
           >
             <Plus className="w-3.5 h-3.5" />

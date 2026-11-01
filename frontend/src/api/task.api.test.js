@@ -881,7 +881,7 @@ describe('Task Completion Toggle and Move API (Task 7.2A)', () => {
 
   test('accessible labels and completion state indicators for task cards and modal use isCompleted (Task 10)', () => {
     const getAriaLabel = (task) =>
-      Boolean(task.isCompleted) ? 'Mark task as incomplete' : 'Mark task as complete';
+      task.isCompleted ? 'Mark task as incomplete' : 'Mark task as complete';
 
     assert.equal(
       getAriaLabel({ _id: 't1', columnKey: 'todo', isCompleted: false }),

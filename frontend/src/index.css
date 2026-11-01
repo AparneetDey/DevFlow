@@ -71,3 +71,105 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* --------------------------------------------------------------------------
+   Themed Scrollbars (Task 10A)
+   Matches the dark-green DevFlow palette with subtle, rounded thumbs.
+   -------------------------------------------------------------------------- */
+
+/* Universal fallback for standard elements */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-primary-muted);
+}
+
+/* Page vertical scrollbar: dark track blending with page background */
+.page-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) var(--color-bg);
+}
+
+.page-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.page-scrollbar::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+.page-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 9999px;
+  border: 2px solid var(--color-bg);
+}
+
+.page-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-primary-muted);
+}
+
+/* Column scrollbar: thin, unobtrusive, integrated into column surface */
+.column-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.column-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.column-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.column-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 9999px;
+}
+
+.column-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-primary-muted);
+}
+
+/* Board canvas horizontal scrollbar */
+.board-canvas-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.board-canvas-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+
+.board-canvas-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.board-canvas-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 9999px;
+}
+
+.board-canvas-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-primary-muted);
+}
+

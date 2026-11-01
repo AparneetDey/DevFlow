@@ -54,8 +54,8 @@ export function Navbar() {
 
   return (
     <>
-      <header className="bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <header className="bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] shrink-0 z-40">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Brand */}
           <Link
             to="/dashboard"
