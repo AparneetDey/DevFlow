@@ -43,18 +43,27 @@ export function sortBoardColumns(columns) {
   for (let i = 0; i < columns.length; i++) {
     const col = columns[i];
 
-    // Preserve existing rule: each entry must be an object (not null/array) with a string title
+    // Preserve rule: each entry must be an object (not null/array) with a string title or name
     if (!col || typeof col !== 'object' || Array.isArray(col)) {
       continue;
     }
-    if (typeof col.title !== 'string') {
+    const hasValidTitle = typeof col.title === 'string';
+    const hasValidName = typeof col.name === 'string';
+    if (!hasValidTitle && !hasValidName) {
       continue;
     }
 
-    if (isValidOrder(col.order)) {
-      validOrderItems.push({ col, index: i });
+    const displayName = hasValidName ? col.name : col.title;
+    const normalizedCol = {
+      ...col,
+      name: hasValidName ? col.name : displayName,
+      title: hasValidTitle ? col.title : displayName,
+    };
+
+    if (isValidOrder(normalizedCol.order)) {
+      validOrderItems.push({ col: normalizedCol, index: i });
     } else {
-      invalidOrderItems.push(col);
+      invalidOrderItems.push(normalizedCol);
     }
   }
 

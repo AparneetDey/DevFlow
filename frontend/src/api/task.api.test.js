@@ -772,53 +772,57 @@ describe('Task Completion Toggle and Move API (Task 7.2A)', () => {
     }
   });
 
-  test('completion toggle determines target column: todo -> done, in-progress -> done, done -> todo', () => {
-    const getTargetColumn = (task) => (task?.columnKey === 'done' ? 'todo' : 'done');
+  test('completion toggle toggles boolean isCompleted independently without altering columnKey or order (Task 10)', () => {
+    const toggleTaskCompletion = (task) => ({
+      ...task,
+      isCompleted: !task.isCompleted,
+    });
 
-    assert.equal(getTargetColumn({ columnKey: 'todo' }), 'done');
-    assert.equal(getTargetColumn({ columnKey: 'in-progress' }), 'done');
-    assert.equal(getTargetColumn({ columnKey: 'done' }), 'todo');
+    const initialTask = { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0, isCompleted: false };
+    const completedTask = toggleTaskCompletion(initialTask);
+
+    assert.equal(completedTask.isCompleted, true);
+    assert.equal(completedTask.columnKey, 'todo', 'Column must not change on completion');
+    assert.equal(completedTask.order, 0, 'Order must not change on completion');
+
+    const incompletedTask = toggleTaskCompletion(completedTask);
+    assert.equal(incompletedTask.isCompleted, false);
+    assert.equal(incompletedTask.columnKey, 'todo');
+    assert.equal(incompletedTask.order, 0);
   });
 
-  test('toggling completion moves task reactively between Kanban column groups', () => {
+  test('completed and incomplete tasks coexist in any column without automatic column movement (Task 10)', () => {
     const tasks = [
-      { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 1 },
-      { _id: 't2', title: 'Task 2', columnKey: 'in-progress', order: 0 },
-      { _id: 't3', title: 'Task 3', columnKey: 'done', order: 0 },
+      { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0, isCompleted: false },
+      { _id: 't2', title: 'Task 2', columnKey: 'in-progress', order: 0, isCompleted: true },
+      { _id: 't3', title: 'Task 3', columnKey: 'done', order: 0, isCompleted: false },
     ];
 
-    // Toggle t1 to done
+    // Toggle t1 to complete (stays in 'todo')
     const updatedTasksAfterComplete = tasks.map((t) =>
-      t._id === 't1' ? { ...t, columnKey: 'done' } : t
+      t._id === 't1' ? { ...t, isCompleted: true } : t
     );
 
-    const todoBefore = getTasksForColumn(tasks, 'todo');
-    const doneBefore = getTasksForColumn(tasks, 'done');
-    assert.equal(todoBefore.length, 1);
-    assert.equal(doneBefore.length, 1);
+    const todoTasks = getTasksForColumn(updatedTasksAfterComplete, 'todo');
+    const inProgressTasks = getTasksForColumn(updatedTasksAfterComplete, 'in-progress');
+    const doneTasks = getTasksForColumn(updatedTasksAfterComplete, 'done');
 
-    const todoAfter = getTasksForColumn(updatedTasksAfterComplete, 'todo');
-    const doneAfter = getTasksForColumn(updatedTasksAfterComplete, 'done');
-    assert.equal(todoAfter.length, 0);
-    assert.equal(doneAfter.length, 2);
-    assert.deepEqual(doneAfter.map((t) => t._id), ['t3', 't1']);
+    assert.equal(todoTasks.length, 1);
+    assert.equal(todoTasks[0]._id, 't1');
+    assert.equal(todoTasks[0].isCompleted, true);
 
-    // Toggle t3 from done to todo
-    const updatedTasksAfterUncomplete = updatedTasksAfterComplete.map((t) =>
-      t._id === 't3' ? { ...t, columnKey: 'todo' } : t
-    );
+    assert.equal(inProgressTasks.length, 1);
+    assert.equal(inProgressTasks[0]._id, 't2');
+    assert.equal(inProgressTasks[0].isCompleted, true);
 
-    const todoFinal = getTasksForColumn(updatedTasksAfterUncomplete, 'todo');
-    const doneFinal = getTasksForColumn(updatedTasksAfterUncomplete, 'done');
-    assert.equal(todoFinal.length, 1);
-    assert.equal(todoFinal[0]._id, 't3');
-    assert.equal(doneFinal.length, 1);
-    assert.equal(doneFinal[0]._id, 't1');
+    assert.equal(doneTasks.length, 1);
+    assert.equal(doneTasks[0]._id, 't3');
+    assert.equal(doneTasks[0].isCompleted, false);
   });
 
-  test('optimistic update failure rolls back tasks and selectedTask to prior state', async () => {
+  test('optimistic update failure rolls back tasks and selectedTask to prior state (Task 10)', async () => {
     const originalTasks = [
-      { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0 },
+      { _id: 't1', title: 'Task 1', columnKey: 'todo', order: 0, isCompleted: false },
     ];
     let tasksState = [...originalTasks];
     let selectedTaskState = { ...originalTasks[0] };
@@ -828,20 +832,21 @@ describe('Task Completion Toggle and Move API (Task 7.2A)', () => {
     const taskToToggle = tasksState[0];
     const prevTasks = tasksState;
     const prevSelectedTask = selectedTaskState;
-    const targetColumnKey = taskToToggle.columnKey === 'done' ? 'todo' : 'done';
+    const nextCompleted = !taskToToggle.isCompleted;
 
     // Optimistic update
-    const optimisticTask = { ...taskToToggle, columnKey: targetColumnKey };
+    const optimisticTask = { ...taskToToggle, isCompleted: nextCompleted };
     tasksState = tasksState.map((t) => (t._id === taskToToggle._id ? optimisticTask : t));
     selectedTaskState = optimisticTask;
 
-    assert.equal(tasksState[0].columnKey, 'done');
-    assert.equal(selectedTaskState.columnKey, 'done');
+    assert.equal(tasksState[0].isCompleted, true);
+    assert.equal(tasksState[0].columnKey, 'todo');
+    assert.equal(selectedTaskState.isCompleted, true);
     assert.equal(taskActionError, null);
 
     // Simulate error occurred during API call
     try {
-      throw new Error('Network timeout: Failed to move task');
+      throw new Error('Network timeout: Failed to update task completion');
     } catch (err) {
       // Rollback
       tasksState = prevTasks;
@@ -850,9 +855,10 @@ describe('Task Completion Toggle and Move API (Task 7.2A)', () => {
     }
 
     // Verify rollback
+    assert.equal(tasksState[0].isCompleted, false);
     assert.equal(tasksState[0].columnKey, 'todo');
-    assert.equal(selectedTaskState.columnKey, 'todo');
-    assert.equal(taskActionError, 'Network timeout: Failed to move task');
+    assert.equal(selectedTaskState.isCompleted, false);
+    assert.equal(taskActionError, 'Network timeout: Failed to update task completion');
   });
 
   test('duplicate in-flight toggle prevention ignores requests when taskId is in togglingTaskIds set', () => {
@@ -866,27 +872,31 @@ describe('Task Completion Toggle and Move API (Task 7.2A)', () => {
       apiCallCount += 1;
     };
 
-    attemptToggle({ _id: 'task-in-flight-1', columnKey: 'todo' });
+    attemptToggle({ _id: 'task-in-flight-1', columnKey: 'todo', isCompleted: false });
     assert.equal(apiCallCount, 0);
 
-    attemptToggle({ _id: 'task-idle-2', columnKey: 'todo' });
+    attemptToggle({ _id: 'task-idle-2', columnKey: 'todo', isCompleted: false });
     assert.equal(apiCallCount, 1);
   });
 
-  test('accessible labels and completion state indicators for task cards and modal', () => {
+  test('accessible labels and completion state indicators for task cards and modal use isCompleted (Task 10)', () => {
     const getAriaLabel = (task) =>
-      task.columnKey === 'done' ? 'Mark task as incomplete' : 'Mark task as complete';
+      task.isCompleted ? 'Mark task as incomplete' : 'Mark task as complete';
 
     assert.equal(
-      getAriaLabel({ _id: 't1', columnKey: 'todo' }),
+      getAriaLabel({ _id: 't1', columnKey: 'todo', isCompleted: false }),
       'Mark task as complete'
     );
     assert.equal(
-      getAriaLabel({ _id: 't2', columnKey: 'in-progress' }),
+      getAriaLabel({ _id: 't2', columnKey: 'in-progress', isCompleted: true }),
+      'Mark task as incomplete'
+    );
+    assert.equal(
+      getAriaLabel({ _id: 't3', columnKey: 'done', isCompleted: false }),
       'Mark task as complete'
     );
     assert.equal(
-      getAriaLabel({ _id: 't3', columnKey: 'done' }),
+      getAriaLabel({ _id: 't4', columnKey: 'review', isCompleted: true }),
       'Mark task as incomplete'
     );
   });
@@ -1432,46 +1442,51 @@ describe('Task 7.6: Task Workflow Verification & Integration', () => {
     }
   });
 
-  test('4. Task Completion Toggle: moves between columns, sets styling, and handles revert on failure', async () => {
+  test('4. Task Completion Toggle: toggles isCompleted independently, preserves column & order, handles revert on failure', async () => {
     let tasks = [
-      { _id: 't-toggle', title: 'Task to toggle', columnKey: 'todo', order: 0 },
-      { _id: 't-other', title: 'Other task', columnKey: 'todo', order: 1 },
+      { _id: 't-toggle', title: 'Task to toggle', columnKey: 'todo', order: 0, isCompleted: false },
+      { _id: 't-other', title: 'Other task', columnKey: 'todo', order: 1, isCompleted: false },
     ];
     let selectedTask = { ...tasks[0] };
 
     // Toggle to complete
-    const toggleToComplete = (task) => {
-      const targetColumn = task.columnKey === 'done' ? 'todo' : 'done';
-      const optimistic = { ...task, columnKey: targetColumn };
+    const toggleCompletion = (task) => {
+      const nextCompleted = !task.isCompleted;
+      const optimistic = { ...task, isCompleted: nextCompleted };
       tasks = tasks.map((t) => (t._id === task._id ? optimistic : t));
       if (selectedTask?._id === task._id) selectedTask = optimistic;
-      return targetColumn;
+      return nextCompleted;
     };
 
-    const targetCol1 = toggleToComplete(tasks[0]);
-    assert.equal(targetCol1, 'done');
-    assert.equal(tasks[0].columnKey, 'done');
-    assert.equal(selectedTask.columnKey, 'done');
+    const isDone1 = toggleCompletion(tasks[0]);
+    assert.equal(isDone1, true);
+    assert.equal(tasks[0].isCompleted, true);
+    assert.equal(tasks[0].columnKey, 'todo', 'Task must stay in original column');
+    assert.equal(tasks[0].order, 0, 'Task must maintain its order');
+    assert.equal(selectedTask.isCompleted, true);
 
     // Toggle back to incomplete
-    const targetCol2 = toggleToComplete(tasks[0]);
-    assert.equal(targetCol2, 'todo');
+    const isDone2 = toggleCompletion(tasks[0]);
+    assert.equal(isDone2, false);
+    assert.equal(tasks[0].isCompleted, false);
     assert.equal(tasks[0].columnKey, 'todo');
-    assert.equal(selectedTask.columnKey, 'todo');
+    assert.equal(tasks[0].order, 0);
+    assert.equal(selectedTask.isCompleted, false);
 
     // Failure rollback
     const snapshotTasks = [...tasks];
     const snapshotSelected = { ...selectedTask };
 
     // Optimistic change
-    toggleToComplete(tasks[0]);
-    assert.equal(tasks[0].columnKey, 'done');
+    toggleCompletion(tasks[0]);
+    assert.equal(tasks[0].isCompleted, true);
 
     // Simulate error rollback
     tasks = snapshotTasks;
     selectedTask = snapshotSelected;
+    assert.equal(tasks[0].isCompleted, false);
     assert.equal(tasks[0].columnKey, 'todo');
-    assert.equal(selectedTask.columnKey, 'todo');
+    assert.equal(selectedTask.isCompleted, false);
   });
 
   test('5. Task Deletion: confirms, clears selected state, updates counts, and preserves on cancel', async () => {

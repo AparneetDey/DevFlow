@@ -1,4 +1,4 @@
-import { Calendar, Pencil, Circle, CheckCircle2 } from 'lucide-react';
+import { Calendar, Pencil } from 'lucide-react';
 
 const PRIORITY_THEMES = {
   high: {
@@ -55,7 +55,7 @@ export function TaskCard({
   }
 
   const taskKey = task._id || task.id || 'task';
-  const isCompleted = task.columnKey === 'done';
+  const isCompleted = Boolean(task.isCompleted);
   const priorityTheme = task.priority ? PRIORITY_THEMES[task.priority.toLowerCase()] : null;
 
   const formattedDueDate = (() => {
@@ -120,7 +120,7 @@ export function TaskCard({
       }}
       className={`group relative p-2.5 select-none bg-[var(--color-surface-elevated)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] focus-visible:border-[var(--color-primary)] transition-all flex flex-col gap-2 min-w-0 cursor-grab active:cursor-grabbing text-[var(--color-text)] ${
         isDragging
-          ? 'opacity-30 border-2 border-dashed border-[var(--color-primary)] bg-[var(--color-primary-muted)]/20 shadow-none'
+          ? 'opacity-30 border-dashed border-[var(--color-primary)] bg-[var(--color-primary-muted)]/20 shadow-none'
           : ''
       } ${
         isOverlay
@@ -130,13 +130,13 @@ export function TaskCard({
       title="Click or double-click to view task details"
     >
       {/* Title, Completion Toggle & Edit Icon Row */}
-      <div className="flex items-start gap-2 min-w-0">
-        {/* Accessible Completion Button Wrapper with Hover Slide Animation */}
+      <div className="flex items-start min-w-0">
+        {/* Completion Control Slot (0 width at rest so title aligns with other elements; expands on hover/completed) */}
         <div
-          className={`shrink-0 flex items-center transition-all duration-200 ease-out ${
+          className={`shrink-0 flex items-center justify-start transition-all duration-200 ease-out overflow-hidden pt-0.5 ${
             isCompleted
-              ? 'w-5 opacity-100 mr-0.5'
-              : 'w-0 opacity-0 -translate-x-2 overflow-hidden pointer-events-none group-hover:w-5 group-hover:opacity-100 group-hover:translate-x-0 group-hover:mr-0.5 group-hover:pointer-events-auto group-focus-within:w-5 group-focus-within:opacity-100 group-focus-within:translate-x-0 group-focus-within:pointer-events-auto'
+              ? 'w-6 opacity-100 mr-0.5'
+              : 'w-0 opacity-0 pointer-events-none group-hover:w-6 group-hover:opacity-100 group-hover:mr-0.5 group-hover:pointer-events-auto group-focus-within:w-6 group-focus-within:opacity-100 group-focus-within:mr-0.5 group-focus-within:pointer-events-auto'
           }`}
         >
           <button
@@ -146,22 +146,53 @@ export function TaskCard({
             onMouseDown={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
             disabled={isToggling}
+            role="checkbox"
+            aria-checked={isCompleted}
             aria-label={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
             title={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
-            className="mt-0.5 p-0.5 rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer shrink-0 transition-colors disabled:opacity-50"
+            className="w-4.5 h-4.5 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer shrink-0 transition-transform duration-150 active:scale-95 disabled:opacity-50"
           >
-            {isCompleted ? (
-              <CheckCircle2 className="w-4 h-4 text-[var(--color-primary-hover)]" />
-            ) : (
-              <Circle className="w-4 h-4 hover:stroke-[var(--color-primary-hover)]" />
-            )}
+            <svg
+              viewBox="0 0 18 18"
+              className="w-4 h-4 overflow-visible"
+              aria-hidden="true"
+            >
+              {/* Circle boundary & fill */}
+              <circle
+                cx="9"
+                cy="9"
+                r="7.25"
+                strokeWidth="1.5"
+                className={`transition-colors duration-200 ease-out ${
+                  isCompleted
+                    ? 'fill-[var(--color-primary-hover)] stroke-[var(--color-primary-hover)]'
+                    : 'fill-transparent stroke-[var(--color-text-muted)] hover:stroke-[var(--color-primary-hover)]'
+                }`}
+              />
+
+              {/* Animated checkmark path with stroke-drawing effect */}
+              <path
+                d="M5.5 9.2L7.8 11.5L12.5 6.5"
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="task-checkmark-path"
+                style={{
+                  strokeDasharray: 14,
+                  strokeDashoffset: isCompleted ? 0 : 14,
+                  opacity: isCompleted ? 1 : 0,
+                }}
+              />
+            </svg>
           </button>
         </div>
 
-        {/* Task Title */}
+        {/* Task Title with Smooth Color Transition */}
         <h4
           id={`task-title-${taskKey}`}
-          className={`text-sm font-semibold tracking-tight break-words flex-1 transition-all duration-200 ease-out ${
+          className={`text-sm font-semibold tracking-tight break-words flex-1 transition-colors duration-200 ease-out ${
             isCompleted
               ? 'line-through text-[var(--color-text-muted)]'
               : 'text-[var(--color-text)]'
@@ -179,7 +210,7 @@ export function TaskCard({
           onDoubleClick={(e) => e.stopPropagation()}
           aria-label={`Edit task: ${task.title || 'Untitled Task'}`}
           title="Edit task in details modal"
-          className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer shrink-0"
+          className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer shrink-0 ml-2"
         >
           <Pencil className="w-3.5 h-3.5" />
         </button>

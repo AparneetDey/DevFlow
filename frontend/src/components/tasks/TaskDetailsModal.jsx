@@ -6,8 +6,6 @@ import {
   Layers,
   Flag,
   AlignLeft,
-  Circle,
-  CheckCircle2,
   AlertCircle,
   ActivitySquare,
   ChevronDown,
@@ -110,8 +108,8 @@ function formatReadableTimestamp(dateVal) {
 function resolveColumnTitle(columnKey, columns = []) {
   if (Array.isArray(columns) && columnKey) {
     const matched = columns.find((c) => c.key === columnKey);
-    if (matched?.title) {
-      return matched.title;
+    if (matched?.name || matched?.title) {
+      return matched.name || matched.title;
     }
   }
 
@@ -301,7 +299,7 @@ export function TaskDetailsModal({
     return null;
   }
 
-  const isCompleted = task.columnKey === 'done';
+  const isCompleted = Boolean(task.isCompleted);
   const priorityKey = (task.priority || 'medium').toLowerCase();
   const priorityInfo = PRIORITY_CONFIG[priorityKey] || PRIORITY_CONFIG.medium;
   const stageName = resolveColumnTitle(task.columnKey, columns);
@@ -619,7 +617,7 @@ export function TaskDetailsModal({
               >
                 <span className="flex items-center gap-2">
                   <Layers className={`w-3.5 h-3.5 ${isSelected ? 'text-[var(--color-primary-hover)]' : 'text-[var(--color-text-muted)]'}`} aria-hidden="true" />
-                  <span>{col.title}</span>
+                  <span>{col.name || col.title}</span>
                 </span>
                 {isSelected && <Check className="w-3.5 h-3.5 text-[var(--color-primary-hover)]" aria-hidden="true" />}
               </button>
@@ -654,15 +652,43 @@ export function TaskDetailsModal({
                 type="button"
                 onClick={() => onToggleComplete?.(task)}
                 disabled={isTogglingComplete || isDeleting}
+                role="checkbox"
+                aria-checked={isCompleted}
                 aria-label={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
                 title={isCompleted ? 'Mark task as incomplete' : 'Mark task as complete'}
-                className="p-1 rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer shrink-0 transition-colors disabled:opacity-50"
+                className="w-6 h-6 flex items-center justify-center rounded-full text-[var(--color-text-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] cursor-pointer shrink-0 transition-opacity disabled:opacity-50"
               >
-                {isCompleted ? (
-                  <CheckCircle2 className="w-5 h-5 text-[var(--color-primary)] fill-[var(--color-primary-muted)]" />
-                ) : (
-                  <Circle className="w-5 h-5 hover:stroke-[var(--color-primary-hover)]" />
-                )}
+                <svg
+                  viewBox="0 0 18 18"
+                  className="w-5 h-5 overflow-visible"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="9"
+                    cy="9"
+                    r="7.25"
+                    strokeWidth="1.5"
+                    className={`transition-colors duration-200 ease-out ${
+                      isCompleted
+                        ? 'fill-[var(--color-primary-hover)] stroke-[var(--color-primary-hover)]'
+                        : 'fill-transparent stroke-[var(--color-text-muted)] hover:stroke-[var(--color-primary-hover)]'
+                    }`}
+                  />
+                  <path
+                    d="M5.5 9.2L7.8 11.5L12.5 6.5"
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="task-checkmark-path"
+                    style={{
+                      strokeDasharray: 14,
+                      strokeDashoffset: isCompleted ? 0 : 14,
+                      opacity: isCompleted ? 1 : 0,
+                    }}
+                  />
+                </svg>
               </button>
 
               {/* Title Input: looks like a heading in resting state, border appears on click/focus */}

@@ -9,7 +9,7 @@ import { LogoutConfirmationModal } from '../auth/LogoutConfirmationModal.jsx';
  * user identity presentation, and confirmed logout initiation.
  */
 export function Navbar() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -54,8 +54,8 @@ export function Navbar() {
 
   return (
     <>
-      <header className="bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <header className="bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] shrink-0 z-40">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Brand */}
           <Link
             to="/dashboard"
@@ -98,16 +98,6 @@ export function Navbar() {
                 </NavLink>
 
                 <div className="h-4 w-px bg-[var(--color-border)] mx-1 hidden sm:block" />
-
-                {/* User Identity Indicator */}
-                {user?.username && (
-                  <span
-                    className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] truncate max-w-[140px]"
-                    title={`Signed in as ${user.username}`}
-                  >
-                    {user.username}
-                  </span>
-                )}
 
                 {/* Logout Action */}
                 <button

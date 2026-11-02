@@ -235,8 +235,8 @@ export function CreateTaskModal({
               className="w-full px-3.5 py-2 text-sm bg-[var(--color-input-bg)] text-[var(--color-text)] border border-[var(--color-border)] rounded-lg transition-colors hover:border-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-focus)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {availableColumns.map((col) => (
-                <option key={col.key || col.title} value={col.key}>
-                  {col.title}
+                <option key={col.key || col.name || col.title} value={col.key}>
+                  {col.name || col.title}
                 </option>
               ))}
             </select>

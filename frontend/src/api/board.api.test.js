@@ -143,17 +143,199 @@ describe('boardApi service & API contracts (Task 8.6 Regression Audit)', () => {
     }
   });
 
+  test('addColumn constructs POST /boards/:boardId/columns with name payload (Task 10)', async () => {
+    const originalPost = apiClient.post;
+    let capturedUrl = null;
+    let capturedData = null;
+
+    apiClient.post = (url, data) => {
+      capturedUrl = url;
+      capturedData = data;
+      return Promise.resolve({
+        data: {
+          statusCode: 201,
+          data: {
+            _id: '507f1f77bcf86cd799439011',
+            columns: [
+              { key: 'todo', name: 'To Do', order: 0 },
+              { key: 'in-progress', name: 'In Progress', order: 1 },
+              { key: 'done', name: 'Done', order: 2 },
+              { key: 'review', name: 'Review', order: 3 },
+            ],
+          },
+          message: 'Column added successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const payload = { name: 'Review' };
+      const res = await boardApi.addColumn('507f1f77bcf86cd799439011', payload);
+      assert.equal(capturedUrl, '/boards/507f1f77bcf86cd799439011/columns');
+      assert.deepEqual(capturedData, payload);
+      assert.equal(res.data.success, true);
+      assert.equal(res.data.data.columns.length, 4);
+      assert.equal(res.data.data.columns[3].name, 'Review');
+    } finally {
+      apiClient.post = originalPost;
+    }
+  });
+
+  test('renameColumn constructs PATCH /boards/:boardId/columns/:columnKey with name payload (Task 10)', async () => {
+    const originalPatch = apiClient.patch;
+    let capturedUrl = null;
+    let capturedData = null;
+
+    apiClient.patch = (url, data) => {
+      capturedUrl = url;
+      capturedData = data;
+      return Promise.resolve({
+        data: {
+          statusCode: 200,
+          data: {
+            _id: '507f1f77bcf86cd799439011',
+            columns: [
+              { key: 'todo', name: 'Backlog', order: 0 },
+              { key: 'in-progress', name: 'In Progress', order: 1 },
+              { key: 'done', name: 'Done', order: 2 },
+            ],
+          },
+          message: 'Column renamed successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const payload = { name: 'Backlog' };
+      const res = await boardApi.renameColumn('507f1f77bcf86cd799439011', 'todo', payload);
+      assert.equal(capturedUrl, '/boards/507f1f77bcf86cd799439011/columns/todo');
+      assert.deepEqual(capturedData, payload);
+      assert.equal(res.data.success, true);
+      assert.equal(res.data.data.columns[0].name, 'Backlog');
+    } finally {
+      apiClient.patch = originalPatch;
+    }
+  });
+
+  test('deleteColumn constructs DELETE /boards/:boardId/columns/:columnKey with move payload', async () => {
+    const originalDelete = apiClient.delete;
+    let capturedUrl = null;
+    let capturedConfig = null;
+
+    apiClient.delete = (url, config) => {
+      capturedUrl = url;
+      capturedConfig = config;
+      return Promise.resolve({
+        data: {
+          statusCode: 200,
+          data: {
+            _id: '507f1f77bcf86cd799439011',
+            columns: [
+              { key: 'in-progress', name: 'In Progress', order: 0 },
+              { key: 'done', name: 'Done', order: 1 },
+            ],
+          },
+          message: 'Column deleted successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const payload = { action: 'move', targetColumnKey: 'in-progress' };
+      const res = await boardApi.deleteColumn('507f1f77bcf86cd799439011', 'todo', payload);
+      assert.equal(capturedUrl, '/boards/507f1f77bcf86cd799439011/columns/todo');
+      assert.deepEqual(capturedConfig.data, payload);
+      assert.equal(res.data.success, true);
+      assert.equal(res.data.data.columns.length, 2);
+    } finally {
+      apiClient.delete = originalDelete;
+    }
+  });
+
+  test('deleteColumn constructs DELETE /boards/:boardId/columns/:columnKey with delete payload', async () => {
+    const originalDelete = apiClient.delete;
+    let capturedUrl = null;
+    let capturedConfig = null;
+
+    apiClient.delete = (url, config) => {
+      capturedUrl = url;
+      capturedConfig = config;
+      return Promise.resolve({
+        data: {
+          statusCode: 200,
+          data: {
+            _id: '507f1f77bcf86cd799439011',
+            columns: [],
+          },
+          message: 'Column deleted successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const payload = { action: 'delete' };
+      const res = await boardApi.deleteColumn('507f1f77bcf86cd799439011', 'done', payload);
+      assert.equal(capturedUrl, '/boards/507f1f77bcf86cd799439011/columns/done');
+      assert.deepEqual(capturedConfig.data, payload);
+      assert.equal(res.data.success, true);
+      assert.equal(res.data.data.columns.length, 0);
+    } finally {
+      apiClient.delete = originalDelete;
+    }
+  });
+
+  test('reorderColumns constructs PATCH /boards/:boardId/columns/reorder with columnKeys payload', async () => {
+    const originalPatch = apiClient.patch;
+    let capturedUrl = null;
+    let capturedData = null;
+
+    apiClient.patch = (url, data) => {
+      capturedUrl = url;
+      capturedData = data;
+      return Promise.resolve({
+        data: {
+          statusCode: 200,
+          data: {
+            _id: '507f1f77bcf86cd799439011',
+            columns: [
+              { key: 'in-progress', name: 'In Progress', order: 0 },
+              { key: 'todo', name: 'To Do', order: 1 },
+              { key: 'done', name: 'Done', order: 2 },
+            ],
+          },
+          message: 'Columns reordered successfully',
+          success: true,
+        },
+      });
+    };
+
+    try {
+      const payload = { columnKeys: ['in-progress', 'todo', 'done'] };
+      const res = await boardApi.reorderColumns('507f1f77bcf86cd799439011', payload);
+      assert.equal(capturedUrl, '/boards/507f1f77bcf86cd799439011/columns/reorder');
+      assert.deepEqual(capturedData, payload);
+      assert.equal(res.data.success, true);
+      assert.equal(res.data.data.columns[0].key, 'in-progress');
+    } finally {
+      apiClient.patch = originalPatch;
+    }
+  });
+
   test('Task update vs move API contract strict isolation', () => {
-    // Contract rule: updateTask accepts only { title, description, priority, dueDate }
+    // Contract rule: updateTask accepts { title, description, priority, dueDate, isCompleted }
     // It must NOT receive columnKey or order.
-    const allowedUpdateFields = new Set(['title', 'description', 'priority', 'dueDate']);
-    const sampleTaskUpdate = { title: 'New Title', priority: 'high' };
+    const allowedUpdateFields = new Set(['title', 'description', 'priority', 'dueDate', 'isCompleted']);
+    const sampleTaskUpdate = { title: 'New Title', priority: 'high', isCompleted: true };
     const invalidUpdateFields = Object.keys(sampleTaskUpdate).filter(f => !allowedUpdateFields.has(f));
     assert.equal(invalidUpdateFields.length, 0, 'sampleTaskUpdate must only contain allowed update fields');
 
     // Contract rule: moveTask requires columnKey and accepts optional order
     const sampleMovePayload = { columnKey: 'in-progress', order: 2 };
-    const validColumnKeys = new Set(['todo', 'in-progress', 'done']);
+    const validColumnKeys = new Set(['todo', 'in-progress', 'done', 'review', 'testing']);
     assert.equal(validColumnKeys.has(sampleMovePayload.columnKey), true);
     assert.equal(typeof sampleMovePayload.order, 'number');
     assert.equal(Number.isInteger(sampleMovePayload.order), true);

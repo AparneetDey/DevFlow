@@ -15,6 +15,8 @@ import {
   DndContext,
   DragOverlay,
   closestCorners,
+  pointerWithin,
+  rectIntersection,
   PointerSensor,
   KeyboardSensor,
   useSensor,
@@ -23,10 +25,15 @@ import {
 import {
   sortableKeyboardCoordinates,
   arrayMove,
+  horizontalListSortingStrategy,
+  SortableContext,
 } from '@dnd-kit/sortable';
 import { Button } from '../components/common/Button.jsx';
 import KanbanColumn from '../components/boards/KanbanColumn.jsx';
+import AddColumnModal from '../components/boards/AddColumnModal.jsx';
+import DeleteColumnModal from '../components/boards/DeleteColumnModal.jsx';
 import TaskCard from '../components/tasks/TaskCard.jsx';
+import TaskSkeleton from '../components/tasks/TaskSkeleton.jsx';
 import CreateTaskModal from '../components/tasks/CreateTaskModal.jsx';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal.jsx';
 import boardApi from '../api/board.api.js';
@@ -34,7 +41,36 @@ import taskApi from '../api/task.api.js';
 import { sortBoardColumns } from '../utils/columnSorting.js';
 import { getTasksForColumn } from '../utils/taskGrouping.js';
 import { extractErrorMessage } from '../api/error.js';
-import { normalizeColumnTasks } from '../utils/taskReordering.js';
+import {
+  normalizeColumnTasks,
+  findColumnKey,
+  calculateTaskDropPosition,
+  moveTaskCrossColumn,
+} from '../utils/taskReordering.js';
+
+/**
+ * Stable collision detection strategy optimized for DevFlow Kanban board.
+ * Prioritizes direct pointer collision (pointerWithin) for stable, jitter-free targeting.
+ * - When pointer is over a task card, returns that task card.
+ * - When pointer is over column space, returns that column.
+ * - When pointer is in a gutter between columns, falls back to rectIntersection / closestCorners.
+ */
+function kanbanCollisionDetection(args) {
+  // 1. Direct pointer collision is primary
+  const pointerCollisions = pointerWithin(args);
+  if (pointerCollisions.length > 0) {
+    return pointerCollisions;
+  }
+
+  // 2. Bounding box intersection when pointer is in gaps
+  const rectCollisions = rectIntersection(args);
+  if (rectCollisions.length > 0) {
+    return rectCollisions;
+  }
+
+  // 3. Distance-based fallback
+  return closestCorners(args);
+}
 
 export function BoardPage() {
   const { boardId } = useParams();
@@ -58,8 +94,10 @@ export function BoardPage() {
 
   // Drag-and-drop state & sensors
   const [activeTask, setActiveTask] = useState(null);
+  const [overColumnKey, setOverColumnKey] = useState(null);
   const [movingTaskIds, setMovingTaskIds] = useState(new Set());
   const dragSnapshotRef = useRef(null);
+  const overColumnKeyRef = useRef(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -75,6 +113,15 @@ export function BoardPage() {
   // Task creation modal state
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [selectedColumnKey, setSelectedColumnKey] = useState('todo');
+
+  // Column creation modal state (Task 10)
+  const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
+
+  // Column deletion modal state (Task 12)
+  const [columnToDelete, setColumnToDelete] = useState(null);
+
+  // Column reordering drag state (Task 12)
+  const [activeColumnKey, setActiveColumnKey] = useState(null);
 
   // Task details modal state
   const [selectedTask, setSelectedTask] = useState(null);
@@ -217,6 +264,96 @@ export function BoardPage() {
     setTasks((prevTasks) => [...prevTasks, newTask]);
   };
 
+  const handleColumnAdded = (updatedBoard) => {
+    if (!updatedBoard) return;
+    if (Array.isArray(updatedBoard.columns)) {
+      setBoard(updatedBoard);
+    } else if (board) {
+      setBoard((prev) => ({
+        ...prev,
+        columns: [...(prev?.columns || []), updatedBoard],
+      }));
+    }
+  };
+
+  const handleRenameColumn = async (columnKey, newName) => {
+    if (!columnKey || !newName || !boardId) return;
+
+    const prevBoard = board;
+    // Optimistic UI update: rename column in board columns array
+    setBoard((prev) => {
+      if (!prev || !Array.isArray(prev.columns)) return prev;
+      return {
+        ...prev,
+        columns: prev.columns.map((c) =>
+          c.key === columnKey ? { ...c, name: newName, title: newName } : c
+        ),
+      };
+    });
+
+    try {
+      const response = await boardApi.renameColumn(boardId, columnKey, {
+        name: newName,
+      });
+      const updatedBoard = response.data?.data;
+      if (updatedBoard && Array.isArray(updatedBoard.columns)) {
+        setBoard(updatedBoard);
+      }
+    } catch (err) {
+      // Revert on error
+      setBoard(prevBoard);
+      setTaskActionError(extractErrorMessage(err));
+      throw err;
+    }
+  };
+
+  const handleOpenDeleteColumn = (column) => {
+    setColumnToDelete(column);
+  };
+
+  const handleCloseDeleteColumn = () => {
+    setColumnToDelete(null);
+  };
+
+  const handleColumnDeleted = (updatedBoard, deletedColumnKey, payload) => {
+    if (updatedBoard && Array.isArray(updatedBoard.columns)) {
+      setBoard(updatedBoard);
+    } else {
+      setBoard((prev) => ({
+        ...prev,
+        columns: (prev?.columns || []).filter((c) => c.key !== deletedColumnKey),
+      }));
+    }
+
+    if (payload?.action === 'move' && payload?.targetColumnKey) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.columnKey === deletedColumnKey
+            ? { ...t, columnKey: payload.targetColumnKey }
+            : t
+        )
+      );
+      if (selectedTask?.columnKey === deletedColumnKey) {
+        setSelectedTask((prev) =>
+          prev ? { ...prev, columnKey: payload.targetColumnKey } : null
+        );
+      }
+      // Re-fetch tasks in background to ensure strict server-synchronized order indices
+      taskApi.getTasksByBoard(boardId).then((res) => {
+        if (Array.isArray(res.data?.data)) {
+          setTasks(res.data.data);
+        }
+      }).catch(() => {});
+    } else {
+      // payload.action === 'delete'
+      setTasks((prev) => prev.filter((t) => t.columnKey !== deletedColumnKey));
+      if (selectedTask?.columnKey === deletedColumnKey) {
+        setSelectedTask(null);
+        setIsTaskDetailsModalOpen(false);
+      }
+    }
+  };
+
   const handleOpenTaskDetails = (task) => {
     if (!task) return;
     setSelectedTask(task);
@@ -310,16 +447,16 @@ export function BoardPage() {
 
   const handleToggleComplete = async (task) => {
     if (!task || !task._id || togglingTaskIds.has(task._id)) return;
-    const targetColumnKey = task.columnKey === 'done' ? 'todo' : 'done';
+    const nextCompleted = !task.isCompleted;
 
     setTogglingTaskIds((prev) => new Set(prev).add(task._id));
     setTaskActionError(null);
 
     const prevTasks = tasks;
     const prevSelectedTask = selectedTask;
-    const optimisticTask = { ...task, columnKey: targetColumnKey };
+    const optimisticTask = { ...task, isCompleted: nextCompleted };
 
-    // Optimistic UI update
+    // Optimistic UI update: completed tasks stay in their current column and order
     setTasks((prev) =>
       prev.map((t) => (t._id === task._id ? optimisticTask : t))
     );
@@ -328,8 +465,8 @@ export function BoardPage() {
     }
 
     try {
-      const response = await taskApi.moveTask(boardId, task._id, {
-        columnKey: targetColumnKey,
+      const response = await taskApi.updateTask(boardId, task._id, {
+        isCompleted: nextCompleted,
       });
       const updatedTask = response.data?.data;
       if (updatedTask && updatedTask._id) {
@@ -361,10 +498,21 @@ export function BoardPage() {
   // --------------------------------------------------------------------------
   const handleDragStart = (event) => {
     const { active } = event;
+    const activeData = active.data.current;
+
+    // Handle column reordering drag initiation
+    if (activeData?.type === 'column') {
+      setActiveColumnKey(activeData.columnKey);
+      setActiveTask(null);
+      return;
+    }
+
     const task = tasks.find((t) => t._id === active.id);
     if (!task) return;
 
     setActiveTask(task);
+    setOverColumnKey(task.columnKey);
+    overColumnKeyRef.current = task.columnKey;
     dragSnapshotRef.current = {
       tasks: [...tasks],
       selectedTask: selectedTask ? { ...selectedTask } : null,
@@ -375,176 +523,184 @@ export function BoardPage() {
   };
 
   const handleDragOver = (event) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeId = active.id;
-    const overId = over.id;
-
-    if (activeId === overId) return;
-
-    const activeTaskItem = tasks.find((t) => t._id === activeId);
-    if (!activeTaskItem) return;
-
-    // Resolve target columnKey
-    let targetColumnKey = null;
-    if (typeof overId === 'string' && overId.startsWith('column-')) {
-      targetColumnKey = overId.replace('column-', '');
-    } else {
-      const overTaskItem = tasks.find((t) => t._id === overId);
-      if (overTaskItem) {
-        targetColumnKey = overTaskItem.columnKey;
-      }
+    // If dragging a column, no task drag-over resolution needed
+    if (activeColumnKey) {
+      return;
     }
 
-    if (!targetColumnKey) return;
+    const { over } = event;
+    if (!over) {
+      if (overColumnKeyRef.current !== null) {
+        overColumnKeyRef.current = null;
+        setOverColumnKey(null);
+      }
+      return;
+    }
 
-    // Continuous state update for cross-column hovering so cards shift smoothly
-    if (activeTaskItem.columnKey !== targetColumnKey) {
-      setTasks((prevTasks) => {
-        const activeIndex = prevTasks.findIndex((t) => t._id === activeId);
-        if (activeIndex === -1) return prevTasks;
+    const overId = over.id;
+    // Resolve target columnKey from overId using available columns and snapshot/current tasks
+    const targetColumnKey = findColumnKey(
+      overId,
+      dragSnapshotRef.current?.tasks || tasks,
+      columns
+    );
 
-        const overIndex = prevTasks.findIndex((t) => t._id === overId);
-        const tasksInDest = prevTasks.filter(
-          (t) => t.columnKey === targetColumnKey && t._id !== activeId
-        );
-
-        let newOrderIndex;
-        if (overIndex === -1) {
-          newOrderIndex = tasksInDest.length;
-        } else {
-          const isBelowOver =
-            over &&
-            active.rect.current.translated &&
-            active.rect.current.translated.top > over.rect.top + over.rect.height;
-
-          newOrderIndex = overIndex >= 0 ? overIndex + (isBelowOver ? 1 : 0) : tasksInDest.length;
-        }
-
-        const updated = [...prevTasks];
-        const [moved] = updated.splice(activeIndex, 1);
-        const updatedMoved = {
-          ...moved,
-          columnKey: targetColumnKey,
-        };
-
-        const insertPos = Math.min(Math.max(0, newOrderIndex), updated.length);
-        updated.splice(insertPos, 0, updatedMoved);
-
-        return updated;
-      });
+    if (targetColumnKey && targetColumnKey !== overColumnKeyRef.current) {
+      overColumnKeyRef.current = targetColumnKey;
+      setOverColumnKey(targetColumnKey);
     }
   };
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;
+
+    // Handle Column Drop & Reordering
+    if (activeColumnKey) {
+      const activeColKey = activeColumnKey;
+      setActiveColumnKey(null);
+
+      if (!over) return;
+
+      let overColKey = null;
+      const overData = over.data.current;
+      if (overData?.type === 'column') {
+        overColKey = overData.columnKey;
+      } else if (typeof over.id === 'string' && over.id.startsWith('sortable-col-')) {
+        overColKey = over.id.replace('sortable-col-', '');
+      } else if (typeof over.id === 'string' && over.id.startsWith('column-')) {
+        overColKey = over.id.replace('column-', '');
+      } else {
+        const overTask = tasks.find((t) => t._id === over.id);
+        if (overTask?.columnKey) {
+          overColKey = overTask.columnKey;
+        }
+      }
+
+      if (!overColKey || overColKey === activeColKey) {
+        // Dropped in original position: no-op, 0 API calls!
+        return;
+      }
+
+      const oldIndex = columns.findIndex((c) => c.key === activeColKey);
+      const newIndex = columns.findIndex((c) => c.key === overColKey);
+
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) {
+        return;
+      }
+
+      const reordered = arrayMove(columns, oldIndex, newIndex);
+      const newColumnKeys = reordered.map((c) => c.key);
+      const previousBoard = board;
+
+      // Optimistic UI update
+      setBoard((prev) => ({
+        ...prev,
+        columns: reordered.map((col, idx) => ({ ...col, order: idx })),
+      }));
+
+      try {
+        const response = await boardApi.reorderColumns(boardId, {
+          columnKeys: newColumnKeys,
+        });
+        const updatedBoard = response.data?.data;
+        if (updatedBoard && Array.isArray(updatedBoard.columns)) {
+          setBoard(updatedBoard);
+        }
+      } catch (err) {
+        // Revert on error
+        setBoard(previousBoard);
+        setTaskActionError(extractErrorMessage(err));
+      }
+      return;
+    }
+
     const activeId = active?.id;
     const snapshot = dragSnapshotRef.current;
+
     setActiveTask(null);
+    setOverColumnKey(null);
+    overColumnKeyRef.current = null;
     dragSnapshotRef.current = null;
 
     if (!activeId || !snapshot) return;
 
-    // Dropped outside any droppable target: rollback to pre-drag state
+    // 1. Dropped outside any droppable target: restore pristine snapshot
     if (!over) {
       setTasks(snapshot.tasks);
       if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
       return;
     }
 
-    // Resolve destination columnKey
-    let targetColumnKey = null;
-    if (typeof over.id === 'string' && over.id.startsWith('column-')) {
-      targetColumnKey = over.id.replace('column-', '');
-    } else {
-      const overTaskItem = tasks.find((t) => t._id === over.id);
-      if (overTaskItem) {
-        targetColumnKey = overTaskItem.columnKey;
-      } else {
-        targetColumnKey = snapshot.sourceColumnKey;
-      }
+    const overId = over.id;
+
+    // 2. Resolve destination columnKey
+    const targetColumnKey = findColumnKey(overId, snapshot.tasks, columns);
+    if (!targetColumnKey) {
+      setTasks(snapshot.tasks);
+      if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
+      return;
     }
 
     const isSameColumn = snapshot.sourceColumnKey === targetColumnKey;
 
-    let finalTasksInDest;
+    let targetOrder;
+    let finalOptimisticTasks;
+
     if (isSameColumn) {
-      // Reorder within the same column using the pre-drag snapshot tasks for stable order calculation
-      const originalColTasks = snapshot.tasks
+      // Reordering within the same column
+      const colTasks = snapshot.tasks
         .filter((t) => t.columnKey === targetColumnKey)
-        .sort((a, b) => {
-          const oA = typeof a.order === 'number' && Number.isFinite(a.order) ? a.order : Infinity;
-          const oB = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : Infinity;
-          return oA - oB;
-        });
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-      const oldIndex = originalColTasks.findIndex((t) => t._id === activeId);
-      const overIndex = originalColTasks.findIndex((t) => t._id === over.id);
+      const oldIndex = colTasks.findIndex((t) => t._id === activeId);
+      let overIndex = colTasks.findIndex((t) => t._id === overId);
 
-      if (oldIndex !== -1 && overIndex !== -1 && oldIndex !== overIndex) {
-        finalTasksInDest = arrayMove(originalColTasks, oldIndex, overIndex);
-      } else {
-        finalTasksInDest = originalColTasks;
+      if (overIndex === -1 && typeof overId === 'string' && overId.startsWith('column-')) {
+        overIndex = colTasks.length - 1;
       }
+
+      // Check if position actually changed
+      if (oldIndex === -1 || overIndex === -1 || oldIndex === overIndex) {
+        // No-op: restore pre-drag snapshot cleanly with 0 API calls
+        setTasks(snapshot.tasks);
+        if (snapshot.selectedTask) setSelectedTask(snapshot.selectedTask);
+        return;
+      }
+
+      const reordered = arrayMove(colTasks, oldIndex, overIndex);
+      const normalizedCol = normalizeColumnTasks(reordered, targetColumnKey);
+      targetOrder = normalizedCol.findIndex((t) => t._id === activeId);
+
+      const colMap = new Map(normalizedCol.map((t) => [t._id, t]));
+      finalOptimisticTasks = snapshot.tasks.map((t) => (colMap.has(t._id) ? colMap.get(t._id) : t));
     } else {
-      // Cross-column move: ensure active task is present in final destination list
-      finalTasksInDest = tasks.filter((t) => t.columnKey === targetColumnKey);
-      const alreadyInDest = finalTasksInDest.some((t) => t._id === activeId);
-      if (!alreadyInDest) {
-        const activeTaskItem =
-          tasks.find((t) => t._id === activeId) ||
-          snapshot.tasks.find((t) => t._id === activeId);
+      // Cross-column movement
+      const destTasks = snapshot.tasks
+        .filter((t) => t.columnKey === targetColumnKey)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-        if (activeTaskItem) {
-          const movedTask = { ...activeTaskItem, columnKey: targetColumnKey };
-          const overIndex = finalTasksInDest.findIndex((t) => t._id === over.id);
-          if (overIndex !== -1) {
-            finalTasksInDest = [
-              ...finalTasksInDest.slice(0, overIndex),
-              movedTask,
-              ...finalTasksInDest.slice(overIndex),
-            ];
-          } else {
-            finalTasksInDest = [...finalTasksInDest, movedTask];
-          }
-        }
-      }
-    }
-
-    // Re-index target column tasks with sequential 0-based orders
-    const normalizedDest = normalizeColumnTasks(finalTasksInDest, targetColumnKey);
-    const targetOrder = Math.max(0, normalizedDest.findIndex((t) => t._id === activeId));
-
-    // Check if position and column are unchanged
-    if (isSameColumn && snapshot.sourceOrder === targetOrder) {
-      // No-op: restore pre-drag snapshot clean state
-      setTasks(snapshot.tasks);
-      return;
-    }
-
-    // If cross-column, also normalize remaining source column tasks
-    let normalizedSource = [];
-    if (!isSameColumn) {
-      const remainingInSource = tasks.filter(
-        (t) => t.columnKey === snapshot.sourceColumnKey && t._id !== activeId
+      const insertPos = calculateTaskDropPosition(
+        destTasks,
+        overId,
+        over.rect,
+        active.rect?.current?.translated
       );
-      normalizedSource = normalizeColumnTasks(remainingInSource, snapshot.sourceColumnKey);
+
+      const result = moveTaskCrossColumn(
+        snapshot.tasks,
+        activeId,
+        targetColumnKey,
+        insertPos
+      );
+
+      finalOptimisticTasks = result.tasks;
+      targetOrder = result.targetOrder;
     }
-
-    const destMap = new Map(normalizedDest.map((t) => [t._id, t]));
-    const srcMap = new Map(normalizedSource.map((t) => [t._id, t]));
-
-    const optimisticTasks = tasks.map((t) => {
-      if (destMap.has(t._id)) return destMap.get(t._id);
-      if (srcMap.has(t._id)) return srcMap.get(t._id);
-      return t;
-    });
 
     // Apply optimistic update immediately
-    setTasks(optimisticTasks);
+    setTasks(finalOptimisticTasks);
 
-    const updatedActiveTask = destMap.get(activeId);
+    const updatedActiveTask = finalOptimisticTasks.find((t) => t._id === activeId);
     if (selectedTask?._id === activeId && updatedActiveTask) {
       setSelectedTask(updatedActiveTask);
     }
@@ -588,8 +744,14 @@ export function BoardPage() {
   };
 
   const handleDragCancel = () => {
+    if (activeColumnKey) {
+      setActiveColumnKey(null);
+      return;
+    }
     const snapshot = dragSnapshotRef.current;
     setActiveTask(null);
+    setOverColumnKey(null);
+    overColumnKeyRef.current = null;
     dragSnapshotRef.current = null;
     if (snapshot) {
       setTasks(snapshot.tasks);
@@ -612,41 +774,70 @@ export function BoardPage() {
   const columns = sortBoardColumns(board?.columns);
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      {/* 1. Loading State: Header & Column Skeletons */}
+    <div className="space-y-3 sm:space-y-4">
+      {/* 1. Loading State: Header Toolbar & Column Skeletons */}
       {isLoading ? (
-        <div className="space-y-6 sm:space-y-8" aria-busy="true">
-          {/* Back link skeleton */}
-          <div className="h-4 w-32 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
+        <div className="space-y-3 sm:space-y-4" aria-busy="true">
+          {/* Sleek Board Toolbar Skeleton */}
+          <div className="bg-[var(--color-surface)] rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 border border-[var(--color-border)] shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3 min-w-0 animate-pulse">
+            {/* Left: Back Link & Title & Metadata */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
+              <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 -ml-1">
+                <div className="w-4 h-4 bg-[var(--color-surface-elevated)] rounded shrink-0" />
+                <div className="h-3.5 w-12 bg-[var(--color-surface-elevated)] rounded hidden sm:block" />
+              </div>
 
-          {/* Header Card Skeleton */}
-          <div className="bg-[var(--color-surface)] rounded-2xl p-6 sm:p-7 border border-[var(--color-border)] shadow-xs space-y-4 animate-pulse">
-            <div className="h-4 w-28 bg-[var(--color-surface-elevated)] rounded" />
-            <div className="h-8 w-72 max-w-full bg-[var(--color-surface-elevated)] rounded-md" />
-            <div className="h-4 w-full max-w-md bg-[var(--color-surface-elevated)]/60 rounded" />
-            <div className="flex gap-2.5 pt-1.5">
-              <div className="h-6 w-24 bg-[var(--color-surface-elevated)] rounded-lg" />
-              <div className="h-6 w-32 bg-[var(--color-surface-elevated)] rounded-lg" />
+              <div className="h-4 w-px bg-[var(--color-border)] hidden sm:block shrink-0" />
+
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="h-5 sm:h-6 w-44 sm:w-60 bg-[var(--color-surface-elevated)] rounded-md" />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="h-5 w-10 bg-[var(--color-surface-elevated)] rounded-md border border-[var(--color-border)]" />
+                    <div className="h-5 w-10 bg-[var(--color-surface-elevated)] rounded-md border border-[var(--color-border)]" />
+                    <div className="h-5 w-20 bg-[var(--color-surface-elevated)] rounded-md border border-[var(--color-border)] hidden lg:block" />
+                  </div>
+                </div>
+                <div className="h-3.5 w-56 sm:w-72 bg-[var(--color-surface-elevated)]/60 rounded mt-0.5" />
+              </div>
             </div>
+
+            {/* Right: Add Column Button Placeholder */}
+            <div className="h-8 w-24 bg-[var(--color-surface-elevated)] rounded-lg shrink-0 self-end md:self-auto border border-[var(--color-border)]" />
           </div>
 
           {/* Kanban Columns Skeleton */}
-          <div className="space-y-3.5">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
-              <div className="h-4 w-28 bg-[var(--color-surface-elevated)] rounded animate-pulse" />
-            </div>
-            <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 min-w-0">
-              {[1, 2, 3].map((colIndex) => (
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 sm:gap-3.5 overflow-x-auto pb-4 pt-1 min-w-0 board-canvas-scrollbar">
+              {[
+                { titleWidth: 'w-20', taskCount: 3 },
+                { titleWidth: 'w-28', taskCount: 2 },
+                { titleWidth: 'w-16', taskCount: 2 },
+              ].map((col, colIndex) => (
                 <div
                   key={colIndex}
-                  className="w-72 sm:w-80 shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-3 sm:p-3.5 min-h-[440px] animate-pulse flex flex-col"
+                  className="w-[255px] sm:w-[278px] shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-2.5 sm:p-3 shadow-xs flex flex-col max-h-[calc(100vh-13.5rem)] animate-pulse"
                 >
-                  <div className="flex items-center gap-2 px-1.5 py-1 mb-2.5 pb-2.5 border-b border-[var(--color-border)]">
-                    <div className="w-2 h-2 rounded-full bg-[var(--color-border)] shrink-0" />
-                    <div className="h-4 w-24 bg-[var(--color-surface-elevated)] rounded" />
+                  {/* Column Header Skeleton */}
+                  <div className="shrink-0 flex items-center justify-between px-1 py-0.5 mb-2 pb-2 border-b border-[var(--color-border)] min-w-0 gap-1.5">
+                    <div className="flex items-center min-w-0 flex-1">
+                      <div className={`h-4 ${col.titleWidth} bg-[var(--color-surface-elevated)] rounded`} />
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="w-5 h-4 bg-[var(--color-surface-elevated)] rounded-full border border-[var(--color-border)]" />
+                      <div className="w-5 h-5 bg-[var(--color-surface-elevated)] rounded-md" />
+                    </div>
                   </div>
-                  <div className="flex-1 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-6 flex flex-col items-center justify-center" />
+
+                  {/* Task Card Placeholders */}
+                  <div className="space-y-2 flex-1 overflow-hidden min-h-[160px]">
+                    <TaskSkeleton count={col.taskCount} />
+                  </div>
+
+                  {/* Add a task button placeholder */}
+                  <div className="shrink-0 pt-1.5 mt-1">
+                    <div className="h-7 w-full bg-[var(--color-surface-elevated)]/40 rounded-lg" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -708,7 +899,7 @@ export function BoardPage() {
         </div>
       ) : board ? (
         /* 4. Populated Board Detail */
-        <div className="space-y-4 sm:space-y-5">
+        <div className="space-y-3 sm:space-y-4">
           {/* Sleek Board Toolbar */}
           <div className="bg-[var(--color-surface)] rounded-xl px-4 py-3 sm:px-5 sm:py-3.5 border border-[var(--color-border)] shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3 min-w-0">
             {/* Left: Back Link & Title & Metadata */}
@@ -762,17 +953,27 @@ export function BoardPage() {
               </div>
             </div>
 
-            {/* Right: Quick Action Buttons */}
+            {/* Right: Quick Action Buttons: Add Column (Max 5) */}
             <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+              {columns.length >= 5 && (
+                <span
+                  className="text-[11px] text-[var(--color-text-muted)] font-medium hidden sm:inline"
+                  title="Maximum limit of 5 columns reached for this board"
+                >
+                  (5/5 columns max)
+                </span>
+              )}
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => handleOpenCreateTask('todo')}
-                className="flex items-center justify-center gap-1.5 cursor-pointer text-xs"
-                aria-label="Create new task"
+                onClick={() => setIsAddColumnModalOpen(true)}
+                disabled={columns.length >= 5}
+                className="flex items-center justify-center gap-1.5 cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={columns.length >= 5 ? 'Maximum of 5 columns reached' : 'Add new column'}
+                title={columns.length >= 5 ? 'Maximum of 5 columns reached' : 'Add new column'}
               >
                 <Plus className="w-4 h-4" />
-                <span>Create Task</span>
+                <span>Add Column</span>
               </Button>
             </div>
           </div>
@@ -833,42 +1034,94 @@ export function BoardPage() {
               <div
                 role="region"
                 aria-label="No workflow columns"
-                className="bg-[var(--color-surface)] rounded-2xl border-2 border-dashed border-[var(--color-border)] p-8 text-center max-w-md mx-auto my-6"
+                className="bg-[var(--color-surface)] rounded-2xl border-2 border-dashed border-[var(--color-border)] p-8 sm:p-10 text-center max-w-md mx-auto my-6 space-y-4"
               >
-                <p className="text-sm font-medium text-[var(--color-text-secondary)]">
-                  No columns configured for this board.
-                </p>
+                <div className="w-12 h-12 rounded-xl bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] flex items-center justify-center mx-auto border border-[var(--color-border)]">
+                  <Layers className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-semibold text-[var(--color-text)]">No columns on this board</h3>
+                  <p className="text-xs text-[var(--color-text-secondary)] max-w-xs mx-auto">
+                    Get started by adding your first workflow column to organize your tasks.
+                  </p>
+                </div>
+                <div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setIsAddColumnModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 cursor-pointer text-xs"
+                    aria-label="Add first column"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add First Column</span>
+                  </Button>
+                </div>
               </div>
             ) : (
               <DndContext
                 sensors={sensors}
-                collisionDetection={closestCorners}
+                collisionDetection={kanbanCollisionDetection}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
                 onDragCancel={handleDragCancel}
               >
-                <div className="flex items-start gap-4 sm:gap-5 overflow-x-auto pb-6 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y">
-                  {columns.map((column, index) => (
-                    <KanbanColumn
-                      key={column.key || column.title || `column-${index}`}
-                      column={column}
-                      tasks={getTasksForColumn(tasks, column.key)}
-                      isLoading={isLoadingTasks}
-                      onAddTask={(colKey) => handleOpenCreateTask(colKey)}
-                      onTaskDoubleClick={handleOpenTaskDetails}
-                      onTaskEditClick={handleOpenTaskDetails}
-                      onTaskClick={handleOpenTaskDetails}
-                      onUpdateTask={handleUpdateTask}
-                      onToggleComplete={handleToggleComplete}
-                      togglingTaskIds={togglingTaskIds}
-                    />
-                  ))}
-                </div>
+                <SortableContext
+                  items={columns.map((c) => `sortable-col-${c.key}`)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  <div className="flex items-start gap-3 sm:gap-3.5 overflow-x-auto pb-4 pt-1 focus:outline-none min-w-0 touch-pan-x touch-pan-y board-canvas-scrollbar">
+                    {columns.map((column, index) => (
+                      <KanbanColumn
+                        key={column.key || column.name || column.title || `column-${index}`}
+                        column={column}
+                        tasks={getTasksForColumn(tasks, column.key)}
+                        isLoading={isLoadingTasks}
+                        isDropTarget={
+                          Boolean(activeTask && overColumnKey === column.key && activeTask.columnKey !== column.key)
+                        }
+                        onAddTask={(colKey) => handleOpenCreateTask(colKey)}
+                        onRenameColumn={handleRenameColumn}
+                        onDeleteColumn={handleOpenDeleteColumn}
+                        onTaskDoubleClick={handleOpenTaskDetails}
+                        onTaskEditClick={handleOpenTaskDetails}
+                        onTaskClick={handleOpenTaskDetails}
+                        onUpdateTask={handleUpdateTask}
+                        onToggleComplete={handleToggleComplete}
+                        togglingTaskIds={togglingTaskIds}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
 
                 <DragOverlay dropAnimation={null}>
-                  {activeTask ? (
-                    <div className="w-72 sm:w-80 pointer-events-none">
+                  {activeColumnKey ? (
+                    (() => {
+                      const col = columns.find((c) => c.key === activeColumnKey);
+                      if (!col) return null;
+                      return (
+                        <div className="w-[255px] sm:w-[278px] pointer-events-none opacity-90 shadow-2xl rotate-1">
+                          <KanbanColumn
+                            column={col}
+                            tasks={getTasksForColumn(tasks, col.key)}
+                            isLoading={false}
+                            isDropTarget={false}
+                            onAddTask={() => {}}
+                            onRenameColumn={() => {}}
+                            onDeleteColumn={() => {}}
+                            onTaskDoubleClick={() => {}}
+                            onTaskEditClick={() => {}}
+                            onTaskClick={() => {}}
+                            onUpdateTask={() => {}}
+                            onToggleComplete={() => {}}
+                            togglingTaskIds={new Set()}
+                          />
+                        </div>
+                      );
+                    })()
+                  ) : activeTask ? (
+                    <div className="w-[235px] sm:w-[240px] pointer-events-none">
                       <TaskCard task={activeTask} isOverlay />
                     </div>
                   ) : null}
@@ -878,6 +1131,16 @@ export function BoardPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Add Column Modal (Task 10) */}
+      {isAddColumnModalOpen && (
+        <AddColumnModal
+          boardId={boardId}
+          isOpen={isAddColumnModalOpen}
+          onClose={() => setIsAddColumnModalOpen(false)}
+          onColumnAdded={handleColumnAdded}
+        />
+      )}
 
       {/* Create Task Modal */}
       {isCreateTaskModalOpen && (
@@ -905,6 +1168,20 @@ export function BoardPage() {
           onDeleteTask={handleDeleteTask}
           onToggleComplete={handleToggleComplete}
           isTogglingComplete={togglingTaskIds.has(selectedTask._id)}
+        />
+      )}
+
+      {/* Delete Column Modal (Task 12) */}
+      {columnToDelete && (
+        <DeleteColumnModal
+          key={columnToDelete.key}
+          boardId={boardId}
+          column={columnToDelete}
+          columns={columns}
+          tasks={tasks}
+          isOpen={Boolean(columnToDelete)}
+          onClose={handleCloseDeleteColumn}
+          onDeleted={handleColumnDeleted}
         />
       )}
     </div>

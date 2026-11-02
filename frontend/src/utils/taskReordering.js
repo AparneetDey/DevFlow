@@ -135,3 +135,83 @@ export function moveTaskCrossColumn(allTasks, activeTaskId, targetColumnKey, tar
     isChanged: true,
   };
 }
+
+/**
+ * Resolves a droppable container ID or task ID to a target columnKey.
+ *
+ * @param {string} id - Droppable target ID (e.g. 'column-todo', 'todo', or task ObjectId)
+ * @param {Array<Object>} [allTasks=[]] - Current list of task objects
+ * @param {Array<Object>} [allColumns=null] - Current list of board column objects
+ * @returns {string|null} Resolved columnKey or null
+ */
+export function findColumnKey(id, allTasks = [], allColumns = null) {
+  if (!id) return null;
+
+  // Case A: Dropped directly over column droppable (e.g., 'column-todo' or 'sortable-col-todo')
+  if (typeof id === 'string' && id.startsWith('sortable-col-')) {
+    const rawKey = id.replace('sortable-col-', '');
+    if (!Array.isArray(allColumns) || allColumns.some((c) => c && c.key === rawKey)) {
+      return rawKey;
+    }
+    return null;
+  }
+
+  if (typeof id === 'string' && id.startsWith('column-')) {
+    const rawKey = id.replace('column-', '');
+    if (!Array.isArray(allColumns) || allColumns.some((c) => c && c.key === rawKey)) {
+      return rawKey;
+    }
+    return null;
+  }
+
+  // Case B: Directly matched a column key
+  if (Array.isArray(allColumns) && allColumns.some((c) => c && c.key === id)) {
+    return id;
+  }
+
+  // Case C: Over a task item
+  if (Array.isArray(allTasks)) {
+    const matchedTask = allTasks.find((t) => t && (t._id === id || t.id === id));
+    if (matchedTask?.columnKey) {
+      return matchedTask.columnKey;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Calculates the 0-based insertion index for a dropped task within destination column tasks.
+ *
+ * @param {Array<Object>} destTasks - Tasks currently in the destination column, sorted by order
+ * @param {string} overId - ID of droppable dropped over (task ID or column container ID)
+ * @param {Object} [overRect] - Optional bounding rect of the over target
+ * @param {Object} [activeRect] - Optional translated bounding rect of the dragged card
+ * @returns {number} 0-based insertion index clamped between 0 and destTasks.length
+ */
+export function calculateTaskDropPosition(destTasks, overId, overRect = null, activeRect = null) {
+  if (!Array.isArray(destTasks) || destTasks.length === 0) {
+    return 0;
+  }
+
+  const overIndex = destTasks.findIndex((t) => (t._id || t.id) === overId);
+
+  // If dropped on column container or unmatched target, place at the bottom of the list
+  if (overIndex === -1) {
+    return destTasks.length;
+  }
+
+  // If bounding rects are available, determine if dropped in top half or bottom half of the target card
+  if (
+    overRect &&
+    activeRect &&
+    typeof overRect.top === 'number' &&
+    typeof activeRect.top === 'number'
+  ) {
+    const isBelowOver = activeRect.top > overRect.top + (overRect.height || 0) / 2;
+    return Math.min(Math.max(0, overIndex + (isBelowOver ? 1 : 0)), destTasks.length);
+  }
+
+  return Math.min(Math.max(0, overIndex), destTasks.length);
+}
+

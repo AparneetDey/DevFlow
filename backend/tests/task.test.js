@@ -31,6 +31,7 @@ describe("Task API", () => {
             expect(res1.body.data.priority).toBe("medium");
             expect(res1.body.data.order).toBe(0);
             expect(res1.body.data.boardId.toString()).toBe(board._id.toString());
+            expect(res1.body.data.isCompleted).toBe(false);
 
             // Second task -> order 1
             const res2 = await request(app)
@@ -131,6 +132,53 @@ describe("Task API", () => {
 
             expect(res.status).toBe(401);
         });
+
+        it("should trigger column persistence when creating a task on a legacy board missing columns", async () => {
+            const { user, authHeaders } = await createTestUser();
+
+            const legacyInsert = await Board.collection.insertOne({
+                title: "Legacy Board For Task",
+                owner: user._id,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            const legacyId = legacyInsert.insertedId;
+
+            const res = await request(app)
+                .post(`/api/v1/boards/${legacyId}/tasks`)
+                .set(authHeaders)
+                .send({ title: "New Task On Legacy Board", columnKey: "todo" });
+
+            expect(res.status).toBe(201);
+            expect(res.body.success).toBe(true);
+
+            // Confirm board columns were persisted in MongoDB
+            const boardInDb = await Board.collection.findOne({ _id: legacyId });
+            expect(boardInDb.columns).toBeDefined();
+            expect(boardInDb.columns).toHaveLength(3);
+        });
+
+        it("should reject task creation on a board with zero columns with 400", async () => {
+            const { user, authHeaders } = await createTestUser();
+
+            const emptyInsert = await Board.collection.insertOne({
+                title: "Board With No Columns",
+                owner: user._id,
+                columns: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            const boardId = emptyInsert.insertedId;
+
+            const res = await request(app)
+                .post(`/api/v1/boards/${boardId}/tasks`)
+                .set(authHeaders)
+                .send({ title: "Impossible Task" });
+
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
+            expect(res.body.message).toContain("no columns");
+        });
     });
 
     describe("GET /api/v1/boards/:boardId/tasks", () => {
@@ -152,6 +200,27 @@ describe("Task API", () => {
             expect(res.body.data[0].title).toBe("T0");
             expect(res.body.data[1].title).toBe("T1");
             expect(res.body.data[2].title).toBe("T2");
+        });
+
+        it("should return an empty list of tasks when board has zero columns", async () => {
+            const { user, authHeaders } = await createTestUser();
+
+            const emptyInsert = await Board.collection.insertOne({
+                title: "Empty Board Tasks",
+                owner: user._id,
+                columns: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            const boardId = emptyInsert.insertedId;
+
+            const res = await request(app)
+                .get(`/api/v1/boards/${boardId}/tasks`)
+                .set(authHeaders);
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toEqual([]);
         });
 
         it("should filter tasks by columnKey", async () => {
@@ -279,6 +348,50 @@ describe("Task API", () => {
 
             expect(res.status).toBe(400);
         });
+
+        it("should mark a task completed without changing its column or order", async () => {
+            const { user, authHeaders } = await createTestUser();
+            const board = await createTestBoard(user._id);
+            const task = await createTestTask(board._id, {
+                title: "Incomplete Task",
+                columnKey: "todo",
+                order: 0
+            });
+
+            const res = await request(app)
+                .patch(`/api/v1/boards/${board._id}/tasks/${task._id}`)
+                .set(authHeaders)
+                .send({
+                    isCompleted: true
+                });
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data.isCompleted).toBe(true);
+            expect(res.body.data.columnKey).toBe("todo"); // Column unaffected
+            expect(res.body.data.order).toBe(0); // Order unaffected
+        });
+
+        it("should mark a completed task back to incomplete", async () => {
+            const { user, authHeaders } = await createTestUser();
+            const board = await createTestBoard(user._id);
+            const task = await createTestTask(board._id, {
+                title: "Completed Task",
+                columnKey: "todo"
+            });
+            task.isCompleted = true;
+            await task.save();
+
+            const res = await request(app)
+                .patch(`/api/v1/boards/${board._id}/tasks/${task._id}`)
+                .set(authHeaders)
+                .send({
+                    isCompleted: false
+                });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.isCompleted).toBe(false);
+        });
     });
 
     describe("PATCH /api/v1/boards/:boardId/tasks/:taskId/move", () => {
@@ -300,6 +413,77 @@ describe("Task API", () => {
             expect(res.body.success).toBe(true);
             expect(res.body.data.columnKey).toBe("in-progress");
             expect(res.body.data.order).toBe(1); // Appended after existing task (order 0)
+        });
+
+        it("should preserve isCompleted status when moving a completed task across columns", async () => {
+            const { user, authHeaders } = await createTestUser();
+            const board = await createTestBoard(user._id);
+
+            const task = await createTestTask(board._id, {
+                title: "Completed Task",
+                columnKey: "todo"
+            });
+            task.isCompleted = true;
+            await task.save();
+
+            const res = await request(app)
+                .patch(`/api/v1/boards/${board._id}/tasks/${task._id}/move`)
+                .set(authHeaders)
+                .send({
+                    columnKey: "in-progress"
+                });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.columnKey).toBe("in-progress");
+            expect(res.body.data.isCompleted).toBe(true); // Must remain true!
+        });
+
+        it("should not automatically mark a task completed when moved into 'done' column", async () => {
+            const { user, authHeaders } = await createTestUser();
+            const board = await createTestBoard(user._id);
+
+            const task = await createTestTask(board._id, {
+                title: "Task moving to done",
+                columnKey: "todo"
+            });
+            expect(task.isCompleted).toBe(false);
+
+            const res = await request(app)
+                .patch(`/api/v1/boards/${board._id}/tasks/${task._id}/move`)
+                .set(authHeaders)
+                .send({
+                    columnKey: "done"
+                });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.columnKey).toBe("done");
+            expect(res.body.data.isCompleted).toBe(false); // Independent completion!
+        });
+
+        it("should support moving a task into a dynamically added board column", async () => {
+            const { user, authHeaders } = await createTestUser();
+            const board = await createTestBoard(user._id);
+
+            // Add dynamic column "In Review" -> key: "in-review"
+            await request(app)
+                .post(`/api/v1/boards/${board._id}/columns`)
+                .set(authHeaders)
+                .send({ name: "In Review" });
+
+            const task = await createTestTask(board._id, {
+                title: "Task for Review",
+                columnKey: "todo"
+            });
+
+            const res = await request(app)
+                .patch(`/api/v1/boards/${board._id}/tasks/${task._id}/move`)
+                .set(authHeaders)
+                .send({
+                    columnKey: "in-review"
+                });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.columnKey).toBe("in-review");
         });
 
         it("should reorder a task within a column at a specific position", async () => {
