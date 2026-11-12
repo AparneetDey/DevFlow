@@ -5581,3 +5581,75 @@ Replace the Navbar brand icon in DevFlow with the custom icon image (`/favicon.p
 ### 5. Honest Testing & Browser Disclosure
 - **Automated Validation:** All component imports, markup syntax, build bundles, image asset paths, and regression test suites were verified via automated Node.js and Vite tooling.
 - **Headless Environment Note:** Direct browser rendering was validated through production build HTML and asset resolution verification. No live desktop browser window was opened in this terminal-only environment.
+
+
+---
+
+## Task — Add robots.txt and sitemap.xml for Google Crawling
+
+### 1. Task Objective
+Configure the DevFlow frontend for search engine crawling and indexing by creating standard, valid `robots.txt` and `sitemap.xml` files in the public directory. Ensure compatibility with Vite static distribution, include only public routes, and protect private/authenticated pages from exposure.
+
+---
+
+### 2. Files Created
+- `frontend/public/robots.txt`: Directs search engine crawlers and declares the sitemap location.
+- `frontend/public/sitemap.xml`: XML sitemap containing only public canonical URLs formatted in schema version 0.9.
+
+---
+
+### 3. Production Domain & Routes Audit
+- **Production Domain:** `https://dev-flow-sigma-topaz.vercel.app`
+- **React Router Configuration Inspected:** `frontend/src/routes/AppRoutes.jsx`
+- **Public Routes Included in `sitemap.xml`:**
+  1. `https://dev-flow-sigma-topaz.vercel.app/` (Root site entry point)
+  2. `https://dev-flow-sigma-topaz.vercel.app/login` (Public guest login view)
+  3. `https://dev-flow-sigma-topaz.vercel.app/register` (Public guest registration view)
+- **Private / Authenticated Routes Intentionally Excluded:**
+  - `/dashboard` (User workspace index requiring authentication)
+  - `/boards/:boardId` (Private Kanban board workspaces and tasks)
+  - `/profile` (User account details)
+  - `*` (Catch-all 404 Not Found route)
+
+---
+
+### 4. Implementation Details
+- **`robots.txt` Content:**
+  ```txt
+  User-agent: *
+  Allow: /
+
+  Sitemap: https://dev-flow-sigma-topaz.vercel.app/sitemap.xml
+  ```
+- **`sitemap.xml` Content:**
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+      <loc>https://dev-flow-sigma-topaz.vercel.app/</loc>
+    </url>
+    <url>
+      <loc>https://dev-flow-sigma-topaz.vercel.app/login</loc>
+    </url>
+    <url>
+      <loc>https://dev-flow-sigma-topaz.vercel.app/register</loc>
+    </url>
+  </urlset>
+  ```
+- **XML Validation:** Verified well-formed XML structure, valid namespace (`http://www.sitemaps.org/schemas/sitemap/0.9`), and absence of fabricated `<lastmod>` dates.
+- **Vite & Vercel Compatibility:** Files placed in `frontend/public/` are automatically emitted to `dist/` root during build. Because Vercel serves static files from the filesystem before applying SPA rewrites (`frontend/vercel.json`), both `/robots.txt` and `/sitemap.xml` will be served directly at root paths.
+
+---
+
+### 5. Verification Results
+- **Frontend Automated Tests:** `npm --prefix frontend test -- --run`
+  - **148 of 148 passed** across 28 suites (0 failures, 0 skipped).
+- **ESLint Check:** `npm --prefix frontend run lint`
+  - All project components and scripts passed, with 1 pre-existing warning in `src/components/profile/ProfileHeader.jsx` (`'CheckCircle2' is defined but never used`) from user commit `91a4210`, which was intentionally left untouched per instructions to not alter user files outside the SEO scope.
+- **Production Build:** `npm --prefix frontend run build`
+  - Build completed successfully in 11.87s.
+  - Verified presence in `frontend/dist/`:
+    - `frontend/dist/robots.txt` (85 bytes)
+    - `frontend/dist/sitemap.xml` (342 bytes)
+- **Deployment URL Verification:**
+  - The deployed URLs (`https://dev-flow-sigma-topaz.vercel.app/robots.txt` and `https://dev-flow-sigma-topaz.vercel.app/sitemap.xml`) could not be verified in real time because this environment does not have access to external deployment pipelines or live browser runtime.
