@@ -5527,3 +5527,57 @@ Refined two key areas of the DevFlow frontend:
 - **Remaining Limitations:** On mobile viewports (<640px) without hover pointers, the completion circle is rendered with full visibility to allow immediate touch activation without requiring a pre-hover state.
 
 
+
+
+---
+
+## Task 14 — Replace Kanban Icons with Custom Public Icon
+
+### 1. Task Objective
+Replace the Navbar brand icon in DevFlow with the custom icon image (`/favicon.png`) present in the `frontend/public` directory. Remove the container background for the Navbar icon, apply proper responsive sizing (`h-8 sm:h-9 w-auto object-contain`), and retain the standard `Kanban` Lucide icon in all other locations (such as board cards and dashboard workspace headers).
+
+---
+
+### 2. File & Public Asset Discovery
+- **Public Image Discovered:** `frontend/public/favicon.png` (dimensions: 1536x1024, RGBA color type 6).
+- **Public URL Used:** Root-relative path `/favicon.png`.
+- **Icon Placement Breakdown:**
+  1. `frontend/src/components/layout/Navbar.jsx`: Uses custom `/favicon.png` with no background wrapper, sized at `h-8 sm:h-9 w-auto object-contain shrink-0`.
+  2. `frontend/index.html`: Browser tab favicon link (`<link rel="icon" type="image/png" href="/favicon.png" />`).
+  3. `frontend/src/components/boards/BoardCard.jsx`: Retains `Kanban` Lucide icon (`<Kanban className="w-4 h-4" />`).
+  4. `frontend/src/pages/DashboardPage.jsx`: Retains `Kanban` Lucide icon (`<Kanban className="w-5 h-5 text-[var(--color-primary-hover)] shrink-0" />`).
+
+---
+
+### 3. Implementation Details & Visual Requirements
+- **Navbar Brand (`Navbar.jsx`):**
+  - Replaced the previous `<div className="... bg-[var(--color-primary)] ...">` container with a clean, background-free `<img src="/favicon.png" alt="DevFlow logo" className="h-8 sm:h-9 w-auto object-contain shrink-0" />`.
+  - Sized proportionately to align with the brand text ("DevFlow") and fit comfortably within the 56px / 64px header bar.
+  - Aspect ratio preserved automatically with `w-auto object-contain`.
+- **Board Card Summary (`BoardCard.jsx`):**
+  - Preserved standard `Kanban` icon (`w-4 h-4`) in badge wrapper.
+- **Dashboard Header (`DashboardPage.jsx`):**
+  - Preserved standard `Kanban` icon (`w-5 h-5 text-[var(--color-primary-hover)] shrink-0`) next to "Your Workspaces" title.
+- **Scope Preservation:**
+  - All other generic icons (`LayoutDashboard`, `User`, `LogIn`, `UserPlus`, `LogOut`, `FolderPlus`, `Plus`, `Pencil`, `Trash2`, `Clock`, `ArrowUpRight`, etc.) were left completely untouched.
+
+---
+
+### 4. Verification Results
+
+- **Frontend Automated Tests:** `npm --prefix frontend test -- --run`
+  - **148 of 148 tests passed** across all 28 suites (0 failures, 0 skipped).
+- **Frontend ESLint Check:** `npm --prefix frontend run lint`
+  - **0 errors, 0 warnings** across all files.
+- **Frontend Production Build:** `npm --prefix frontend run build`
+  - Built successfully with **0 compilation errors**.
+  - Public asset `favicon.png` copied cleanly to `dist/favicon.png` (1.3 MB).
+  - Production HTML output `dist/index.html` references `/favicon.png`.
+- **Backend Integrity:**
+  - **0 backend files modified.**
+
+---
+
+### 5. Honest Testing & Browser Disclosure
+- **Automated Validation:** All component imports, markup syntax, build bundles, image asset paths, and regression test suites were verified via automated Node.js and Vite tooling.
+- **Headless Environment Note:** Direct browser rendering was validated through production build HTML and asset resolution verification. No live desktop browser window was opened in this terminal-only environment.

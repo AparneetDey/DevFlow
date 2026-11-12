@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
-import { Kanban, LayoutDashboard, User, LogIn, UserPlus, LogOut } from 'lucide-react';
+import { LayoutDashboard, User, LogIn, UserPlus, LogOut } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmationModal } from '../auth/LogoutConfirmationModal.jsx';
 
@@ -62,9 +62,11 @@ export function Navbar() {
             className="flex items-center gap-2 sm:gap-2.5 group shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-lg p-1"
             aria-label="DevFlow home"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[var(--color-primary)] flex items-center justify-center text-[var(--color-text)] shadow-xs group-hover:bg-[var(--color-primary-hover)] transition-colors">
-              <Kanban className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
+            <img
+              src="/favicon.png"
+              alt="DevFlow logo"
+              className="h-8 sm:h-9 w-auto object-contain shrink-0"
+            />
             <div>
               <span className="text-base sm:text-lg font-bold text-[var(--color-text)] tracking-tight">
                 DevFlow
