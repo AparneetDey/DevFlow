@@ -203,7 +203,7 @@ export function KanbanColumn({
       ref={setColNodeRef}
       style={columnStyle}
       aria-labelledby={`column-header-${columnKey}`}
-      className={`w-[255px] sm:w-[278px] shrink-0 bg-[var(--color-surface)] border ${
+      className={`w-[255px] sm:w-[286px] shrink-0 bg-[var(--color-surface)] border ${
         isColDragging
           ? 'opacity-40 border-dashed border-[var(--color-primary)]'
           : isTarget
