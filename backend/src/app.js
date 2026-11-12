@@ -9,6 +9,7 @@ import { errorHandler } from "./middlewares/error.middleware.js";
 // API routes imports
 import authRouter from "./routes/auth.routes.js";
 import boardRouter from "./routes/board.routes.js";
+import healthRouter from "./routes/health.route.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +35,7 @@ app.use(cookieParser());
 // API Routes
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/boards", boardRouter);
+app.use("/api/v1/health", healthRouter);
 
 // 404 handler for unmatched routes (registered after all routes)
 app.use(notFoundHandler);
